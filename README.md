@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Planning and initial scaffold.** The repository contains a minimal Compose app, UI mockups, branding assets, and an implementation plan. Music playback, library discovery, playlists, and the designed interface are not implemented yet.
+**Main player visual shell implemented.** The app renders the reference player with bundled Inter fonts, sample album artwork and metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, and browsing/settings screens are not connected yet. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -86,7 +86,7 @@ Dependency versions are declared in [gradle/libs.versions.toml](gradle/libs.vers
 3. Let Gradle sync and install any requested SDK components.
 4. Select an AVD or connected Android device and run the `app` configuration.
 
-The current app displays a minimal Compose shell. The offline requirement applies to the finished app; initial development setup may need internet access to download dependencies and SDK components.
+The current app displays the main player visual shell. The offline requirement applies to the finished app; initial development setup may need internet access to download dependencies and SDK components.
 
 ### Build from the command line
 
@@ -126,3 +126,17 @@ PLAN.md               Agreed specification and implementation plan
 Initial acceptance testing will cover 100 mixed-format tracks, nested folders, missing metadata, unavailable sources, playlists, background playback, paused restoration, and the fixed landscape layout on minimum and modern Android AVDs.
 
 Real USB/SD behavior, steering-wheel controls, ignition and sleep cycles, boot launch, audio interruptions, and OEM process management require physical head-unit testing. Boot launch is a best-effort convenience, not a universal compatibility guarantee. Codec variants, file-identity ambiguity, and performance on low-powered hardware remain validation risks documented in [PLAN.md](PLAN.md).
+
+## Main screen visual comparison
+
+Build with `./gradlew assembleDebug`, start the **headunit_a6** AVD, then run:
+
+```sh
+python3 scripts/compare-main-player.py --install
+```
+
+The script requires `adb` and Python Pillow. It checks the AVD name, installs the APK when requested, and opens the debug-only `reference_preview` fixture with the mockup's Friday / 10:30 AM / 30-01-2026 clock and sample progress. Normal launches use the device clock. The debug fixture retains the mockup's progress-marker placement, which differs slightly from its elapsed/duration ratio.
+
+Artifacts are saved under `build/visual-comparison/final/`: the AVD screenshot, reference resized to the display dimensions, pixel difference, side-by-side comparison (reference left), and raw mean RGB difference. The 2000×1236 mockup is adapted to the AVD's native 1280×720 screen. Text rasterization can differ from the mockup; the numeric difference is a comparison aid, not a claim of pixel identity.
+
+See [asset provenance and font license](design/ASSETS.md). The album cover is a sample fixture, not a bundled audio track.

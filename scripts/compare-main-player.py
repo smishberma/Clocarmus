@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Capture the installed debug screen in headunit_a6 and compare it to the mockup.
+
+Requires adb on PATH, a running headunit_a6 AVD, and Pillow (python3 -m pip install Pillow).
+Run ./gradlew assembleDebug first, then use --install to install that APK.
+"""
+import argparse
+import io
+from pathlib import Path
+import subprocess
+import time
+
+from PIL import Image, ImageChops, ImageStat
+
+ROOT = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--serial", help="Optional adb serial; must be headunit_a6")
+parser.add_argument("--install", action="store_true", help="Install the current debug APK before capture")
+parser.add_argument("--output", type=Path, default=ROOT / "build/visual-comparison/final")
+args = parser.parse_args()
+
+
+def adb(serial, *command):
+    return subprocess.check_output(["adb", "-s", serial, *command])
+
+
+serials = [args.serial] if args.serial else [line.split()[0] for line in
+    subprocess.check_output(["adb", "devices"], text=True).splitlines()[1:] if "\tdevice" in line]
+serial = next((s for s in serials if adb(s, "emu", "avd", "name").decode().splitlines()[0] == "headunit_a6"), None)
+if serial is None:
+    parser.error("Start the headunit_a6 AVD first; no matching device is connected.")
+if args.install:
+    print(adb(serial, "install", "-r", str(ROOT / "app/build/outputs/apk/debug/app-debug.apk")).decode())
+adb(serial, "shell", "am", "start", "-S", "-n", "com.example.clocarmus/.MainActivity", "--ez", "reference_preview", "true")
+time.sleep(3)  # Allow activity startup and immersive-mode animation to finish.
+actual = Image.open(io.BytesIO(adb(serial, "exec-out", "screencap", "-p"))).convert("RGB")
+reference = Image.open(ROOT / "design/01-main-player.png").convert("RGB").resize(actual.size, Image.Resampling.LANCZOS)
+difference = ImageChops.difference(reference, actual)
+args.output.mkdir(parents=True, exist_ok=True)
+actual.save(args.output / "actual.png")
+reference.save(args.output / "reference.png")
+difference.save(args.output / "difference.png")
+side_by_side = Image.new("RGB", (actual.width * 2, actual.height))
+side_by_side.paste(reference)
+side_by_side.paste(actual, (actual.width, 0))
+side_by_side.save(args.output / "comparison.png")
+mae = sum(ImageStat.Stat(difference).mean) / 3
+report = f"AVD: headunit_a6 ({serial})\nResolution: {actual.width}x{actual.height}\nMean absolute RGB difference: {mae:.3f}/255\nLeft: reference resized to AVD dimensions. Right: actual Compose screen.\n"
+(args.output / "comparison.txt").write_text(report)
+print(report)
+print(f"Artifacts: {args.output}")
