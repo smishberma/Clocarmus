@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageStat, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -31,10 +31,17 @@ if serial is None:
     parser.error("Start the headunit_a6 AVD first; no matching device is connected.")
 if args.install:
     print(adb(serial, "install", "-r", str(ROOT / "app/build/outputs/apk/debug/app-debug.apk")).decode())
-adb(serial, "shell", "am", "start", "-S", "-n", "com.example.clocarmus/.MainActivity", "--ez", "reference_preview", "true")
+adb(serial, "shell", "am", "start", "-S", "-f", "0x10008000", "-n", "com.example.clocarmus/.MainActivity", "--ez", "reference_preview", "true")
 time.sleep(3)  # Allow activity startup and immersive-mode animation to finish.
 actual = Image.open(io.BytesIO(adb(serial, "exec-out", "screencap", "-p"))).convert("RGB")
-reference = Image.open(ROOT / "design/01-main-player.png").convert("RGB").resize(actual.size, Image.Resampling.LANCZOS)
+source = Image.open(ROOT / "design/01-main-player.png").convert("RGB")
+# Fit each half uniformly, matching the app's fixed split without distorting the mockup.
+reference = Image.new("RGB", actual.size)
+for side in range(2):
+    pane = source.crop((side * source.width // 2, 0, (side + 1) * source.width // 2, source.height))
+    fitted = ImageOps.contain(pane, (actual.width // 2, actual.height), Image.Resampling.LANCZOS)
+    reference.paste(fitted, (side * actual.width // 2 + (actual.width // 2 - fitted.width) // 2,
+                             (actual.height - fitted.height) // 2))
 difference = ImageChops.difference(reference, actual)
 args.output.mkdir(parents=True, exist_ok=True)
 actual.save(args.output / "actual.png")
@@ -45,7 +52,7 @@ side_by_side.paste(reference)
 side_by_side.paste(actual, (actual.width, 0))
 side_by_side.save(args.output / "comparison.png")
 mae = sum(ImageStat.Stat(difference).mean) / 3
-report = f"AVD: headunit_a6 ({serial})\nResolution: {actual.width}x{actual.height}\nMean absolute RGB difference: {mae:.3f}/255\nLeft: reference resized to AVD dimensions. Right: actual Compose screen.\n"
+report = f"AVD: headunit_a6 ({serial})\nResolution: {actual.width}x{actual.height}\nMean absolute RGB difference: {mae:.3f}/255\nLeft: reference fitted proportionally within each half. Right: actual Compose screen with supplied SVG assets and placeholder artwork.\n"
 (args.output / "comparison.txt").write_text(report)
 print(report)
 print(f"Artifacts: {args.output}")

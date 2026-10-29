@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Main player visual shell implemented.** The app renders the reference player with bundled Inter fonts, sample album artwork and metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, and browsing/settings screens are not connected yet. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
+**Main player visual shell implemented.** The app renders the reference player with bundled Inter fonts, the supplied SVG artwork placeholder and sample metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, and browsing/settings screens are not connected yet. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -135,8 +135,8 @@ Build with `./gradlew assembleDebug`, start the **headunit_a6** AVD, then run:
 python3 scripts/compare-main-player.py --install
 ```
 
-The script requires `adb` and Python Pillow. It checks the AVD name, installs the APK when requested, and opens the debug-only `reference_preview` fixture with the mockup's Friday / 10:30 AM / 30-01-2026 clock and sample progress. Normal launches use the device clock. The debug fixture retains the mockup's progress-marker placement, which differs slightly from its elapsed/duration ratio.
+The script requires `adb` and Python Pillow. It checks the AVD name, installs the APK when requested, and opens the debug-only `reference_preview` fixture with the mockup's Friday / 10:30 AM / 30-01-2026 clock and sample progress. Normal launches use the device clock. Seek progress consistently reflects elapsed time divided by duration, including in the comparison fixture.
 
-Artifacts are saved under `build/visual-comparison/final/`: the AVD screenshot, reference resized to the display dimensions, pixel difference, side-by-side comparison (reference left), and raw mean RGB difference. The 2000×1236 mockup is adapted to the AVD's native 1280×720 screen. Text rasterization can differ from the mockup; the numeric difference is a comparison aid, not a claim of pixel identity.
+Artifacts are saved under `build/visual-comparison/final/`: the AVD screenshot, reference resized to the display dimensions, pixel difference, side-by-side comparison (reference left), and raw mean RGB difference. The 2000×1236 mockup is fitted proportionally inside each half of the AVD's native 1280×720 screen. The screen uses one uniform scale per half, square artwork, and proportional SVG icons. Text has no horizontal/vertical transforms; long clock values shrink by font size if needed. The artwork placeholder and supplied icons intentionally differ from the original mockup, so pixel differences are a visual aid rather than an acceptance threshold.
 
-See [asset provenance and font license](design/ASSETS.md). The album cover is a sample fixture, not a bundled audio track.
+See [asset provenance and font license](design/ASSETS.md). The player uses `design/assets/no-album-art.svg` as its artwork; no audio track is bundled.

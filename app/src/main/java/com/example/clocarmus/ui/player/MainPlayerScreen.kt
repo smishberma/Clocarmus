@@ -2,12 +2,15 @@ package com.example.clocarmus.ui.player
 
 import android.content.Context
 import android.media.AudioManager
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -16,115 +19,99 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.clocarmus.R
+import com.example.clocarmus.ui.theme.InterFontFamily
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.example.clocarmus.R
-import com.example.clocarmus.ui.theme.InterFontFamily
 
-private val White = Color.White
-private val Muted = Color(0xff808080)
+/** A uniformly scaled reference grid, centered within each half of the landscape display. */
+private class PlayerGrid(width: Float, height: Float) {
+    val scale = minOf(width / 1000f, height / 1236f)
+    private val left = (width - 1000f * scale) / 2
+    private val top = (height - 1236f * scale) / 2
 
-/** Main-screen visual shell. Sample metadata/transport are replaced by the playback service later. */
+    fun place(x: Float, y: Float, width: Float, height: Float) = Modifier
+        .offset((left + x * scale).dp, (top + y * scale).dp)
+        .size((width * scale).dp, (height * scale).dp)
+
+    fun touchTarget(cx: Float, cy: Float, visualSize: Float): Modifier {
+        val side = maxOf(48f, visualSize * scale)
+        return Modifier.offset((left + cx * scale - side / 2).dp, (top + cy * scale - side / 2).dp)
+            .size(side.dp)
+    }
+}
+
+/** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
 fun MainPlayerScreen(referencePreview: Boolean = false) {
     val context = LocalContext.current
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+    val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var volume by remember { mutableFloatStateOf(if (referencePreview) .62f else audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
     var playing by rememberSaveable { mutableStateOf(referencePreview) }
     var position by rememberSaveable { mutableFloatStateOf(113f) }
     var shuffle by rememberSaveable { mutableStateOf(true) }
     var repeat by rememberSaveable { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(1000) } }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
-        // Positions and artwork follow the reference grid; type scales to the available space.
-        val sx = maxWidth.value / 2000f
-        val sy = maxHeight.value / 1236f
-        val unit = minOf(sx, sy)
-        fun place(x: Float, y: Float, w: Float, h: Float) = Modifier
-            .offset((x * sx).dp, (y * sy).dp).size((w * sx).dp, (h * sy).dp)
-        @Composable
-        fun Label(text: String, x: Float, y: Float, w: Float, h: Float, size: Float, bold: Boolean = false, widthScale: Float = 1f) {
-            Box(place(x, y, w, h), contentAlignment = Alignment.Center) {
-                Text(text, modifier = Modifier.graphicsLayer(scaleX = widthScale), color = White, fontFamily = InterFontFamily, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = (size * unit).sp, lineHeight = (size * unit * 1.12f).sp,
-                    letterSpacing = 0.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Row(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+                val grid = PlayerGrid(maxWidth.value, maxHeight.value)
+                MenuButton(grid) { dialog = "Menu" }
+                PlayerSlider(volume, {
+                    volume = it
+                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0)
+                }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true)
+                AssetButton("Add to playlist", R.drawable.player_playlist_button, grid, 850f, 106f, 104f) { dialog = "Add to playlist" }
+                Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
+                    grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
+                AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
+                    grid, 141f, 291f, 93f, if (shuffle) "On" else "Off") { shuffle = !shuffle }
+                AssetButton("Repeat", when (repeat) {
+                    1 -> R.drawable.player_repeat_one_active
+                    2 -> R.drawable.player_repeat_active
+                    else -> R.drawable.player_repeat_inactive
+                }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }) { repeat = (repeat + 1) % 3 }
+                AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f) { position = (position - 10).coerceAtLeast(0f) }
+                AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f) { position = (position + 10).coerceAtMost(225f) }
+                PlayerLabel("Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true)
+                PlayerLabel("Lazlo Bane", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale)
+                PlayerLabel("All the Time in the World", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale)
+                PlayerLabel("2002", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
+                PlayerSlider(position / 225f, { position = it * 225f }, grid.place(79f, 944f, 841f, 87f), "Track position", grid.scale)
+                PlayerLabel(formatPosition(position), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
+                PlayerLabel("3:45", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
+                AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, 93f) { position = 0f }
+                AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
+                    grid, 508f, 1137f, 110f) { playing = !playing }
+                AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, 93f) { position = 0f }
             }
+            ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
         }
-        @Composable
-        fun Control(name: String, x: Float, y: Float, w: Float = 130f, h: Float = 130f,
-                    selected: Boolean? = null, action: () -> Unit) {
-            val touchW = maxOf(w * sx, 48f)
-            val touchH = maxOf(h * sy, 48f)
-            Box(Modifier.offset((x * sx + (w * sx - touchW) / 2).dp, (y * sy + (h * sy - touchH) / 2).dp).size(touchW.dp, touchH.dp).semantics { contentDescription = name; role = Role.Button
-                if (selected != null) { this.selected = selected; stateDescription = if (selected) "On" else "Off" }
-            }.clickable(onClick = action), contentAlignment = Alignment.Center) {
-                PlayerIcon(name, Modifier.size((w * sx).dp, (h * sy).dp), selected ?: false)
-            }
-        }
-        Canvas(Modifier.fillMaxSize()) { drawLine(Color(0xffdddddd), Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), 2 * sx) }
-        Box(place(52f, 67f, 178f, 79f).clip(RoundedCornerShape(50)).clickable { dialog = "Menu" }, contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) { val border = 7 * unit
-                drawRoundRect(White, topLeft = Offset(border / 2, border / 2), size = Size(size.width - border, size.height - border), cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2), style = Stroke(border)) }
-            Text("MENU", color = White, fontFamily = InterFontFamily, fontWeight = FontWeight.Bold, fontSize = (34 * unit).sp)
-        }
-        ReferenceSlider(volume, { volume = it; audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0) },
-            place(283f, 72f, 434f, 61f), "Media volume", false)
-        Box(place(308f, 82f, 44f, 42f)) { PlayerIcon("Volume", Modifier.fillMaxSize()) }
-        Control("Add to playlist", 813f, 76f, 74f, 53f) { dialog = "Add to playlist" }
-        Box(place(273f, 187f, 457f, 457f), contentAlignment = Alignment.Center) {
-            Image(painterResource(R.drawable.demo_album), "All the Time in the World album artwork", Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
-        }
-        Control("Shuffle", 95f, 245f, 93f, 93f, selected = shuffle) { shuffle = !shuffle }
-        Control("Repeat", 817f, 263f, 66f, 57f, selected = repeat != 0) { repeat = (repeat + 1) % 3 }
-        if (repeat == 1) Label("1", 819f, 273f, 60f, 35f, 28f, true)
-        Control("Rewind 10 seconds", 98f, 493f, 84f, 90f) { position = (position - 10).coerceAtLeast(0f) }
-        Control("Forward 10 seconds", 808f, 493f, 84f, 90f) { position = (position + 10).coerceAtMost(225f) }
-        Label("Superman", 100f, 656f, 800f, 72f, 52f, widthScale = 1.125f)
-        Label("Lazlo Bane", 100f, 742f, 800f, 57f, 47f, widthScale = 1.04f)
-        Label("All the Time in the World", 73f, 800f, 860f, 57f, 47f, widthScale = 1.02f)
-        Label("2002", 100f, 857f, 800f, 57f, 47f, widthScale = 1.10f)
-        ReferenceSlider(if (referencePreview && position == 113f) .533f else position / 225f, { position = it * 225 }, place(79f, 954f, 841f, 67f), "Track position", true)
-        Label("${position.toInt() / 60}:${(position.toInt() % 60).toString().padStart(2, '0')}", 64f, 1026f, 100f, 53f, 43f, widthScale = 1.07f)
-        Label("3:45", 826f, 1026f, 100f, 53f, 43f, widthScale = 1.07f)
-        Control("Previous track", 206f, 1109f, 62f, 53f) { position = 0f }
-        Control(if (playing) "Pause" else "Play", 465f, 1090f, 87f, 95f) { playing = !playing }
-        Control("Next track", 749f, 1109f, 62f, 53f) { position = 0f }
-        val day = if (referencePreview) "Friday" else SimpleDateFormat("EEEE", Locale.ENGLISH).format(now)
-        val time = if (referencePreview) "10:30" else SimpleDateFormat("h:mm", Locale.ENGLISH).format(now)
-        val period = if (referencePreview) "AM" else SimpleDateFormat("a", Locale.ENGLISH).format(now)
-        val date = if (referencePreview) "30-01-2026" else SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH).format(now)
-        Label(day, 1035f, 314f, 855f, 120f, 97f, widthScale = 1.065f)
-        Label(time, 1177f, 488f, 580f, 248f, 230f, widthScale = 1.052f)
-        Label(period, 1750f, 651f, 120f, 77f, 61f, true, widthScale = 1.05f)
-        Label(date, 1110f, 800f, 710f, 120f, 102f, widthScale = 1.048f)
+        Box(Modifier.align(Alignment.Center).width(1.dp).fillMaxHeight().background(Color(0xffdddddd)))
     }
     dialog?.let { title ->
         AlertDialog(onDismissRequest = { dialog = null }, title = { Text(title) },
@@ -134,48 +121,111 @@ fun MainPlayerScreen(referencePreview: Boolean = false) {
 }
 
 @Composable
-private fun ReferenceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier, label: String, thumb: Boolean) {
-    Canvas(modifier.semantics {
-        contentDescription = label
-        progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
-        setProgress { onValueChange(it.coerceIn(0f, 1f)); true }
-    }.pointerInput(Unit) { detectTapGestures { onValueChange((it.x / size.width).coerceIn(0f, 1f)) } }
-        .pointerInput(Unit) { detectDragGestures { change, _ -> change.consume(); onValueChange((change.position.x / size.width).coerceIn(0f, 1f)) } }) {
-        val barHeight = if (thumb) size.height * .55f else size.height
-        val top = (size.height - barHeight) / 2
-        val radiusX = if (thumb) size.width * .006f else barHeight / 2
-        val radiusY = barHeight / 2
-        val outline = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, top, size.width, top + barHeight, radiusX, radiusY)) }
-        drawPath(outline, if (thumb) Color(0xff494949) else Color(0xff646464))
-        clipPath(outline) { drawRect(White, Offset(0f, top), Size(size.width * value, barHeight)) }
-        if (thumb) drawCircle(White, size.height / 2, Offset(size.width * value, size.height / 2))
+private fun MenuButton(grid: PlayerGrid, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    // The SVG's square canvas includes the pill's original padding; preserve that canvas.
+    Box(grid.touchTarget(141f, 106f, 178f).semantics { contentDescription = "Menu" }
+        .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        Image(painterResource(if (pressed) R.drawable.player_menu_button_pressed else R.drawable.player_menu_button),
+            null, Modifier.size((178f * grid.scale).dp), contentScale = ContentScale.Fit)
     }
 }
 
 @Composable
-private fun PlayerIcon(name: String, modifier: Modifier, active: Boolean = false) {
-    val asset = when (name) {
-        "Pause" -> R.drawable.ic_player_pause
-        "Previous track" -> R.drawable.ic_player_previous
-        "Next track" -> R.drawable.ic_player_next
-        "Shuffle" -> R.drawable.ic_player_shuffle
-        "Repeat" -> R.drawable.ic_player_repeat
-        "Rewind 10 seconds" -> R.drawable.ic_player_rewind
-        "Forward 10 seconds" -> R.drawable.ic_player_forward
-        "Add to playlist" -> R.drawable.ic_player_playlist
-        "Volume" -> R.drawable.ic_player_volume
-        else -> null
+private fun AssetButton(label: String, @DrawableRes asset: Int, grid: PlayerGrid, cx: Float, cy: Float,
+                        size: Float, state: String? = null, onClick: () -> Unit) {
+    Box(grid.touchTarget(cx, cy, size).semantics {
+        contentDescription = label
+        if (state != null) stateDescription = state
+    }.clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        Image(painterResource(asset), null, Modifier.size((size * grid.scale).dp), contentScale = ContentScale.Fit)
     }
-    if (asset != null) {
-        val tint = when {
-            name == "Volume" -> Color.Black
-            (name == "Repeat" || name == "Shuffle") && !active -> Muted
-            else -> White
-        }
-        Image(painterResource(asset), null, modifier, contentScale = ContentScale.FillBounds, colorFilter = ColorFilter.tint(tint))
-    } else {
-        Canvas(modifier) {
-            drawPath(Path().apply { moveTo(size.width * .12f, 0f); lineTo(size.width, size.height / 2); lineTo(size.width * .12f, size.height); close() }, White)
-        }
+}
+
+private fun playerTextStyle(size: Float, bold: Boolean = false) = TextStyle(
+    color = Color.White, fontFamily = InterFontFamily,
+    fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+    fontSize = size.sp, lineHeight = (size * 1.12f).sp, letterSpacing = 0.sp,
+    platformStyle = PlatformTextStyle(includeFontPadding = false)
+)
+
+@Composable
+private fun PlayerLabel(text: String, modifier: Modifier, size: Float, alignment: Alignment = Alignment.Center, bold: Boolean = false) {
+    Box(modifier, contentAlignment = alignment) {
+        Text(text, style = playerTextStyle(size, bold), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+}
+
+@Composable
+private fun ClockPane(referencePreview: Boolean, modifier: Modifier) {
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(referencePreview) {
+        if (!referencePreview) while (true) { now = Date(); delay(1000) }
+    }
+    val day = if (referencePreview) "Friday" else SimpleDateFormat("EEEE", Locale.ENGLISH).format(now)
+    val time = if (referencePreview) "10:30" else SimpleDateFormat("h:mm", Locale.ENGLISH).format(now)
+    val period = if (referencePreview) "AM" else SimpleDateFormat("a", Locale.ENGLISH).format(now)
+    val date = if (referencePreview) "30-01-2026" else SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH).format(now)
+    BoxWithConstraints(modifier) {
+        val grid = PlayerGrid(maxWidth.value, maxHeight.value)
+        PlayerLabel(day, grid.place(15f, 311f, 900f, 120f), 100f * grid.scale)
+        BoxWithConstraints(grid.place(90f, 495f, 850f, 248f), contentAlignment = Alignment.Center) {
+            val measurer = rememberTextMeasurer()
+            val density = LocalDensity.current
+            val mainStyle = playerTextStyle(230f * grid.scale)
+            val periodStyle = playerTextStyle(62f * grid.scale, bold = true)
+            val gap = (24f * grid.scale).dp
+            val naturalWidth = measurer.measure(time, mainStyle).size.width +
+                measurer.measure(period, periodStyle).size.width + with(density) { gap.toPx() }
+            val availableWidth = with(density) { maxWidth.toPx() }
+            // Fit long times by changing font size uniformly, never by transforming glyphs.
+            val fit = minOf(1f, availableWidth / naturalWidth)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(time, Modifier.alignByBaseline(), style = playerTextStyle(230f * grid.scale * fit), maxLines = 1)
+                Spacer(Modifier.width(gap * fit))
+                Text(period, Modifier.alignByBaseline(), style = playerTextStyle(62f * grid.scale * fit, bold = true), maxLines = 1)
+            }
+        }
+        PlayerLabel(date, grid.place(15f, 800f, 900f, 120f), 100f * grid.scale)
+    }
+}
+
+@Composable
+private fun PlayerSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier,
+                         label: String, scale: Float, volume: Boolean = false) {
+    val update by rememberUpdatedState(onValueChange)
+    val trackHeight = (if (volume) 61f else 36f) * scale
+    val thumbRadius = 33f * scale
+    val density = LocalDensity.current
+    val trackPx = with(density) { trackHeight.dp.toPx() }
+    val thumbPx = with(density) { thumbRadius.dp.toPx() }
+    Box(modifier.defaultMinSize(minHeight = 48.dp).semantics {
+        contentDescription = label
+        progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
+        setProgress { update(it.coerceIn(0f, 1f)); true }
+    }.pointerInput(Unit) { detectTapGestures { update((it.x / size.width).coerceIn(0f, 1f)) } }
+        .pointerInput(Unit) { detectDragGestures { change, _ ->
+            change.consume(); update((change.position.x / size.width).coerceIn(0f, 1f))
+        } }, contentAlignment = Alignment.Center) {
+        if (volume) {
+            Image(painterResource(R.drawable.player_volume_track), null,
+                Modifier.fillMaxWidth().height(trackHeight.dp), contentScale = ContentScale.Fit)
+        }
+        Canvas(Modifier.fillMaxSize()) {
+            val top = (size.height - trackPx) / 2
+            val radius = if (volume) CornerRadius(trackPx / 2) else CornerRadius(5f * scale * density.density, trackPx / 2)
+            val outline = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, top, size.width, top + trackPx, radius.x, radius.y)) }
+            if (!volume) drawPath(outline, Color(0xff494949))
+            clipPath(outline) { drawRect(Color.White, Offset(0f, top), Size(size.width * value, trackPx)) }
+            if (!volume) drawCircle(Color.White, thumbPx, Offset(size.width * value, size.height / 2))
+        }
+        if (volume) Image(painterResource(R.drawable.player_volume_slider_icon), null,
+            Modifier.align(Alignment.CenterStart).padding(start = (15f * scale).dp).size(trackHeight.dp), contentScale = ContentScale.Fit)
+    }
+}
+
+private fun formatPosition(position: Float): String {
+    val seconds = position.toInt()
+    return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
