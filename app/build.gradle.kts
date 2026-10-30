@@ -13,6 +13,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        // Compose renders vectors directly on API 23, including gradients.
+        vectorDrawables.useSupportLibrary = true
     }
 
     buildTypes {

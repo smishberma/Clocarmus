@@ -8,7 +8,8 @@ public class ConvertPlayerSvg {
     public static void main(String[] args) throws Exception {
         try (var output = new ByteArrayOutputStream()) {
             String errors = Svg2Vector.parseSvgToXml(Path.of(args[0]), output);
-            if (!errors.isBlank()) throw new IllegalArgumentException(errors);
+            if (errors.contains("ERROR")) throw new IllegalArgumentException(errors);
+            if (!errors.isBlank()) System.err.println(errors);
             Files.write(Path.of(args[1]), output.toByteArray());
         }
     }

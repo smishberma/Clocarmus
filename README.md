@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Main player visual shell implemented.** The app renders the reference player with bundled Inter fonts, the supplied SVG artwork placeholder and sample metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, and browsing/settings screens are not connected yet. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
+**Main player and menu visual shells implemented.** The app renders the reference player with bundled Inter fonts, the supplied SVG artwork placeholder and sample metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, and category browsing/settings screens are not connected yet. The Menu button opens the supplied six-category menu; Back or Android Back returns to the player while preserving local transport state. Category and Settings buttons currently open placeholder dialogs. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -145,4 +145,21 @@ The script requires `adb` and Python Pillow. It checks the AVD name, installs th
 
 Artifacts are saved under `build/visual-comparison/final/`: the AVD screenshot, reference resized to the display dimensions, pixel difference, side-by-side comparison (reference left), and raw mean RGB difference. The 2000×1236 mockup is fitted proportionally inside each half of the AVD's native 1280×720 screen. The screen uses one uniform scale per half, square artwork, and proportional SVG icons. Text has no horizontal/vertical transforms; long clock values shrink by font size if needed. The artwork placeholder and supplied icons intentionally differ from the original mockup, so pixel differences are a visual aid rather than an acceptance threshold.
 
-See [asset provenance and font license](design/ASSETS.md). The player uses `design/assets/no-album-art.svg` as its artwork; no audio track is bundled.
+See [asset provenance and font license](design/ASSETS.md). The player uses `design/assets/main-player/no-album-art.svg` as its artwork; no audio track is bundled.
+
+## Menu screen visual comparison
+
+```sh
+./gradlew assembleDebug
+python3 scripts/compare-main-player.py --screen menu --install
+```
+
+This uses `design/02-menu-opened.png`, the same proportional fitting and fixed clock fixture as the player comparison, and the supplied vectors in `design/assets/menu-page/`. Artifacts are saved under `build/visual-comparison/menu/`. Normal launch still opens the player; the menu fixture requires a debug build and `reference_preview=true` with `menu_preview=true`.
+
+The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. Library category and Settings destinations remain placeholders until their screens are implemented.
+
+Regenerate only the menu vectors with `python3 scripts/import-player-assets.py --group menu-page`. The importer also accepts `--group main-player` and `--group shared`; complex SVG filters are rejected by Android's vector converter and require separate asset preparation.
+
+Validated on `headunit_a6` at 1280×720: menu screenshot comparison, all category controls exposed, category/Settings dialog dismissal, play/pause preserved through navigation, and both Back actions. `assembleDebug`, `testDebugUnitTest` (11 tests), and `lintDebug` pass. Pixel comparison remains a review aid; supplied SVG details and Inter rendering differ from the raster mockup.
+
+Menu category icons, Back, and Settings use their supplied normal/pressed SVGs while held; releasing or dragging outside restores their normal state. Transport buttons use a matching pink press highlight. Genres is centered directly below Artists. The updated artwork SVG is bundled as an Android vector with its gradients preserved; regenerate it with `python3 scripts/import-player-assets.py --group main-player --asset no-album-art`.

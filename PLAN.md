@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player visual shell implemented and being validated on `headunit_a6`. Library, real playback, onboarding, browsing, and settings remain planned.
+Status: main player and menu visual shells implemented and being validated on `headunit_a6`. Library, real playback, onboarding, browsing, and settings remain planned.
 
 ## 1. Product and constraints
 

@@ -14,10 +14,13 @@ from PIL import Image, ImageChops, ImageStat, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--screen", choices=("player", "menu"), default="player", help="Reference screen to capture")
 parser.add_argument("--serial", help="Optional adb serial; must be headunit_a6")
 parser.add_argument("--install", action="store_true", help="Install the current debug APK before capture")
 parser.add_argument("--output", type=Path, default=ROOT / "build/visual-comparison/final")
 args = parser.parse_args()
+if args.screen == "menu" and args.output == ROOT / "build/visual-comparison/final":
+    args.output = ROOT / "build/visual-comparison/menu"
 
 
 def adb(serial, *command):
@@ -31,10 +34,10 @@ if serial is None:
     parser.error("Start the headunit_a6 AVD first; no matching device is connected.")
 if args.install:
     print(adb(serial, "install", "-r", str(ROOT / "app/build/outputs/apk/debug/app-debug.apk")).decode())
-adb(serial, "shell", "am", "start", "-S", "-f", "0x10008000", "-n", "com.example.clocarmus/.MainActivity", "--ez", "reference_preview", "true")
+adb(serial, "shell", "am", "start", "-S", "-f", "0x10008000", "-n", "com.example.clocarmus/.MainActivity", "--ez", "reference_preview", "true", "--ez", "menu_preview", str(args.screen == "menu").lower())
 time.sleep(3)  # Allow activity startup and immersive-mode animation to finish.
 actual = Image.open(io.BytesIO(adb(serial, "exec-out", "screencap", "-p"))).convert("RGB")
-source = Image.open(ROOT / "design/01-main-player.png").convert("RGB")
+source = Image.open(ROOT / ("design/02-menu-opened.png" if args.screen == "menu" else "design/01-main-player.png")).convert("RGB")
 # Fit each half uniformly, matching the app's fixed split without distorting the mockup.
 reference = Image.new("RGB", actual.size)
 for side in range(2):
@@ -52,7 +55,7 @@ side_by_side.paste(reference)
 side_by_side.paste(actual, (actual.width, 0))
 side_by_side.save(args.output / "comparison.png")
 mae = sum(ImageStat.Stat(difference).mean) / 3
-report = f"AVD: headunit_a6 ({serial})\nResolution: {actual.width}x{actual.height}\nMean absolute RGB difference: {mae:.3f}/255\nLeft: reference fitted proportionally within each half. Right: actual Compose screen with supplied SVG assets and placeholder artwork.\n"
+report = f"Screen: {args.screen}\nAVD: headunit_a6 ({serial})\nResolution: {actual.width}x{actual.height}\nMean absolute RGB difference: {mae:.3f}/255\nLeft: reference fitted proportionally within each half. Right: actual Compose screen with supplied SVG assets.\n"
 (args.output / "comparison.txt").write_text(report)
 print(report)
 print(f"Artifacts: {args.output}")
