@@ -25,6 +25,9 @@ if not jars:
 classpath = ':'.join(jars)
 subprocess.run(['javac', '-cp', classpath, '-d', str(WORK), str(ROOT / 'scripts/ConvertPlayerSvg.java')], check=True)
 for source in sorted((ROOT / 'design/assets').rglob('*.svg')):
+    # Branding has separate adaptive layers and legacy PNG exports.
+    if source.parent.name == 'logo-brand':
+        continue
     if args.group and source.parent.name != args.group:
         continue
     if args.asset and source.stem != args.asset:

@@ -1,5 +1,22 @@
 # Player and menu assets
 
+## App logo and launcher icons
+
+The supplied [logo-brand/logo.svg](assets/shared/logo-brand/logo.svg) is imported as `drawable/brand_logo.xml`, retaining its transparent background and gradients. Use it with Compose `painterResource` for in-app branding, including on API 23.
+
+[logo-brand/icon.svg](assets/shared/logo-brand/icon.svg) supplies the launcher artwork. Android 8.0+ uses `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml`, with a vector foreground derived from the SVG and an opaque `#CEB9D5` background sampled from its lavender circle. The original circular canvas fits inside the central 66dp safe circle of the 108dp adaptive layer, preserving the mark under launcher masks. See [Android's adaptive icon guidance](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive).
+
+Android 6.0–7.1 uses transparent, circular legacy PNGs exported directly from `icon.svg`: 48, 72, 96, 144, and 192px in `mipmap-mdpi` through `mipmap-xxxhdpi`. Both manifest icon entries have density-specific PNGs. There are no unqualified `mipmap-anydpi` overrides, so older devices select the PNGs.
+
+Regenerate all branding resources with Inkscape, a JDK, and resolved Gradle dependencies:
+
+```sh
+python3 scripts/import-brand-assets.py
+./gradlew assembleDebug
+```
+
+Source artwork stays unchanged. Generated resources are checked in; normal builds need no SVG conversion tools. The player importer skips `logo-brand` because branding uses this dedicated pipeline.
+
 The main player uses the supplied SVGs in [assets/main-player/](assets/main-player/) and [assets/shared/](assets/shared/), converted into Android vector resources under `app/src/main/res/drawable/player_*.xml`. Original SVGs remain unchanged. Icons use `ContentScale.Fit` and square display boxes; artwork uses the square `no-album-art.svg` placeholder. All placement and icon dimensions share one uniform scale within each screen half. Text uses Inter directly, with no geometric scaling.
 
 Menu normal/pressed, play/pause, shuffle on/off, and repeat off/one/all each use their provided asset. Menu and repeat-one SVG text is outlined during import so the vectors retain its original lettering. The volume slider background is derived from `volume-slider.svg`; its changing fill and seek-bar track/thumb are rendered by Compose. The volume icon is imported separately. No additional main-screen assets are required.
@@ -27,7 +44,7 @@ The sixteen normal/pressed SVGs in [assets/menu-page/](assets/menu-page/) are im
 python3 scripts/import-player-assets.py --group menu-page
 ```
 
-The importer searches the reorganized asset folders recursively and supports selecting a single folder with `--group`. Stroke-scaling warnings are printed; unsupported features remain errors. The six category buttons, Back, and Settings switch to the supplied pressed SVG for the duration of a press, with the default ripple suppressed. Releasing or canceling a press restores the normal SVG. Category labels retain their normal color. Shared transport controls use the category icons' pink (`#bf1363`) while pressed because no transport pressed SVGs were supplied.
+The importer searches the reorganized asset folders recursively and supports selecting a single folder with `--group`. Stroke-scaling warnings are printed; unsupported features remain errors. The six category buttons, Back, and Settings switch to the supplied pressed SVG for the duration of a press, with the default ripple suppressed. Releasing or canceling a press restores the normal SVG. Category labels retain their normal color. Shared transport controls use the supplied `play-pressed.svg`, `pause-pressed.svg`, `skip-back-pressed.svg`, and `skip-next-pressed.svg` while held on the player, menu, and All Tracks screens. Their supplied colors and proportions are preserved, with no tint or ripple added. Releasing or canceling a press restores the appropriate normal asset.
 
 ## Updated artwork placeholder
 
@@ -56,3 +73,9 @@ python3 scripts/import-player-assets.py --group track-menu
 The pill's pointer area is wider than its visible shape to make dragging easier. Grabbing it preserves the finger's offset; tapping the rail centers the pill at that point. The rail, list scroll offset, and accessibility progress share the same clamped scroll range.
 
 Track rows show title and artist/album on two lines. The selected row uses a solid white background, black title/metadata, and the supplied black play indicator (or a black-tinted pause icon when paused). The scroll rail and letter bubble retain their dark gray background.
+
+## Shared playback pressed assets
+
+The four pressed playback SVGs in `assets/shared/` are imported as `player_play_pressed.xml`, `player_pause_pressed.xml`, `player_skip_back_pressed.xml`, and `player_skip_next_pressed.xml`. Play/Pause chooses the pressed asset for its current playback state; actions still occur on release. Both normal and pressed images use the same proportional display size and existing touch target.
+
+To regenerate these individually, run `python3 scripts/import-player-assets.py --group shared --asset play-pressed` (and repeat for `pause-pressed`, `skip-back-pressed`, and `skip-next-pressed`).

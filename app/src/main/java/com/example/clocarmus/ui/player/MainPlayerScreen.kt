@@ -28,7 +28,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -178,10 +177,10 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                     PlayerLabel(formatPosition(position), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
                     PlayerLabel("3:45", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                 }
-                AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, if (menuOpen) 74f else 93f, highlightOnPress = menuOpen) { browsingReturn.interaction(); stepTrack(-1) }
+                AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, if (menuOpen) 74f else 93f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                 AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
-                    grid, 508f, 1137f, if (menuOpen) 123f else 110f, highlightOnPress = menuOpen) { browsingReturn.interaction(); playing = !playing }
-                AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, if (menuOpen) 74f else 93f, highlightOnPress = menuOpen) { browsingReturn.interaction(); stepTrack(1) }
+                    grid, 508f, 1137f, if (menuOpen) 123f else 110f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing }
+                AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, if (menuOpen) 74f else 93f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
             }
             ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
         }
@@ -228,16 +227,16 @@ private fun MenuButton(grid: PlayerGrid, opacity: Float, onClick: () -> Unit) {
 
 @Composable
 private fun AssetButton(label: String, @DrawableRes asset: Int, grid: PlayerGrid, cx: Float, cy: Float,
-                        size: Float, state: String? = null, opacity: Float = 1f, highlightOnPress: Boolean = false, onClick: () -> Unit) {
+                        size: Float, state: String? = null, opacity: Float = 1f, @DrawableRes pressedAsset: Int? = null, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     Box(grid.touchTarget(cx, cy, size).alpha(opacity).semantics {
         contentDescription = label
         if (state != null) stateDescription = state
-    }.clickable(interactionSource = interaction, indication = if (highlightOnPress) null else androidx.compose.foundation.LocalIndication.current,
+    }.clickable(interactionSource = interaction, indication = if (pressedAsset != null) null else androidx.compose.foundation.LocalIndication.current,
         role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        Image(painterResource(asset), null, Modifier.size((size * grid.scale * 0.8f).dp), contentScale = ContentScale.Fit,
-            colorFilter = if (highlightOnPress && pressed) ColorFilter.tint(Color(0xffbf1363)) else null)
+        Image(painterResource(if (pressed && pressedAsset != null) pressedAsset else asset), null,
+            Modifier.size((size * grid.scale * 0.8f).dp), contentScale = ContentScale.Fit)
     }
 }
 
