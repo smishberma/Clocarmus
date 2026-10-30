@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player and menu visual shells implemented and being validated on `headunit_a6`. Library, real playback, onboarding, browsing, and settings remain planned.
+Status: main player, menu, and All Tracks visual shells implemented on `headunit_a6`. All Tracks uses 28 demo titles with search, selection, interactive fast scrolling, and the 15-second inactivity return after selection. Real library data, playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -19,7 +19,7 @@ The current project is a minimal Compose shell using package/application ID `com
 Use `design/01-main-player.png` as the primary reference, the remaining screen mockups for flows, and `design/design-system-ref.png` for styling. Final name: **Clocarmus**. Use the supplied logo assets and Inter typography; confirm font asset availability and licensing before bundling.
 
 - Full-screen, landscape-only, fixed 50/50 left/right division across supported landscape sizes.
-- Left side: album artwork, title, artist, album, year, playback controls, progress, volume, shuffle, repeat, and +/-10-second controls. Browsing/settings replace left-side content.
+- Left side: album artwork, title, artist, album, year directly below album, playback controls, progress, volume, shuffle, repeat, and +/-10-second controls. Browsing/settings replace left-side content.
 - Right side: persistent day, digital clock, and date during normal app use, including browsing/settings. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
@@ -30,7 +30,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 ### Main-player inactivity fading
 
 - Only Menu, Add to playlist, Shuffle, Repeat, Skip forward 10 seconds, and Skip backward 10 seconds fade. All other elements retain their normal appearance.
-- While the main player is active, 10 seconds without touch starts a 500 ms animation from 100% to 35% opacity, regardless of whether music is playing or paused.
+- While the main player is active, 10 seconds without touch starts a 500 ms animation from 100% to 20% opacity, regardless of whether music is playing or paused.
 - Apply opacity to each control's existing appearance, including inactive Shuffle/Repeat styling; preserve active/inactive distinctions, hit areas, and accessibility semantics.
 - Touch anywhere on the player, including the clock pane, immediately restores all six controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
 - Keep controls fully visible while any finger remains down. Start a fresh 15-second countdown when the last finger lifts, including after holds, drags, or multi-touch gestures.
@@ -54,7 +54,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Albums: disc/track number; define a deterministic fallback for missing track numbers during implementation.
 - Folders: filename order, including a deterministic ordering across descendant folders.
 - Playlists: user-controlled order.
-- Missing title: filename. Missing artist/album: Unknown artist/Unknown album. Missing year: omit. Missing artwork: local placeholder.
+- Missing title: filename. Missing artist/album: Unknown artist/Unknown album. Missing year: Unknown year; always retain the year row directly below Album on the main player. Missing artwork: local placeholder.
 - No online metadata/artwork lookups or metadata editor.
 
 ## 3. Library, playlists, and persistence
@@ -148,7 +148,7 @@ Before committing to implementations, verify current official documentation for 
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
 - Add snapshots and paused restoration, source-loss/error handling, audio interruption behavior, and supported media buttons.
-- Add the inactivity-return timer, screen-awake policy, best-effort boot entry, and distinguish sleep from ordinary background playback where platform signals allow.
+- Inactivity-return timer implemented for the browsing shell: arm after selection, reset on interaction, cancel on search typing or Settings/playlist editing entry. Complete service integration, screen-awake policy, best-effort boot entry, and distinguish sleep from ordinary background playback where platform signals allow.
 
 ### Phase 5 — Diagnostics and delivery
 
@@ -167,7 +167,7 @@ Before committing to implementations, verify current official documentation for 
 - Shuffle/repeat restoration, previous-track threshold, seeking bounds, empty queue, and finite skipping of unplayable tracks.
 - Snapshot recovery and paused startup; distinguish UI reconnection from a fresh player session.
 - Browsing-return timer starts only after selection, resets on interaction, cancels in editing/search/settings, and cannot navigate away after cancellation.
-- Main-player fading: full opacity before 10 seconds, animation begins at 10 seconds, and 35% opacity is reached after another 500 ms in both playing and paused states.
+- Main-player fading: full opacity before 10 seconds, animation begins at 10 seconds, and 20% opacity is reached after another 500 ms in both playing and paused states.
 - Touch on either pane immediately restores opacity without suppressing the same touch's action; holds, drags, and multiple fingers prevent fading until the final release.
 - Verify all six controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.

@@ -18,7 +18,9 @@ class MainActivity : ComponentActivity() {
             intent.getBooleanExtra("reference_preview", false)
         setContent {
             ClocarmusTheme {
-                MainPlayerScreen(referencePreview, menuPreview = referencePreview && intent.getBooleanExtra("menu_preview", false))
+                MainPlayerScreen(referencePreview,
+                    menuPreview = referencePreview && intent.getBooleanExtra("menu_preview", false),
+                    tracksPreview = referencePreview && intent.getBooleanExtra("tracks_preview", false))
             }
         }
     }

@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -73,7 +75,7 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false) {
+fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false) {
     val context = LocalContext.current
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
@@ -82,23 +84,76 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     var position by rememberSaveable { mutableFloatStateOf(113f) }
     var shuffle by rememberSaveable { mutableStateOf(true) }
     var repeat by rememberSaveable { mutableIntStateOf(0) }
-    var menuOpen by rememberSaveable { mutableStateOf(menuPreview) }
-    BackHandler(enabled = menuOpen) { menuOpen = false }
+    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview) }
+    var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
+    var selectedTitle by rememberSaveable { mutableStateOf<String?>(null) }
+    var demoQueue by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var trackQuery by rememberSaveable { mutableStateOf("") }
+    val trackScroll = rememberScrollState()
+    val visibleTracks = remember(trackQuery) { demoTracks.filter { it.title.contains(trackQuery, ignoreCase = true) } }
+    LaunchedEffect(trackQuery) { trackScroll.scrollTo(0) }
+    val selectedTrack = demoTracks.firstOrNull { it.title == selectedTitle }
+    val stepTrack: (Int) -> Unit = { direction ->
+        if (demoQueue.isNotEmpty()) {
+            val index = demoQueue.indexOf(selectedTitle)
+            selectedTitle = demoQueue[(index + direction).coerceIn(0, demoQueue.lastIndex)]
+        }
+        position = 0f
+    }
     var dialog by remember { mutableStateOf<String?>(null) }
+    var searchOpen by remember { mutableStateOf(false) }
+    val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen) {
+        tracksOpen = false
+        menuOpen = false
+    }
+    LaunchedEffect(trackScroll, browsingReturn) {
+        snapshotFlow { tracksOpen && trackScroll.isScrollInProgress }.collect { browsingReturn.setScrolling(it) }
+    }
+    LaunchedEffect(trackScroll, browsingReturn) {
+        snapshotFlow { trackScroll.value }.collect { browsingReturn.interaction() }
+    }
+    BackHandler(enabled = menuOpen) {
+        browsingReturn.interaction()
+        if (tracksOpen) tracksOpen = false else {
+            browsingReturn.cancel()
+            menuOpen = false
+        }
+    }
 
     val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !referencePreview)
     val controlOpacity = if (dialog == null && !referencePreview) inactivity.opacity else 1f
 
-    Box(Modifier.fillMaxSize().background(Color.Black).observePlayerTouches(inactivity)) {
+    Box(Modifier.fillMaxSize().background(Color.Black).observePlayerTouches(inactivity)
+        .observeBrowsingTouches(browsingReturn).onPreviewKeyEvent { browsingReturn.interaction(); false }) {
         Row(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                 val grid = PlayerGrid(maxWidth.value, maxHeight.value)
-                if (menuOpen) {
-                    MenuPane(grid, onBack = { menuOpen = false }, onDestination = { dialog = it })
+                if (tracksOpen) {
+                    TrackMenuPane(grid, visibleTracks, selectedTitle, playing, trackScroll, trackQuery,
+                        onQuery = { trackQuery = it },
+                        onSearchVisibilityChanged = { searchOpen = it },
+                        onSearchEdited = { browsingReturn.cancel() },
+                        onBack = { browsingReturn.interaction(); tracksOpen = false }, onSelect = {
+                            selectedTitle = it
+                            demoQueue = ArrayList(visibleTracks.map { track -> track.title })
+                            position = 0f
+                            playing = true
+                            browsingReturn.trackSelected()
+                        })
+                } else if (menuOpen) {
+                    MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
+                        browsingReturn.interaction()
+                        if (it == "All tracks") tracksOpen = true else {
+                            // Settings and playlist editing must never inherit a pending return.
+                            if (it == "Settings" || it == "Playlists") browsingReturn.cancel()
+                            dialog = it
+                        }
+                    })
                 } else {
                     MenuButton(grid, controlOpacity) { menuOpen = true }
                 }
                 PlayerSlider(volume, {
+                    browsingReturn.interaction()
                     volume = it
                     audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0)
                 }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true)
@@ -115,18 +170,18 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                     }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
                     AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
                     AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(225f) }
-                    PlayerLabel("Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true)
-                    PlayerLabel("Lazlo Bane", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale)
-                    PlayerLabel("All the Time in the World", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale)
-                    PlayerLabel("2002", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
+                    PlayerLabel(selectedTitle ?: "Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true)
+                    PlayerLabel(if (selectedTitle == null) "Lazlo Bane" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale)
+                    PlayerLabel(if (selectedTitle == null) "All the Time in the World" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale)
+                    PlayerLabel(if (selectedTitle == null) "2002" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
                     PlayerSlider(position / 225f, { position = it * 225f }, grid.place(79f, 944f, 841f, 87f), "Track position", grid.scale)
                     PlayerLabel(formatPosition(position), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
                     PlayerLabel("3:45", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                 }
-                AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, if (menuOpen) 74f else 93f, highlightOnPress = menuOpen) { position = 0f }
+                AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, if (menuOpen) 74f else 93f, highlightOnPress = menuOpen) { browsingReturn.interaction(); stepTrack(-1) }
                 AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
-                    grid, 508f, 1137f, if (menuOpen) 123f else 110f, highlightOnPress = menuOpen) { playing = !playing }
-                AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, if (menuOpen) 74f else 93f, highlightOnPress = menuOpen) { position = 0f }
+                    grid, 508f, 1137f, if (menuOpen) 123f else 110f, highlightOnPress = menuOpen) { browsingReturn.interaction(); playing = !playing }
+                AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, if (menuOpen) 74f else 93f, highlightOnPress = menuOpen) { browsingReturn.interaction(); stepTrack(1) }
             }
             ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
         }
@@ -145,6 +200,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
 
 @Composable
 private fun MenuButton(grid: PlayerGrid, opacity: Float, onClick: () -> Unit) {
+    val buttonSize = 178f * 0.95f
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val viewConfiguration = LocalViewConfiguration.current
@@ -155,14 +211,14 @@ private fun MenuButton(grid: PlayerGrid, opacity: Float, onClick: () -> Unit) {
     }
     // Keep the original 48×48 SVG canvas for drawing. Its visible pill occupies
     // x=0..48, y=12.979..34.0575 (including the border stroke).
-    Box(grid.place(52f, 17f, 178f, 178f).alpha(opacity)) {
+    Box(grid.place(141f - buttonSize / 2, 106f - buttonSize / 2, buttonSize, buttonSize).alpha(opacity)) {
         Image(painterResource(if (pressed) R.drawable.player_menu_button_pressed else R.drawable.player_menu_button),
             null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         // Restrict only this button's hit area, including the rounded corners.
         // Compose's default minimum touch target would otherwise extend past it.
         CompositionLocalProvider(LocalViewConfiguration provides exactTouchBounds) {
-            Box(Modifier.offset(y = (178f * 12.979f / 48f * grid.scale).dp)
-                .size((178f * grid.scale).dp, (178f * 21.0785f / 48f * grid.scale).dp)
+            Box(Modifier.offset(y = (buttonSize * 12.979f / 48f * grid.scale).dp)
+                .size((buttonSize * grid.scale).dp, (buttonSize * 21.0785f / 48f * grid.scale).dp)
                 .clip(RoundedCornerShape(percent = 50))
                 .semantics { contentDescription = "Menu" }
                 .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick))
@@ -193,9 +249,9 @@ private fun playerTextStyle(size: Float, bold: Boolean = false) = TextStyle(
 )
 
 @Composable
-internal fun PlayerLabel(text: String, modifier: Modifier, size: Float, alignment: Alignment = Alignment.Center, bold: Boolean = false) {
+internal fun PlayerLabel(text: String, modifier: Modifier, size: Float, alignment: Alignment = Alignment.Center, bold: Boolean = false, color: Color = Color.White) {
     Box(modifier, contentAlignment = alignment) {
-        Text(text, style = playerTextStyle(size, bold), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, style = playerTextStyle(size, bold).copy(color = color), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

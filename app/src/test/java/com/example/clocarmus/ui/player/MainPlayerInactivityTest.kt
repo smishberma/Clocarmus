@@ -29,13 +29,13 @@ class MainPlayerInactivityTest {
 
     private fun TestScope.advance(ms: Long) { advanceTimeBy(ms); runCurrent() }
     private fun full(player: MainPlayerInactivity) = assertEquals(1f, player.opacity, 0f)
-    private fun faded(player: MainPlayerInactivity) = assertEquals(.35f, player.opacity, .001f)
+    private fun faded(player: MainPlayerInactivity) = assertEquals(.20f, player.opacity, .001f)
 
     @Test fun fadesOnlyAfter10SecondsThenAnimatesFor500Milliseconds() = runTest {
         val player = player()
         advance(9_999); full(player)
         advance(1); full(player)
-        advance(251); assertEquals(.675f, player.opacity, .01f)
+        advance(251); assertEquals(.60f, player.opacity, .01f)
         advance(250); faded(player)
         advance(30_000); faded(player)
     }
@@ -43,7 +43,7 @@ class MainPlayerInactivityTest {
     @Test fun touchInterruptsAnInProgressAnimationImmediately() = runTest {
         val player = player()
         advance(10_250)
-        assertTrue(player.opacity in .36f.. .99f)
+        assertTrue(player.opacity in .21f.. .99f)
         player.touch(true); full(player)
         advance(30_000); full(player)
         player.touch(false); runCurrent()

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="48"
+   height="48"
+   viewBox="0 0 12.7 12.7"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   sodipodi:docname="skip-next-pressed.svg"
+   xml:space="preserve"
+   inkscape:export-filename="PNGs/main-player.png"
+   inkscape:export-xdpi="233.67665"
+   inkscape:export-ydpi="233.67665"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="true"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:zoom="6.0021756"
+     inkscape:cx="10.079678"
+     inkscape:cy="32.48822"
+     inkscape:window-width="1536"
+     inkscape:window-height="796"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     labelstyle="below"><inkscape:page
+       x="0"
+       y="0"
+       width="12.7"
+       height="12.7"
+       id="page1"
+       margin="0"
+       bleed="0" /></sodipodi:namedview><defs
+     id="defs1" /><g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(449.38351,-1197.8693)"><path
+       id="path155"
+       style="fill:#bf1363;stroke:none;stroke-width:2.18786;stroke-linecap:square;fill-opacity:1"
+       inkscape:transform-center-x="-1.2976653"
+       d="M 94.333557 386.95606 L 94.333557 395.94658 L 102.11958 391.45111 L 94.333557 386.95606 z M 102.24937 386.95606 L 102.24937 395.94616 L 104.86056 395.94616 L 104.86056 386.95606 L 102.24937 386.95606 z "
+       transform="matrix(1.2064217,0,0,1.2064217,-563.18956,731.96419)" /></g></svg>

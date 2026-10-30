@@ -57,7 +57,7 @@ private fun MenuCategory(destination: String, label: String, @DrawableRes asset:
 }
 
 @Composable
-private fun MenuAssetButton(label: String, @DrawableRes asset: Int, @DrawableRes pressedAsset: Int, grid: PlayerGrid,
+internal fun MenuAssetButton(label: String, @DrawableRes asset: Int, @DrawableRes pressedAsset: Int, grid: PlayerGrid,
                             x: Float, y: Float, width: Float, height: Float, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()

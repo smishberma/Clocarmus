@@ -55,7 +55,7 @@ internal class MainPlayerInactivity(private val scope: CoroutineScope) {
         if (active && !fingerDown) {
             countdown = scope.launch {
                 delay(10_000)
-                animate(1f, 0.35f, animationSpec = tween(500, easing = LinearEasing)) { value, _ ->
+                animate(1f, 0.20f, animationSpec = tween(500, easing = LinearEasing)) { value, _ ->
                     opacity = value
                 }
             }

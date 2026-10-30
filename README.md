@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Main player and menu visual shells implemented.** The app renders the reference player with bundled Inter fonts, the supplied SVG artwork placeholder and sample metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, and category browsing/settings screens are not connected yet. The Menu button opens the supplied six-category menu; Back or Android Back returns to the player while preserving local transport state. Category and Settings buttons currently open placeholder dialogs. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
+**Main player, menu, and All Tracks visual shells implemented.** The app renders the reference player with bundled Inter fonts, the supplied SVG artwork placeholder and sample metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, other category screens, and settings are not connected yet. The Menu button opens the supplied six-category menu; Back or Android Back returns to the player while preserving local transport state. All Tracks opens a searchable, alphabetically sorted demo library of 28 English titles, from Amber to Zenith. Other categories and Settings open placeholder dialogs. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -129,7 +129,7 @@ Real USB/SD behavior, steering-wheel controls, ignition and sleep cycles, boot l
 
 ## Main-player inactivity fading
 
-On the active player, Menu, Add to playlist, Shuffle, Repeat, and both 10-second skip controls fade to 35% opacity over 500 ms after 10 seconds without touch. Other elements retain their normal appearance. A touch on either pane restores the controls immediately and still performs its normal action. Holds, drags, and multiple fingers keep them visible until the last release.
+On the active player, Menu, Add to playlist, Shuffle, Repeat, and both 10-second skip controls fade to 20% opacity over 500 ms after 10 seconds without touch. Other elements retain their normal appearance. A touch on either pane restores the controls immediately and still performs its normal action. Holds, drags, and multiple fingers keep them visible until the last release.
 
 Dialogs and backgrounding suspend and reset the timer; dismissal or foreground return starts a fresh interval. The timer is transient, independent of playback and hardware keys, and disabled in static reference previews. Run the timing/cancellation tests with `./gradlew testDebugUnitTest`.
 
@@ -156,10 +156,33 @@ python3 scripts/compare-main-player.py --screen menu --install
 
 This uses `design/02-menu-opened.png`, the same proportional fitting and fixed clock fixture as the player comparison, and the supplied vectors in `design/assets/menu-page/`. Artifacts are saved under `build/visual-comparison/menu/`. Normal launch still opens the player; the menu fixture requires a debug build and `reference_preview=true` with `menu_preview=true`.
 
-The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. Library category and Settings destinations remain placeholders until their screens are implemented.
+The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu; other library categories and Settings remain placeholders.
 
 Regenerate only the menu vectors with `python3 scripts/import-player-assets.py --group menu-page`. The importer also accepts `--group main-player` and `--group shared`; complex SVG filters are rejected by Android's vector converter and require separate asset preparation.
 
 Validated on `headunit_a6` at 1280×720: menu screenshot comparison, all category controls exposed, category/Settings dialog dismissal, play/pause preserved through navigation, and both Back actions. `assembleDebug`, `testDebugUnitTest` (11 tests), and `lintDebug` pass. Pixel comparison remains a review aid; supplied SVG details and Inter rendering differ from the raster mockup.
 
 Menu category icons, Back, and Settings use their supplied normal/pressed SVGs while held; releasing or dragging outside restores their normal state. Transport buttons use a matching pink press highlight. Genres is centered directly below Artists. The updated artwork SVG is bundled as an Android vector with its gradients preserved; regenerate it with `python3 scripts/import-player-assets.py --group main-player --asset no-album-art`.
+
+## Track menu
+
+Menu → All Tracks opens the screen based on `design/03-track-menu.png`, using the existing uniform scale, fixed 50/50 split, bundled Inter, and supplied SVGs. The 28 fixed sample titles cover A–Z, with two A and two S titles. They exercise the scroll window without requiring audio files or storage access.
+
+Swipe the list to move the scrollbar, drag the white pill to scroll quickly, or tap the rail to jump. A letter bubble follows the pill during scrolling; dragging beyond either endpoint clamps at the beginning/end. Search filters the sample titles and Show all clears the filter. A list that fits the window has no draggable pill. The scrollbar also supports accessibility progress actions.
+
+Each row shows its title above an Artist - Album metadata line (demo placeholders). On the main player, Year remains directly below Album after selection and track changes; demo entries use a Year placeholder, while missing real year metadata displays Unknown year. Selecting a row gives it a white background with black text and a black play/pause indicator, and updates the player's demo title/queue. Previous/Next follow the displayed collection captured at selection; Play/Pause updates the selected row indicator. Screen Back and Android Back return through menu → player. Scroll position, search, and selection survive that navigation. Playback remains a visual demo; no audio is connected yet.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen tracks --install
+```
+
+The debug fixture uses `reference_preview=true` and `tracks_preview=true`. Screenshots and proportional comparisons are saved to `build/visual-comparison/tracks/`; the raster reference has different titles from the demo list. Regenerate the two new vectors with `python3 scripts/import-player-assets.py --group track-menu`.
+
+## Return to player after selection
+
+Selecting a track keeps browsing open, then returns directly to the player after 15 seconds without interaction. Taps anywhere (including the clock), transport/volume actions, keyboard input, and scrolling reset the countdown. Holds and ongoing scroll gestures/flings postpone it until the final release/scroll stop.
+
+Typing in search or entering Settings/Playlists cancels the return until another track is selected. Opening the search dialog without typing suspends the countdown; closing it starts a fresh interval if still armed. Backgrounding also suspends it and foregrounding starts a fresh interval. Manual return to the player disarms it, so reopening the menu alone cannot schedule another return. The timer is transient across recreation and independent of main-player control fading; returning starts that screen's normal fading interval.
+
+Run `./gradlew testDebugUnitTest` for exact-deadline, reset, cancellation, scrolling, multi-touch/hold, lifecycle suspension, and rearming checks.
