@@ -127,6 +127,12 @@ Initial acceptance testing will cover 100 mixed-format tracks, nested folders, m
 
 Real USB/SD behavior, steering-wheel controls, ignition and sleep cycles, boot launch, audio interruptions, and OEM process management require physical head-unit testing. Boot launch is a best-effort convenience, not a universal compatibility guarantee. Codec variants, file-identity ambiguity, and performance on low-powered hardware remain validation risks documented in [PLAN.md](PLAN.md).
 
+## Main-player inactivity fading
+
+On the active player, Menu, Add to playlist, Shuffle, Repeat, and both 10-second skip controls fade to 35% opacity over 500 ms after 10 seconds without touch. Other elements retain their normal appearance. A touch on either pane restores the controls immediately and still performs its normal action. Holds, drags, and multiple fingers keep them visible until the last release.
+
+Dialogs and backgrounding suspend and reset the timer; dismissal or foreground return starts a fresh interval. The timer is transient, independent of playback and hardware keys, and disabled in static reference previews. Run the timing/cancellation tests with `./gradlew testDebugUnitTest`.
+
 ## Main screen visual comparison
 
 Build with `./gradlew assembleDebug`, start the **headunit_a6** AVD, then run:

@@ -30,7 +30,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 ### Main-player inactivity fading
 
 - Only Menu, Add to playlist, Shuffle, Repeat, Skip forward 10 seconds, and Skip backward 10 seconds fade. All other elements retain their normal appearance.
-- While the main player is active, 15 seconds without touch starts a 300 ms animation from 100% to 50% opacity, regardless of whether music is playing or paused.
+- While the main player is active, 10 seconds without touch starts a 500 ms animation from 100% to 35% opacity, regardless of whether music is playing or paused.
 - Apply opacity to each control's existing appearance, including inactive Shuffle/Repeat styling; preserve active/inactive distinctions, hit areas, and accessibility semantics.
 - Touch anywhere on the player, including the clock pane, immediately restores all six controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
 - Keep controls fully visible while any finger remains down. Start a fresh 15-second countdown when the last finger lifts, including after holds, drags, or multi-touch gestures.
@@ -167,7 +167,7 @@ Before committing to implementations, verify current official documentation for 
 - Shuffle/repeat restoration, previous-track threshold, seeking bounds, empty queue, and finite skipping of unplayable tracks.
 - Snapshot recovery and paused startup; distinguish UI reconnection from a fresh player session.
 - Browsing-return timer starts only after selection, resets on interaction, cancels in editing/search/settings, and cannot navigate away after cancellation.
-- Main-player fading: full opacity before 15 seconds, animation begins at 15 seconds, and 50% opacity is reached after another 300 ms in both playing and paused states.
+- Main-player fading: full opacity before 10 seconds, animation begins at 10 seconds, and 35% opacity is reached after another 500 ms in both playing and paused states.
 - Touch on either pane immediately restores opacity without suppressing the same touch's action; holds, drags, and multiple fingers prevent fading until the final release.
 - Verify all six controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.

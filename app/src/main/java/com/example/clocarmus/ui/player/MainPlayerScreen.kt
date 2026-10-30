@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -76,27 +77,30 @@ fun MainPlayerScreen(referencePreview: Boolean = false) {
     var repeat by rememberSaveable { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    val inactivity = rememberMainPlayerInactivity(enabled = dialog == null && !referencePreview)
+    val controlOpacity = if (dialog == null && !referencePreview) inactivity.opacity else 1f
+
+    Box(Modifier.fillMaxSize().background(Color.Black).observePlayerTouches(inactivity)) {
         Row(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                 val grid = PlayerGrid(maxWidth.value, maxHeight.value)
-                MenuButton(grid) { dialog = "Menu" }
+                MenuButton(grid, controlOpacity) { dialog = "Menu" }
                 PlayerSlider(volume, {
                     volume = it
                     audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0)
                 }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true)
-                AssetButton("Add to playlist", R.drawable.player_playlist_button, grid, 850f, 106f, 104f) { dialog = "Add to playlist" }
+                AssetButton("Add to playlist", R.drawable.player_playlist_button, grid, 850f, 106f, 104f, opacity = controlOpacity) { dialog = "Add to playlist" }
                 Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
                     grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
                 AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
-                    grid, 141f, 291f, 93f, if (shuffle) "On" else "Off") { shuffle = !shuffle }
+                    grid, 141f, 291f, 93f, if (shuffle) "On" else "Off", opacity = controlOpacity) { shuffle = !shuffle }
                 AssetButton("Repeat", when (repeat) {
                     1 -> R.drawable.player_repeat_one_active
                     2 -> R.drawable.player_repeat_active
                     else -> R.drawable.player_repeat_inactive
-                }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }) { repeat = (repeat + 1) % 3 }
-                AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f) { position = (position - 10).coerceAtLeast(0f) }
-                AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f) { position = (position + 10).coerceAtMost(225f) }
+                }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
+                AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
+                AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(225f) }
                 PlayerLabel("Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true)
                 PlayerLabel("Lazlo Bane", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale)
                 PlayerLabel("All the Time in the World", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale)
@@ -121,11 +125,11 @@ fun MainPlayerScreen(referencePreview: Boolean = false) {
 }
 
 @Composable
-private fun MenuButton(grid: PlayerGrid, onClick: () -> Unit) {
+private fun MenuButton(grid: PlayerGrid, opacity: Float, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     // The SVG's square canvas includes the pill's original padding; preserve that canvas.
-    Box(grid.touchTarget(141f, 106f, 178f).semantics { contentDescription = "Menu" }
+    Box(grid.touchTarget(141f, 106f, 178f).alpha(opacity).semantics { contentDescription = "Menu" }
         .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
         Image(painterResource(if (pressed) R.drawable.player_menu_button_pressed else R.drawable.player_menu_button),
             null, Modifier.size((178f * grid.scale).dp), contentScale = ContentScale.Fit)
@@ -134,8 +138,8 @@ private fun MenuButton(grid: PlayerGrid, onClick: () -> Unit) {
 
 @Composable
 private fun AssetButton(label: String, @DrawableRes asset: Int, grid: PlayerGrid, cx: Float, cy: Float,
-                        size: Float, state: String? = null, onClick: () -> Unit) {
-    Box(grid.touchTarget(cx, cy, size).semantics {
+                        size: Float, state: String? = null, opacity: Float = 1f, onClick: () -> Unit) {
+    Box(grid.touchTarget(cx, cy, size).alpha(opacity).semantics {
         contentDescription = label
         if (state != null) stateDescription = state
     }.clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
