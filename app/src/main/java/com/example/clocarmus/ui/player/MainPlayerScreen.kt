@@ -139,7 +139,7 @@ private fun AssetButton(label: String, @DrawableRes asset: Int, grid: PlayerGrid
         contentDescription = label
         if (state != null) stateDescription = state
     }.clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        Image(painterResource(asset), null, Modifier.size((size * grid.scale).dp), contentScale = ContentScale.Fit)
+        Image(painterResource(asset), null, Modifier.size((size * grid.scale * 0.8f).dp), contentScale = ContentScale.Fit)
     }
 }
 

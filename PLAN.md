@@ -27,6 +27,18 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Configurable time and date formats. Default assumption: mockup-style 12-hour time and DD-MM-YYYY date.
 - English-only interface; preserve music metadata in its original language.
 
+### Main-player inactivity fading
+
+- Only Menu, Add to playlist, Shuffle, Repeat, Skip forward 10 seconds, and Skip backward 10 seconds fade. All other elements retain their normal appearance.
+- While the main player is active, 15 seconds without touch starts a 300 ms animation from 100% to 50% opacity, regardless of whether music is playing or paused.
+- Apply opacity to each control's existing appearance, including inactive Shuffle/Repeat styling; preserve active/inactive distinctions, hit areas, and accessibility semantics.
+- Touch anywhere on the player, including the clock pane, immediately restores all six controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
+- Keep controls fully visible while any finger remains down. Start a fresh 15-second countdown when the last finger lifts, including after holds, drags, or multi-touch gestures.
+- Hardware/media buttons, physical volume keys, clock updates, playback progress, and track changes do not reset the countdown.
+- Suspend and reset fading while another screen or dialog is active or the app is backgrounded. Returning to the active player, including dismissing a dialog, restores full opacity and starts a fresh interval.
+- Keep this timer independent of the browsing-to-player return timer below. Its state is transient and is not persisted across screen recreation.
+- Keep static reference-preview mode fully opaque for deterministic mockup comparisons.
+
 ### First use and navigation
 
 1. Show branding and welcome flow, explain storage access, and let users select music folders.
@@ -123,6 +135,7 @@ Before committing to implementations, verify current official documentation for 
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Implement skippable onboarding, source management, empty/access-denied states, and browsing navigation.
+- Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the six designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
 
 ### Phase 3 — Local library
@@ -153,7 +166,12 @@ Before committing to implementations, verify current official documentation for 
 - Source overlap, disconnect/reconnect, permission loss, interrupted scan, source removal, and rename/move reconciliation with duplicate ambiguity.
 - Shuffle/repeat restoration, previous-track threshold, seeking bounds, empty queue, and finite skipping of unplayable tracks.
 - Snapshot recovery and paused startup; distinguish UI reconnection from a fresh player session.
-- Timer starts only after selection, resets on interaction, cancels in editing/search/settings, and cannot navigate away after cancellation.
+- Browsing-return timer starts only after selection, resets on interaction, cancels in editing/search/settings, and cannot navigate away after cancellation.
+- Main-player fading: full opacity before 15 seconds, animation begins at 15 seconds, and 50% opacity is reached after another 300 ms in both playing and paused states.
+- Touch on either pane immediately restores opacity without suppressing the same touch's action; holds, drags, and multiple fingers prevent fading until the final release.
+- Verify all six controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
+- Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
+- Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
 
 ### AVD acceptance
 
