@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, and All Tracks visual shells implemented on `headunit_a6`. All Tracks uses 28 demo titles with search, selection, interactive fast scrolling, and the 15-second inactivity return after selection. Real library data, playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, and the four-screen Artists visual flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all updates the demo queue, disables shuffle, and returns immediately. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -47,6 +47,43 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 4. Browse All Tracks, Artists, Albums, Genres, Folders, and Playlists. Search songs, albums, and artists.
 5. Selecting a song starts its collection in displayed order; search queues all matching songs. Folder playback includes descendants.
 6. Remain in browsing after selection, then return to the player after 15 seconds of inactivity. Taps, scrolling, and typing reset inactivity; entering settings, playlist editing, or typing in search cancels the automatic return until another song is selected. Cancellation takes precedence over resetting.
+
+### Artists browsing flow
+
+The visual/demo flow is implemented using the shared All Tracks list, search, selection, fast-scroll, and inactivity-return components. Repository and playback-service integration remain planned. Keep the fixed 50/50 layout, persistent clock, volume slider, and transport controls across all four screens.
+
+#### Artists list — `design/04-artists-screen.png`
+
+- Open from Menu > Artists. List artists alphabetically by name, grouping on the track's Artist tag rather than Album Artist. Retain the existing Unknown artist fallback for missing tags.
+- Show artist name with album count underneath, using singular/plural labels such as `1 Album` and `2 Albums`. Do not show a year on artist rows.
+- Count distinct album titles for each artist across selected sources; duplicate copies do not inflate the count. Retain counts for disconnected sources, and group missing album tags into one Unknown album entry per artist.
+- Search filters artist names only, using the existing case-insensitive search interaction.
+- Tapping an artist opens its detail screen and retains that artist as the white highlighted, last-opened selection when returning to the list. Browsing an artist does not itself start playback or arm the browsing-return timer.
+
+#### Artist detail — `design/05-artists-screen-artist-options.png`
+
+- Display the selected artist name beneath the Artists heading, with Play all and a Browse section containing Tracks and Albums.
+- Play all replaces the current queue with all tracks belonging to this artist in alphabetical song-title order, disables shuffle, begins playback from the first playable entry, and immediately returns to the main player. This is an explicit exception to the normal 15-second browsing return.
+- Preserve the established unavailable/unplayable-track handling; do not start unrelated tracks if no artist tracks can play.
+- Tracks opens the selected artist's track browser; Albums opens the selected artist's album browser. These navigation actions do not initiate playback.
+
+#### Artist tracks — `design/06-artists-screen-artist-all-tracks.png`
+
+- Show ALL TRACKS with the selected artist name underneath. List only that artist's tracks alphabetically by song title, with `Artist - Album` below each title, matching the reference and existing track browser interaction.
+- Search filters song titles within this artist only. Selecting a song replaces the queue with the displayed artist tracks (the matching subset while filtered), starts the selected track, and retains the existing selected-track/playback indicator behavior.
+- After individual track selection, remain in browsing until 15 seconds of inactivity, using the existing interaction resets and cancellation on search typing/settings/playlist editing. Unlike Play all, individual selection does not introduce a new shuffle-off rule.
+
+#### Artist albums — `design/07-artists-screen-artist-all-albums.png`
+
+- Show ALL ALBUMS with the selected artist name underneath. List only albums associated with that artist, alphabetically by album title; show year below each title, or Unknown year when unavailable. Year subtitles belong to album rows, not artist or track rows in this flow.
+- Use the same distinct album grouping that supplies the artist's album count. Search filters album titles within this artist only.
+- Tapping an album only highlights that row for now. It does not start playback, create a queue, open a detail screen, or arm an inactivity return. Subsequent album screens and their interactions will be designed separately.
+
+#### Back navigation and retained state
+
+- On-screen Back and Android Back use the same hierarchy: artist Tracks/Albums > artist detail > Artists > Menu.
+- Restore each list's search query and scroll position when navigating back. Keep track and album list state scoped to the selected artist so filters do not leak between artists.
+- Preserve the last-opened artist highlight independently of playback state. Reuse existing scrolling and search patterns while following the supplied screen-specific headings and rows.
 
 ### Sorting and metadata
 
@@ -143,10 +180,12 @@ Before committing to implementations, verify current official documentation for 
 - Implement database/preferences, selected sources, recursive discovery, metadata/artwork caching, incremental refresh, and unavailable states.
 - Implement renamed/moved-file reconciliation and overlapping-source handling.
 - Add browsing, search, sorting, playlists, favorites, recent lists, and immediate membership updates.
+- Add the four-screen Artists flow with Artist-tag grouping, distinct album counts, artist-scoped tracks/albums and search, retained list state, hierarchical Back, and highlight-only album selection. Reuse the existing browser components with stable track identity rather than title-only selection when connecting real library data.
 
 ### Phase 4 — Playback integration and lifecycle
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
+- Connect artist Play all to queue replacement, alphabetical track ordering, shuffle disablement, and immediate player return; preserve the existing delayed return for individual artist-track selection.
 - Add snapshots and paused restoration, source-loss/error handling, audio interruption behavior, and supported media buttons.
 - Inactivity-return timer implemented for the browsing shell: arm after selection, reset on interaction, cancel on search typing or Settings/playlist editing entry. Complete service integration, screen-awake policy, best-effort boot entry, and distinguish sleep from ordinary background playback where platform signals allow.
 
@@ -172,6 +211,17 @@ Before committing to implementations, verify current official documentation for 
 - Verify all six controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
 - Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
+
+### Artists-flow acceptance
+
+- Artist-tag grouping differs correctly from Album Artist; missing tags use Unknown artist. Artist rows sort alphabetically and show singular/plural distinct album counts, including Unknown album and disconnected sources.
+- Duplicate album copies across sources count once per artist; identical album titles belonging to different artists remain scoped to their artist. Duplicate track titles remain distinct selectable tracks when real library data is connected.
+- Artist detail, Tracks, and Albums headings reflect the chosen artist. Tracks have Artist - Album subtitles; album rows alone have year subtitles, including Unknown year.
+- Search filters only the appropriate field and artist scope. Empty/no-match results never show tracks or albums from another artist.
+- Play all replaces an existing queue, disables shuffle, starts in alphabetical title order using normal unplayable-track handling, and returns immediately. Individual track selection queues displayed results and uses the existing 15-second inactivity return instead.
+- Album taps change only the highlighted selection; no playback or unplanned navigation occurs.
+- Both Back mechanisms follow the specified hierarchy and restore queries, scroll positions, and last-opened artist selection without leaking state between artists.
+- Compare all four panes against their reference PNGs while verifying the clock, volume, and transport controls remain available.
 
 ### AVD acceptance
 

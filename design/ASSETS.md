@@ -79,3 +79,9 @@ Track rows show title and artist/album on two lines. The selected row uses a sol
 The four pressed playback SVGs in `assets/shared/` are imported as `player_play_pressed.xml`, `player_pause_pressed.xml`, `player_skip_back_pressed.xml`, and `player_skip_next_pressed.xml`. Play/Pause chooses the pressed asset for its current playback state; actions still occur on release. Both normal and pressed images use the same proportional display size and existing touch target.
 
 To regenerate these individually, run `python3 scripts/import-player-assets.py --group shared --asset play-pressed` (and repeat for `pause-pressed`, `skip-back-pressed`, and `skip-next-pressed`).
+
+## Artist options pressed assets
+
+Play all uses `assets/shared/play-all.svg` and `play-all-pressed.svg`, imported as `player_play_all.xml` and `player_play_all_pressed.xml`, replacing the triangle previously drawn with Compose. Albums uses the shared `albums.svg` / `albums-pressed.svg` pair (`player_albums*.xml`). Tracks reuses `menu_all_tracks.xml` / `menu_all_tracks_pressed.xml`. Each button shows its supplied pressed SVG while held and restores its normal SVG on release or cancellation, retaining white labels and suppressing ripples. Back and the shared transport buttons retain their existing pressed assets.
+
+Regenerate each new shared vector with `python3 scripts/import-player-assets.py --group shared --asset play-all`, repeating for `play-all-pressed`, `albums`, and `albums-pressed`.

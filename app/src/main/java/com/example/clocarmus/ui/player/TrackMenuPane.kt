@@ -38,7 +38,10 @@ internal val demoTrackTitles = listOf(
     "Willow", "Xenon", "Yonder", "Zenith"
 )
 
-internal data class TrackMenuEntry(val title: String, val artist: String, val album: String, val year: String? = null)
+internal data class TrackMenuEntry(
+    val title: String, val artist: String, val album: String, val year: String? = null,
+    val id: String = title, val available: Boolean = true
+)
 
 // Placeholder metadata matches the visual fixture until the library supplies real tags.
 internal val demoTracks = demoTrackTitles.map { TrackMenuEntry(it, "Artist", "Album", "Year") }
@@ -51,11 +54,23 @@ internal fun fastScrollLetter(titles: List<String>, fraction: Float): String =
     titles.getOrNull(((titles.size - 1).coerceAtLeast(0) * fraction.coerceIn(0f, 1f)).roundToInt())
         ?.firstOrNull()?.uppercaseChar()?.toString().orEmpty()
 
+internal data class BrowserRow(val id: String, val title: String, val subtitle: String)
+
 @Composable
 internal fun TrackMenuPane(
+    grid: PlayerGrid, tracks: List<TrackMenuEntry>, selectedId: String?, playing: Boolean,
+    scroll: ScrollState, query: String, onQuery: (String) -> Unit,
+    onSearchVisibilityChanged: (Boolean) -> Unit, onSearchEdited: () -> Unit,
+    onBack: () -> Unit, onSelect: (String) -> Unit, artist: String? = null
+) = BrowserPane(grid, tracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") },
+    selectedId, playing, scroll, query, onQuery, onSearchVisibilityChanged, onSearchEdited,
+    onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT))
+
+@Composable
+internal fun BrowserPane(
     grid: PlayerGrid,
-    tracks: List<TrackMenuEntry>,
-    selectedTitle: String?,
+    rows: List<BrowserRow>,
+    selectedId: String?,
     playing: Boolean,
     scroll: ScrollState,
     query: String,
@@ -63,9 +78,14 @@ internal fun TrackMenuPane(
     onSearchVisibilityChanged: (Boolean) -> Unit,
     onSearchEdited: () -> Unit,
     onBack: () -> Unit,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    heading: String = "ALL TRACKS",
+    subtitle: String? = null,
+    icon: Int = R.drawable.menu_all_tracks,
+    searchName: String = "tracks",
+    showPlayback: Boolean = true
 ) {
-    val titles = remember(tracks) { tracks.map { it.title } }
+    val titles = remember(rows) { rows.map { it.title } }
     var searching by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf(query) }
     DisposableEffect(searching) {
@@ -74,52 +94,49 @@ internal fun TrackMenuPane(
     }
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onBack)
-    Image(painterResource(R.drawable.menu_all_tracks), null,
-        grid.place(342f, 192f, 52f, 52f), contentScale = ContentScale.Fit)
-    PlayerLabel("ALL TRACKS", grid.place(418f, 191f, 300f, 54f), 40f * grid.scale,
-        alignment = Alignment.CenterStart, bold = true)
-    Box(grid.touchTarget(902f, 103f, 87f).semantics { contentDescription = "Search tracks" }
+    BrowserHeading(grid, heading, icon, subtitle)
+    Box(grid.touchTarget(902f, 103f, 87f).semantics { contentDescription = "Search $searchName" }
         .clickable(role = Role.Button) { draft = query; searching = true }, contentAlignment = Alignment.Center) {
         Image(painterResource(R.drawable.track_search), null,
             Modifier.size((87f * grid.scale).dp), contentScale = ContentScale.Fit)
     }
 
     Column(grid.place(53f, 293f, 827f, 700f).verticalScroll(scroll)) {
-        tracks.forEach { track ->
-            val title = track.title
-            val selected = title == selectedTitle
+        rows.forEachIndexed { index, row ->
+            val title = row.title
+            val selected = row.id == selectedId
             Box(Modifier.fillMaxWidth().height((126f * grid.scale).dp)
                 .clip(RoundedCornerShape((36f * grid.scale).dp))
                 .background(if (selected) Color.White else Color.Transparent)
                 .semantics(mergeDescendants = true) {
                     this.selected = selected
-                    if (selected) stateDescription = if (playing) "Playing" else "Paused"
+                    if (selected && showPlayback) stateDescription = if (playing) "Playing" else "Paused"
                 }
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                    role = Role.Button) { onSelect(title) }) {
+                    role = Role.Button) { onSelect(row.id) }) {
                 val textColor = if (selected) Color.Black else Color.White
                 Column(Modifier.fillMaxSize().padding(start = (32f * grid.scale).dp,
-                    end = ((if (selected) 100f else 28f) * grid.scale).dp)) {
+                    end = ((if (selected && showPlayback) 100f else 28f) * grid.scale).dp)) {
                     PlayerLabel(title, Modifier.fillMaxWidth().height((76f * grid.scale).dp),
                         58f * grid.scale, alignment = Alignment.CenterStart, color = textColor)
-                    PlayerLabel("${track.artist} - ${track.album}",
+                    PlayerLabel(row.subtitle,
                         Modifier.fillMaxWidth().height((42f * grid.scale).dp),
                         34f * grid.scale, alignment = Alignment.CenterStart, color = textColor)
                 }
-                if (selected) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
+                if (selected && showPlayback) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
                     null, Modifier.align(Alignment.CenterEnd).padding(end = (42f * grid.scale).dp)
                         .size((48f * grid.scale).dp), contentScale = ContentScale.Fit,
                     colorFilter = if (playing) null else ColorFilter.tint(Color.Black))
             }
-            if (title != titles.last()) Spacer(Modifier.height((14f * grid.scale).dp))
+            if (index != rows.lastIndex) Spacer(Modifier.height((14f * grid.scale).dp))
         }
     }
-    if (titles.isEmpty()) PlayerLabel("No matching tracks", grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
+    if (titles.isEmpty()) PlayerLabel("No matching $searchName", grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
         alignment = Alignment.CenterStart)
-    TrackScrollbar(grid, scroll, titles)
+    TrackScrollbar(grid, scroll, titles, searchName)
 
-    if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search tracks") },
-        text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Track title") }) },
+    if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search $searchName") },
+        text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Search $searchName") }) },
         confirmButton = { TextButton(onClick = { onQuery(draft.trim()); searching = false }) { Text("Search") } },
         dismissButton = { TextButton(onClick = { onQuery(""); searching = false }) { Text("Show all") } })
 }
@@ -127,7 +144,7 @@ internal fun TrackMenuPane(
 private val ColorScrollRail = Color(0xff494949)
 
 @Composable
-private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>) {
+private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val railHeight = 708f * grid.scale
@@ -147,7 +164,7 @@ private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<S
 
     Box(grid.place(908f, 312f, 48f, 708f)
         .semantics {
-            contentDescription = "Track scrollbar"
+            contentDescription = "$searchName scrollbar"
             stateDescription = fastScrollLetter(titles, fraction)
             progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
             setProgress { if (scrollable) { jump(it); true } else false }

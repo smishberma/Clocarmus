@@ -20,7 +20,8 @@ class MainActivity : ComponentActivity() {
             ClocarmusTheme {
                 MainPlayerScreen(referencePreview,
                     menuPreview = referencePreview && intent.getBooleanExtra("menu_preview", false),
-                    tracksPreview = referencePreview && intent.getBooleanExtra("tracks_preview", false))
+                    tracksPreview = referencePreview && intent.getBooleanExtra("tracks_preview", false),
+                    artistsPreview = if (referencePreview) intent.getStringExtra("artists_preview")?.takeIf { it in setOf("artists", "artist-detail", "artist-tracks", "artist-albums") } else null)
             }
         }
     }
