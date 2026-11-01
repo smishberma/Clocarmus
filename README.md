@@ -156,7 +156,7 @@ python3 scripts/compare-main-player.py --screen menu --install
 
 This uses `design/02-menu-screen.png`, the same proportional fitting and fixed clock fixture as the player comparison, and the supplied vectors in `design/assets/menu-page/`. Artifacts are saved under `build/visual-comparison/menu/`. Normal launch still opens the player; the menu fixture requires a debug build and `reference_preview=true` with `menu_preview=true`.
 
-The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu and Artists opens the four-screen artist browser; other library categories and Settings remain placeholders.
+The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, and Albums opens the album browser; other library categories and Settings remain placeholders.
 
 Regenerate only the menu vectors with `python3 scripts/import-player-assets.py --group menu-page`. The importer also accepts `--group main-player` and `--group shared`; complex SVG filters are rejected by Android's vector converter and require separate asset preparation.
 
@@ -192,7 +192,7 @@ Run `./gradlew testDebugUnitTest` for exact-deadline, reset, cancellation, scrol
 
 Menu → Artists opens the artist list; tapping a name opens its detail pane with Play all and Browse → Tracks / Albums. All four panes share the existing fixed split, clock, volume, transport, Inter typography, and list controls. Track Artist tags determine grouping; distinct album titles determine counts, with Unknown artist / Unknown album / Unknown year fallbacks. Disconnected entries remain in the groups. This is a demo shell with separate artist fixtures; the real offline library and audio service are still pending.
 
-Search filters the current field (artist name, song title, or album title). Back and Android Back follow Tracks/Albums → artist detail → Artists → Menu. Queries and scroll positions are retained per list and artist, and the last-opened artist stays highlighted independently of the selected track. Album taps only highlight. Individual track selection queues the displayed matching tracks and arms the existing 15-second return. Play all queues the artist's tracks alphabetically, disables shuffle, selects the first available entry, and returns immediately to the player. Queue selection uses track IDs so the same title in different artists' fixtures stays distinct.
+Search filters the current field (artist name, song title, or album title). Back and Android Back follow Tracks/Albums → artist detail → Artists → Menu. Queries and scroll positions are retained per list and artist, and the last-opened artist stays highlighted independently of the selected track. Album taps open shared album options for the whole album, including compilation performers. Individual track selection queues the displayed matching tracks and arms the existing 15-second return. Play all queues the artist's tracks alphabetically, disables shuffle, selects the first available entry, and returns immediately to the player. Queue selection uses track IDs so the same title in different artists' fixtures stays distinct.
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug
@@ -204,6 +204,26 @@ python3 scripts/compare-main-player.py --screen artist-albums
 
 Comparisons are saved under `build/visual-comparison/<screen>/`. These debug-only fixtures reproduce Ripple and the mockups' visible Pebble–Summit rows; the album preview uses a separate sample collection to reproduce the supplied years (the artist-list mockup specifies one Ripple album while the album mockup shows several). Normal browsing uses consistent artist groups and album counts. The comparison script settles each preview after immersive-mode resizing. Supplied vectors, font rasterization, the screen divider, and a scrollbar positioned from the actual collection length introduce small differences from the PNGs.
 
-Validated on `headunit_a6` (API 23, 1280×720): all four screenshot comparisons; Menu navigation; artist-scoped search and query restoration through Back, player return, and reentry; exact artist/track scroll restoration; last-opened artist highlighting; highlight-only album taps; delayed individual-track return; immediate Play all return and queue advancement. The unit suite has 32 passing tests, including grouping, distinct album counts with unavailable copies, metadata fallbacks, alphabetical ordering, stable IDs, and existing inactivity/scroll checks. `assembleDebug` and `lintDebug` pass.
+Validated on `headunit_a6` (API 23, 1280×720): all four screenshot comparisons; Menu navigation; artist-scoped search and query restoration through Back, player return, and reentry; exact artist/track scroll restoration; last-opened artist highlighting; album highlighting; delayed individual-track return; immediate Play all return and queue advancement. The unit suite has 32 passing tests, including grouping, distinct album counts with unavailable copies, metadata fallbacks, alphabetical ordering, stable IDs, and existing inactivity/scroll checks. `assembleDebug` and `lintDebug` pass.
 
 Artist options uses the supplied normal/pressed SVG pairs for Play all, Tracks, and Albums. Holding a button changes its icon to the supplied pressed color; release or cancellation restores the normal icon. Labels stay white, and actions run on release, matching Back and transport controls.
+
+
+## Albums flow
+
+Menu → Albums opens an alphabetical list with effective Album Artist, year, and song count. Album options provides Play album, Album Tracks, and an Artist shortcut. Album Tracks shows zero-padded numbers and durations in numeric disc/track order. Missing metadata uses Unknown album / Unknown artist / Unknown year, `--`, and `--:--`. Album years use the most frequent known year, earliest on ties. Physical copies and disconnected entries remain in counts.
+
+Albums group by title + effective Album Artist. Artist album rows use the same identity, while main artist counts retain distinct titles. Album taps from Artists open the whole album. The Artist shortcut uses explicit Album Artist scope, including Various Artists; the main Artists menu continues using track Artist. Back retraces the entry path and restores list queries, scroll, and last-opened selection. Search filters album titles or song titles within the current collection; options search opens Album Tracks search.
+
+Play album captures the entire ordered album queue, disables shuffle, starts the first available demo track, and immediately returns to the player. Selecting an individual track captures the displayed matching queue and keeps the existing 15-second return without changing shuffle. Unavailable selections skip only within that queue; an exhausted collection stops. This remains a visual/demo implementation: repository scanning and real audio playback are pending.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen albums --install
+python3 scripts/compare-main-player.py --screen album-options
+python3 scripts/compare-main-player.py --screen album-tracks
+```
+
+Comparison artifacts are saved under `build/visual-comparison/<screen>/`. Debug fixtures use `albums_preview=albums`, `album-options`, or `album-tracks` with `reference_preview=true`. The list fixture reproduces the reference album rows, while normal browsing also includes the artist fixtures and a Various Artists compilation. Album Tracks uses a proportional scrollbar thumb; the supplied normal/pressed Album Tracks vectors retain their original geometry and colors.
+
+Validated on `headunit_a6` (API 23, 1280×720): three reference comparisons; Menu Albums entry; scoped album search and filter restoration through Back; numbered/duration rows; options search opening Album Tracks search; individual selection remaining in browsing; immediate Play album return at track 1; Artist shortcut and Back to album options; an artist album opening both performers of a compilation; Various Artists scope and Back to the originating artist. All 38 unit tests pass, including album identity, metadata fallbacks, year ties, numeric disc/track ordering, disconnected copies, scope separation, filtered ordering, and finite unavailable selection. `assembleDebug` and `lintDebug` pass. Real audio and physical-head-unit behavior remain unvalidated.

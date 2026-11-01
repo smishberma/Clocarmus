@@ -75,7 +75,7 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null) {
+fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null) {
     val context = LocalContext.current
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
@@ -84,16 +84,25 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     var position by rememberSaveable { mutableFloatStateOf(113f) }
     var shuffle by rememberSaveable { mutableStateOf(true) }
     var repeat by rememberSaveable { mutableIntStateOf(0) }
-    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null) }
+    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null) }
     var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
-    var artistsOpen by rememberSaveable { mutableStateOf(artistsPreview != null) }
-    var artistPage by rememberSaveable { mutableStateOf(when (artistsPreview) {
-        "artist-detail" -> "detail"; "artist-tracks" -> "tracks"; "artist-albums" -> "albums"; else -> "artists"
+    var browserStack by rememberSaveable { mutableStateOf(arrayListOf<BrowserDestination>().apply {
+        if (artistsPreview != null) {
+            add(BrowserDestination("artists", artist = "Ripple"))
+            if (artistsPreview != "artists") add(BrowserDestination("detail", artist = "Ripple"))
+            if (artistsPreview == "artist-tracks" || artistsPreview == "artist-albums")
+                add(BrowserDestination(if (artistsPreview == "artist-tracks") "tracks" else "albums", artist = "Ripple"))
+        }
+        if (albumsPreview != null) {
+            add(BrowserDestination("album-list"))
+            if (albumsPreview != "albums") add(BrowserDestination("album-options", album = AlbumIdentity("Saffron", "Artist")))
+            if (albumsPreview == "album-tracks") add(BrowserDestination("album-tracks", album = AlbumIdentity("Saffron", "Artist")))
+        }
     }) }
-    var artistName by rememberSaveable { mutableStateOf<String?>(if (artistsPreview != null) "Ripple" else null) }
+    val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
-    var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (artistsPreview == "artist-tracks") "artist:Ripple:18" else null) }
-    val selectedTrack = (demoTracks + demoArtistTracks).firstOrNull { it.id == selectedTrackId }
+    var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else null) }
+    val selectedTrack = (demoTracks + demoLibraryTracks).firstOrNull { it.id == selectedTrackId }
     val selectedTitle = selectedTrack?.title
     var demoQueue by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var trackQuery by rememberSaveable { mutableStateOf("") }
@@ -111,11 +120,11 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     var searchOpen by remember { mutableStateOf(false) }
     val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen) {
         tracksOpen = false
-        artistsOpen = false
+        browserStack = arrayListOf()
         menuOpen = false
     }
     LaunchedEffect(trackScroll, browsingReturn) {
-        snapshotFlow { tracksOpen && !artistsOpen && trackScroll.isScrollInProgress }.collect { browsingReturn.setScrolling(it) }
+        snapshotFlow { tracksOpen && browserStack.isEmpty() && trackScroll.isScrollInProgress }.collect { browsingReturn.setScrolling(it) }
     }
     LaunchedEffect(trackScroll, browsingReturn) {
         snapshotFlow { trackScroll.value }.collect { browsingReturn.interaction() }
@@ -123,20 +132,19 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     val goBack: () -> Unit = {
         browsingReturn.interaction()
         when {
-            artistsOpen && (artistPage == "tracks" || artistPage == "albums") -> artistPage = "detail"
-            artistsOpen && artistPage == "detail" -> artistPage = "artists"
-            artistsOpen -> artistsOpen = false
+            browserStack.isNotEmpty() -> browserStack = ArrayList(browserStack.dropLast(1))
             tracksOpen -> tracksOpen = false
             else -> { browsingReturn.cancel(); menuOpen = false }
         }
     }
     BackHandler(enabled = menuOpen, onBack = goBack)
     val selectTrack: (String, List<TrackMenuEntry>) -> Unit = { id, tracks ->
-        selectedTrackId = id
+        val playable = playableTrack(tracks, id)
+        selectedTrackId = playable?.id
         demoQueue = ArrayList(tracks.map { it.id })
         position = 0f
-        playing = true
-        browsingReturn.trackSelected()
+        playing = playable != null
+        if (playable != null) browsingReturn.trackSelected() else browsingReturn.cancel()
     }
 
     val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !referencePreview)
@@ -147,24 +155,34 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
         Row(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                 val grid = PlayerGrid(maxWidth.value, maxHeight.value)
-                if (artistsOpen) {
-                    artistStates.SaveableStateProvider("artists-flow") {
-                        ArtistsPane(grid, artistPage, artistName, artistsPreview, selectedTrackId, playing,
-                            browsingReturn, onSearchVisibilityChanged = { searchOpen = it }, onBack = goBack,
-                            onArtist = { artistName = it; artistPage = "detail" }, onPage = { artistPage = it },
-                            onSelectTrack = selectTrack, onPlayAll = { tracks ->
-                                val first = tracks.firstOrNull { it.available }
-                                if (first != null) {
-                                    selectedTrackId = first.id
-                                    demoQueue = ArrayList(tracks.map { it.id })
-                                    position = 0f
-                                    shuffle = false
-                                    playing = true
-                                    browsingReturn.cancel()
-                                    artistsOpen = false
-                                    menuOpen = false
-                                }
-                            })
+                if (browserStack.isNotEmpty()) {
+                    val destination = browserStack.last()
+                    artistStates.SaveableStateProvider(destination.copy(search = false)) {
+                        val playCollection: (List<TrackMenuEntry>) -> Unit = { tracks ->
+                            demoQueue = ArrayList(tracks.map { it.id })
+                            shuffle = false
+                            val first = tracks.firstOrNull { it.available }
+                            selectedTrackId = first?.id
+                            playing = first != null
+                            position = 0f
+                            if (first != null) {
+                                browsingReturn.cancel()
+                                browserStack = arrayListOf()
+                                tracksOpen = false
+                                menuOpen = false
+                            }
+                        }
+                        if (destination.page.startsWith("album-")) {
+                            AlbumsPane(grid, destination, albumsPreview, selectedTrackId, playing, browsingReturn,
+                                { searchOpen = it }, goBack, navigate, selectTrack, playCollection)
+                        } else {
+                            ArtistsPane(grid, destination.page, destination.artist, artistsPreview, selectedTrackId, playing,
+                                browsingReturn, onSearchVisibilityChanged = { searchOpen = it }, onBack = goBack,
+                                onArtist = { navigate(BrowserDestination("detail", artist = it)) },
+                                onPage = { navigate(destination.copy(page = it)) },
+                                onSelectTrack = selectTrack, onPlayAll = playCollection, scope = destination.scope,
+                                onAlbum = { navigate(BrowserDestination("album-options", album = it)) })
+                        }
                     }
                 } else if (tracksOpen) {
                     TrackMenuPane(grid, visibleTracks, selectedTrackId, playing, trackScroll, trackQuery,
@@ -176,7 +194,8 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                     MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
                         browsingReturn.interaction()
                         if (it == "All tracks") tracksOpen = true
-                        else if (it == "Artists") { artistsOpen = true; artistPage = "artists" }
+                        else if (it == "Artists") navigate(BrowserDestination("artists"))
+                        else if (it == "Albums") navigate(BrowserDestination("album-list"))
                         else {
                             // Settings and playlist editing must never inherit a pending return.
                             if (it == "Settings" || it == "Playlists") browsingReturn.cancel()

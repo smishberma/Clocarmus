@@ -40,7 +40,9 @@ internal val demoTrackTitles = listOf(
 
 internal data class TrackMenuEntry(
     val title: String, val artist: String, val album: String, val year: String? = null,
-    val id: String = title, val available: Boolean = true
+    val id: String = title, val available: Boolean = true,
+    val albumArtist: String? = null, val discNumber: Int? = null,
+    val trackNumber: Int? = null, val durationSeconds: Int? = null
 )
 
 // Placeholder metadata matches the visual fixture until the library supplies real tags.
@@ -83,10 +85,11 @@ internal fun BrowserPane(
     subtitle: String? = null,
     icon: Int = R.drawable.menu_all_tracks,
     searchName: String = "tracks",
-    showPlayback: Boolean = true
+    showPlayback: Boolean = true,
+    searchInitiallyOpen: Boolean = false
 ) {
     val titles = remember(rows) { rows.map { it.title } }
-    var searching by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(searchInitiallyOpen) }
     var draft by remember { mutableStateOf(query) }
     DisposableEffect(searching) {
         onSearchVisibilityChanged(searching)
@@ -133,7 +136,7 @@ internal fun BrowserPane(
     }
     if (titles.isEmpty()) PlayerLabel("No matching $searchName", grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
         alignment = Alignment.CenterStart)
-    TrackScrollbar(grid, scroll, titles, searchName)
+    TrackScrollbar(grid, scroll, titles, searchName, proportional = heading == "ALBUM TRACKS")
 
     if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search $searchName") },
         text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Search $searchName") }) },
@@ -144,13 +147,15 @@ internal fun BrowserPane(
 private val ColorScrollRail = Color(0xff494949)
 
 @Composable
-private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String) {
+private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String, proportional: Boolean = false) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val railHeight = 708f * grid.scale
-    // Preserve the supplied pill's aspect ratio (2.9479708 × 9.6478851).
-    val pillHeight = 88f * grid.scale
-    val pillWidth = pillHeight * 2.9479708f / 9.6478851f
+    // Album tracks use a proportional thumb; other browsers retain the supplied pill ratio.
+    val viewportPx = with(density) { (700f * grid.scale).dp.toPx() }
+    val pillHeight = if (proportional) (railHeight * viewportPx / (scroll.maxValue + viewportPx)).coerceIn(88f * grid.scale, railHeight)
+        else 88f * grid.scale
+    val pillWidth = 88f * grid.scale * 2.9479708f / 9.6478851f
     val travelPx = with(density) { (railHeight - pillHeight).dp.toPx() }
     val fraction = if (scroll.maxValue > 0) scroll.value.toFloat() / scroll.maxValue else 0f
     var dragging by remember { mutableStateOf(false) }
@@ -197,7 +202,7 @@ private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<S
         Box(Modifier.align(Alignment.Center).width((24f * grid.scale).dp).fillMaxHeight().background(ColorScrollRail))
         if (scrollable) Image(painterResource(R.drawable.track_scroll_pill), null,
             Modifier.align(Alignment.TopCenter).offset(y = ((railHeight - pillHeight) * fraction).dp)
-                .size(pillWidth.dp, pillHeight.dp), contentScale = ContentScale.Fit)
+                .size(pillWidth.dp, pillHeight.dp), contentScale = if (proportional) ContentScale.FillBounds else ContentScale.Fit)
     }
     if (scrollable && (dragging || scroll.isScrollInProgress)) {
         PlayerLabel(fastScrollLetter(titles, fraction),
