@@ -55,7 +55,7 @@ internal val demoAlbumTracks = demoTrackTitles.flatMapIndexed { albumIndex, albu
     TrackMenuEntry("Together", "Ripple", "Road collection", "2024", "compilation:1", albumArtist = "Various Artists", trackNumber = 2, durationSeconds = 210),
     TrackMenuEntry("Journey", "Saffron", "Road collection", "2024", "compilation:2", albumArtist = "Various Artists", trackNumber = 10, durationSeconds = 245)
 )
-internal val demoLibraryTracks = demoArtistTracks + demoAlbumTracks
+internal val demoLibraryTracks = demoArtistTracks + demoAlbumTracks + marqueeDemoTrack
 
 /** Finite traversal of the displayed queue; never falls back to an unrelated collection. */
 internal fun playableTrack(tracks: List<TrackMenuEntry>, selectedId: String): TrackMenuEntry? {

@@ -63,7 +63,7 @@ internal fun BrowserHeading(grid: PlayerGrid, heading: String, icon: Int, subtit
     PlayerLabel(heading, grid.place(if (artists) 447f else if (albumTracks) 384f else 418f, 191f, if (albumTracks) 520f else 340f, 54f).offset(y = headingOffset),
         40f * grid.scale, alignment = Alignment.CenterStart, bold = true)
     subtitle?.let {
-        PlayerLabel(it, grid.place(60f, 250f, 880f, 54f).offset(y = headingOffset), 40f * grid.scale, bold = true)
+        PlayerLabel(it, grid.place(60f, 250f, 880f, 54f).offset(y = headingOffset), 40f * grid.scale, bold = true, marquee = true)
     }
 }
 

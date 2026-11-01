@@ -46,7 +46,14 @@ internal data class TrackMenuEntry(
 )
 
 // Placeholder metadata matches the visual fixture until the library supplies real tags.
-internal val demoTracks = demoTrackTitles.map { TrackMenuEntry(it, "Artist", "Album", "Year") }
+internal val marqueeDemoTrack = TrackMenuEntry(
+    title = "Departing From a Station That Was Demolished Before It Was Ever Built",
+    artist = "Bartholomew Quillfeather-Ashworth & The Interdimensional Orchestra",
+    album = "The Unabridged and Occasionally Contradictory Chronicles of Seventeen Thousand Midnight Trains",
+    year = "2026", id = "demo:long-metadata", trackNumber = 1, durationSeconds = 225
+)
+internal val demoTracks = (demoTrackTitles.map { TrackMenuEntry(it, "Artist", "Album", "Year") } + marqueeDemoTrack)
+    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
 
 // Both gestures and accessibility use the same clamped mapping, including both endpoints.
 internal fun fastScrollFraction(pillTop: Float, travel: Float): Float =
@@ -121,10 +128,10 @@ internal fun BrowserPane(
                 Column(Modifier.fillMaxSize().padding(start = (32f * grid.scale).dp,
                     end = ((if (selected && showPlayback) 100f else 28f) * grid.scale).dp)) {
                     PlayerLabel(title, Modifier.fillMaxWidth().height((76f * grid.scale).dp),
-                        58f * grid.scale, alignment = Alignment.CenterStart, color = textColor)
+                        58f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
                     PlayerLabel(row.subtitle,
                         Modifier.fillMaxWidth().height((42f * grid.scale).dp),
-                        34f * grid.scale, alignment = Alignment.CenterStart, color = textColor)
+                        34f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
                 }
                 if (selected && showPlayback) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
                     null, Modifier.align(Alignment.CenterEnd).padding(end = (42f * grid.scale).dp)

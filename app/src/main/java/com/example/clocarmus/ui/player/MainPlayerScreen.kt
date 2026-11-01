@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.AudioManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -223,9 +226,9 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                     }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
                     AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
                     AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(225f) }
-                    PlayerLabel(selectedTitle ?: "Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true)
-                    PlayerLabel(if (selectedTitle == null) "Lazlo Bane" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale)
-                    PlayerLabel(if (selectedTitle == null) "All the Time in the World" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale)
+                    PlayerLabel(selectedTitle ?: "Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
+                    PlayerLabel(if (selectedTitle == null) "Lazlo Bane" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
+                    PlayerLabel(if (selectedTitle == null) "All the Time in the World" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
                     PlayerLabel(if (selectedTitle == null) "2002" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
                     PlayerSlider(position / 225f, { position = it * 225f }, grid.place(79f, 944f, 841f, 87f), "Track position", grid.scale)
                     PlayerLabel(formatPosition(position), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
@@ -302,9 +305,22 @@ private fun playerTextStyle(size: Float, bold: Boolean = false) = TextStyle(
 )
 
 @Composable
-internal fun PlayerLabel(text: String, modifier: Modifier, size: Float, alignment: Alignment = Alignment.Center, bold: Boolean = false, color: Color = Color.White) {
-    Box(modifier, contentAlignment = alignment) {
-        Text(text, style = playerTextStyle(size, bold).copy(color = color), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+internal fun PlayerLabel(text: String, modifier: Modifier, size: Float, alignment: Alignment = Alignment.Center, bold: Boolean = false, color: Color = Color.White, marquee: Boolean = false) {
+    Box(if (marquee) modifier.clipToBounds() else modifier, contentAlignment = alignment) {
+        // A new title starts at its beginning with a fresh pause. Keep the marquee on
+        // Text so it measures natural width inside the label's bounded viewport.
+        key(text) {
+            Text(text, modifier = if (marquee) Modifier.basicMarquee(
+                iterations = Int.MAX_VALUE,
+                initialDelayMillis = 1500,
+                repeatDelayMillis = 1500,
+                spacing = MarqueeSpacing((size * 1.5f).dp),
+                velocity = (size * 0.8f).dp
+            ) else Modifier,
+                style = playerTextStyle(size, bold).copy(color = color),
+                textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
+                overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis)
+        }
     }
 }
 
