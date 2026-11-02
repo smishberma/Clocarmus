@@ -170,6 +170,59 @@ The visual/demo flow is implemented against the updated playlist mockups, retain
 - Both on-screen Back and Android Back follow details > Playlists overview > Menu, restoring each list's scroll position. Merely opening a playlist does not start playback or arm a return timer.
 - No search controls are added in this feature. App-wide search and the main-player Add to playlist popup remain separate interview topics.
 
+### Genres browsing flow
+
+This feature remains planned. Use the five genre mockups below and retain the fixed split, persistent clock, volume slider, transport controls, existing fast scrolling, and long-text behavior.
+
+#### Genre membership and counts
+
+- Trim surrounding whitespace and group genre values case-insensitively: Rock, rock, and spaced variants belong together. Missing/blank genre tags appear under Unknown genre.
+- A track with multiple explicitly stored genres belongs to each genre. Count each track identity once within a genre, even if its tag repeats the same normalized value. Do not infer multiple genres by arbitrarily splitting names such as Pop/Rock.
+- Track counts include disconnected entries and distinct physical copies, consistent with the library. Playback retains normal unavailable/unplayable-track handling.
+- Derive album membership from tracks: an album qualifies when at least one track has the selected genre. Do not propagate that genre to the album's other tracks. Preserve album identity as title + effective Album Artist.
+
+#### Genres list — `design/018-genres-screen.png`
+
+- Menu > Genres shows genre names alphabetically with matching track counts beneath, using singular/plural Track/Tracks labels.
+- Tapping a genre opens its options and retains the last-opened selection. Navigation alone does not start playback or arm an inactivity return.
+- Provisional search filters genre names case-insensitively.
+
+#### Genre options — `design/019-genre-options.png`
+
+- Show GENRES with the selected genre beneath, Play all, and three equally spaced Browse buttons: Tracks, Artists, Albums.
+- Reuse existing normal/pressed assets for Tracks (`menu_all_tracks`), Artists (`menu_artists`), Albums (`player_albums`), and Play all (`player_play_all`), including their corresponding `_pressed` drawables. Reuse the existing Genres icon for headings. No replacement SVGs or new icon artwork are required.
+- Play all replaces the queue with the genre's matching tracks alphabetically by title, disables shuffle, starts the first playable track, and immediately returns to the player. Do not substitute unrelated music if none can play.
+- Browse buttons open the respective genre-scoped lists without initiating playback. Provisional options-screen search opens the selected genre's Tracks search.
+
+#### Genre tracks — `design/020-genre-browse-tracks.png`
+
+- Show the selected genre heading and TRACKS. List matching tracks alphabetically by title with Artist - Album subtitles and the existing selected/playing indicator.
+- Selecting a track snapshots the displayed matching tracks into the queue, starts that track, preserves shuffle, and uses the existing 15-second inactivity return.
+- Provisional search filters song titles within this genre; selected search results queue the matching subset in displayed order.
+
+#### Genre artists — `design/021-genre-browse-artists.png`
+
+- Show the selected genre heading and ARTISTS. Group matching tracks by track Artist, not Album Artist, and sort artist names alphabetically.
+- Show below each name the number of associated albums containing that artist's matching tracks. Retain the main Artists list's distinct-title count convention, including Unknown album; duplicate physical copies do not inflate album counts.
+- Opening an artist reuses artist options with the genre filter retained. Its Play all and Tracks use only that artist's genre-matching tracks; its Albums lists only associated albums containing those matching tracks.
+- Artist Play all retains its established queue replacement, alphabetical ordering, shuffle-off, and immediate-return behavior, applied to this filtered collection.
+- Provisional search filters artist names within the selected genre.
+
+#### Genre albums — `design/022-genre-browse-albums.png`
+
+- Show the selected genre heading and ALBUMS. List qualifying albums alphabetically by title with effective Album Artist, year (or Unknown year), and the full album track count underneath.
+- An album with 12 tracks and only 3 genre matches displays 12 tracks. Count physical copies and disconnected entries as in the normal Albums browser.
+- Opening an album deliberately leaves the genre filter and opens the shared options for the whole album. This also applies to albums reached through a genre-scoped artist. Album Tracks and Play album include all album tracks in normal disc/track order.
+- The whole album's Artist shortcut opens normal, unfiltered Album Artist options. Do not silently reapply the prior genre filter there.
+- Provisional search filters album titles within the genre-qualified album list.
+
+#### Back navigation and retained scope
+
+- Both Back controls retrace the actual route: genre Tracks/Artists/Albums > genre options > Genres > Menu, with nested artist/album screens returning to their actual originating screen.
+- Preserve query, scroll position, and last-opened selection per genre and nested artist/album scope. Returning from a whole album restores the prior genre-filtered browser rather than losing the genre context.
+- Carry genre context explicitly while browsing artist options and children; drop the filter for whole-album entry but retain its originating navigation entry for Back.
+- Search choices here are provisional pending the dedicated app-wide search interview. Typing in search continues to cancel pending automatic return under the established rules.
+
 ### Sorting and metadata
 
 - All Tracks and song search results: alphabetical by title.
@@ -205,6 +258,7 @@ Keep all data on the device:
 
 - Selected source: stable ID, granted folder reference, display name, access/scan status.
 - Track: stable app ID, source/location reference, availability, metadata, duration, artwork reference, file attributes/content identity, first-import timestamp.
+- Track genre memberships: original display values and normalized matching keys, supporting multiple explicit values per track without duplicate membership.
 - Playlist and ordered playlist membership, with unique track membership per playlist.
 - Favorites with membership timestamps, and distinct-track recent playback-start timestamps.
 - Playback snapshot: queue, selected track/index, position, shuffle order, repeat mode.
@@ -272,6 +326,8 @@ Before committing to implementations, verify current official documentation for 
 
 - Implement the Playlists overview, named detail lists, creation/rename validation, confirmed deletion, track removal, and custom-track drag reordering. Use both supplied plus-button states only on the overview, and update bounded recent lists and favorites ordering as specified.
 
+- Add genre membership metadata and the five-screen Genres flow with normalized genre grouping, counts, filtered track/artist/album views, retained navigation state, and the explicit whole-album exception. Reuse existing normal/pressed icons in the three-button Browse layout.
+
 ### Phase 4 — Playback integration and lifecycle
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
@@ -282,6 +338,8 @@ Before committing to implementations, verify current official documentation for 
 - Connect Play album to whole-album queue replacement, shuffle disablement, disc/track ordering, and immediate player return; integrate filtered individual selection with the existing delayed return.
 
 - Connect playlist selection to stable queue snapshots and the existing inactivity return; update Recently played on actual playback starts without reshuffling the current queue. Cancel automatic return throughout playlist editing.
+
+- Connect genre and genre-scoped artist Play all to filtered alphabetical queue replacement with shuffle disabled and immediate return; preserve shuffle and the inactivity return for individual selections. Whole-album entry uses normal album playback rules.
 
 ### Phase 5 — Diagnostics and delivery
 
@@ -343,6 +401,16 @@ Before committing to implementations, verify current official documentation for 
 - Import/play 51 distinct tracks to verify each recent list holds 50. Replay an older track to verify it moves to the top without duplication. Failed starts and paused restoration do not update Recently played; unchanged reconnects do not update Recently added.
 - Selecting a song snapshots displayed order, preserves shuffle, and arms the 15-second return. Subsequent recent-list updates, playlist edits, or deletion do not mutate that queue; editing cancels pending return.
 - Verify distinct empty messages, track subtitles/indicators, Back hierarchy and restored scroll positions, and unchanged clock/transport availability. Recently played uses the shared built-in layout; populated custom playlists use `015` and empty custom playlists use `016`.
+
+### Genres-flow acceptance
+
+- Case/outer-whitespace variants group together; blank tags use Unknown genre. Multi-genre tracks appear once per applicable genre, without guessing delimiters in a single genre name.
+- Genre track counts retain disconnected entries and separate physical copies. Artist rows use track Artist and count only associated album titles containing that artist's matching tracks.
+- All four list types sort alphabetically by their displayed name/title. Search stays within the relevant field and genre scope, and empty matches never expose unrelated entries.
+- A 12-track album with 3 matching tracks qualifies, displays 12 tracks, and opens all 12. Nonmatching tracks do not gain genre membership merely through that album.
+- Opening an artist retains genre filtering for Play all, Tracks, and qualifying Albums. Opening any whole album leaves that filter; its Artist shortcut is unfiltered Album Artist scope. Back restores the previous genre/artist context and list state.
+- Genre Play all replaces the queue, disables shuffle, and returns immediately. Individual track selection preserves shuffle, snapshots displayed results, and uses the 15-second return. Empty/unplayable collections never start unrelated tracks.
+- Compare the five panes with references 018–022; verify the equally spaced three-button Browse layout and existing pressed/unpressed assets, unchanged clock/transport access, retained selection, scrolling, and long-title behavior.
 
 ### AVD acceptance
 
