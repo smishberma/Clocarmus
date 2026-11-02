@@ -85,3 +85,9 @@ To regenerate these individually, run `python3 scripts/import-player-assets.py -
 Play all uses `assets/shared/play-all.svg` and `play-all-pressed.svg`, imported as `player_play_all.xml` and `player_play_all_pressed.xml`, replacing the triangle previously drawn with Compose. Albums uses the shared `albums.svg` / `albums-pressed.svg` pair (`player_albums*.xml`). Tracks reuses `menu_all_tracks.xml` / `menu_all_tracks_pressed.xml`. Each button shows its supplied pressed SVG while held and restores its normal SVG on release or cancellation, retaining white labels and suppressing ripples. Back and the shared transport buttons retain their existing pressed assets.
 
 Regenerate each new shared vector with `python3 scripts/import-player-assets.py --group shared --asset play-all`, repeating for `play-all-pressed`, `albums`, and `albums-pressed`.
+
+## Playlist assets
+
+The supplied `assets/playlists-screen/add-playlist.svg` and `add-playlist-pressed.svg` are used as `add_playlist.xml` and `add_playlist_pressed.xml`, preserving their white/magenta paths and square viewports. They appear only on the overview. Regenerate them with `python3 scripts/import-player-assets.py --group playlists-screen`.
+
+The heading reuses `menu_playlists.xml`. The built-in heart and recent-history glyphs are local Android vectors (`playlist_favorites.xml`, `playlist_recent_added.xml`, `playlist_recent_played.xml`) drawn to match the updated mockups; no separate source SVGs were supplied for these glyphs. Detail rows reuse the supplied selected-track indicator and transport assets.

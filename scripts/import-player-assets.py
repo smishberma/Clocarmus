@@ -9,7 +9,7 @@ ET.register_namespace('', 'http://www.w3.org/2000/svg')
 ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--group', choices=('main-player', 'menu-page', 'track-menu', 'shared'), help='Import only one asset directory')
+parser.add_argument('--group', choices=('main-player', 'menu-page', 'track-menu', 'shared', 'playlists-screen'), help='Import only one asset directory')
 parser.add_argument('--asset', help='Import only this SVG stem, for example no-album-art')
 args = parser.parse_args()
 
@@ -33,7 +33,7 @@ for source in sorted((ROOT / 'design/assets').rglob('*.svg')):
     if args.asset and source.stem != args.asset:
         continue
     name = source.stem.replace('-', '_')
-    prefix = {'menu-page': 'menu', 'track-menu': 'track'}.get(source.parent.name, 'player')
+    prefix = {'menu-page': 'menu', 'track-menu': 'track', 'playlists-screen': ''}.get(source.parent.name, 'player')
     prepared = WORK / f'{prefix}_{source.name}'
     # Outlining text preserves Inter lettering in menu/repeat-one without a runtime SVG library.
     subprocess.run(['inkscape', str(source), '--export-text-to-path', '--export-plain-svg',
@@ -57,7 +57,7 @@ for source in sorted((ROOT / 'design/assets').rglob('*.svg')):
                     parent.remove(child)
         tree.write(prepared, encoding='utf-8', xml_declaration=True)
         name = 'volume_track'
-    target = DEST / f'{prefix}_{name}.xml'
+    target = DEST / f'{prefix + "_" if prefix else ""}{name}.xml'
     subprocess.run(['java', '-cp', f'{WORK}:{classpath}', 'ConvertPlayerSvg', str(prepared), str(target)], check=True)
     print(target.relative_to(ROOT))
 

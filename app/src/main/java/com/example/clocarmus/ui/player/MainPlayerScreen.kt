@@ -78,8 +78,23 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null) {
+fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null) {
     val context = LocalContext.current
+    val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
+    var playlistLibrary by remember { mutableStateOf(if (playlistsPreview != null) playlistFixture(playlistsPreview) else loadPlaylists(playlistPreferences)) }
+    val updatePlaylists: (PlaylistLibrary) -> Unit = {
+        playlistLibrary = it
+        if (playlistsPreview == null) savePlaylists(playlistPreferences, it)
+    }
+    val playlistTracks = remember { (demoTracks + demoLibraryTracks + playlistFixtureTracks).distinctBy { it.id } }
+    LaunchedEffect(Unit) {
+        if (playlistsPreview == null) {
+            var next = playlistLibrary
+            playlistTracks.filterNot { it.id.startsWith("playlist:") }.forEachIndexed { i, track -> next = next.imported(track.id, i.toLong()) }
+            updatePlaylists(next)
+        }
+    }
+    val recordDemoStart: (TrackMenuEntry) -> Unit = { updatePlaylists(playlistLibrary.playbackStarted(it, System.currentTimeMillis())) }
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var volume by remember { mutableFloatStateOf(if (referencePreview) .62f else audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
@@ -87,7 +102,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     var position by rememberSaveable { mutableFloatStateOf(113f) }
     var shuffle by rememberSaveable { mutableStateOf(true) }
     var repeat by rememberSaveable { mutableIntStateOf(0) }
-    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null) }
+    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null) }
     var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
     var browserStack by rememberSaveable { mutableStateOf(arrayListOf<BrowserDestination>().apply {
         if (artistsPreview != null) {
@@ -95,6 +110,18 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
             if (artistsPreview != "artists") add(BrowserDestination("detail", artist = "Ripple"))
             if (artistsPreview == "artist-tracks" || artistsPreview == "artist-albums")
                 add(BrowserDestination(if (artistsPreview == "artist-tracks") "tracks" else "albums", artist = "Ripple"))
+        }
+        if (playlistsPreview != null) {
+            add(BrowserDestination("playlist-list"))
+            val id = when (playlistsPreview) {
+                "playlist-favorites", "playlist-favorites-empty" -> FAVORITES
+                "playlist-added", "playlist-added-empty" -> RECENT_ADDED
+                "playlist-played", "playlist-played-empty" -> RECENT_PLAYED
+                "playlist-custom" -> "demo:trip"
+                "playlist-custom-empty" -> "demo:empty"
+                else -> null
+            }
+            if (id != null) add(BrowserDestination("playlist-detail", playlistId = id))
         }
         if (albumsPreview != null) {
             add(BrowserDestination("album-list"))
@@ -104,8 +131,8 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     }) }
     val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
-    var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else null) }
-    val selectedTrack = (demoTracks + demoLibraryTracks).firstOrNull { it.id == selectedTrackId }
+    var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else null) }
+    val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
     val selectedTitle = selectedTrack?.title
     var demoQueue by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var trackQuery by rememberSaveable { mutableStateOf("") }
@@ -115,13 +142,16 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     val stepTrack: (Int) -> Unit = { direction ->
         if (demoQueue.isNotEmpty()) {
             val index = demoQueue.indexOf(selectedTrackId)
-            selectedTrackId = demoQueue[(index + direction).coerceIn(0, demoQueue.lastIndex)]
+            val next = playableTrack(demoQueue.mapNotNull { id -> playlistTracks.firstOrNull { it.id == id } }, demoQueue[(index + direction).coerceIn(0, demoQueue.lastIndex)])
+            selectedTrackId = next?.id
+            if (next == null) playing = false else if (playing) recordDemoStart(next)
         }
         position = 0f
     }
     var dialog by remember { mutableStateOf<String?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
-    val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen) {
+    var playlistEditing by remember { mutableStateOf(false) }
+    val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen || playlistEditing) {
         tracksOpen = false
         browserStack = arrayListOf()
         menuOpen = false
@@ -147,7 +177,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
         demoQueue = ArrayList(tracks.map { it.id })
         position = 0f
         playing = playable != null
-        if (playable != null) browsingReturn.trackSelected() else browsingReturn.cancel()
+        if (playable != null) { recordDemoStart(playable); browsingReturn.trackSelected() } else browsingReturn.cancel()
     }
 
     val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !referencePreview)
@@ -169,13 +199,19 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                             playing = first != null
                             position = 0f
                             if (first != null) {
+                                recordDemoStart(first)
                                 browsingReturn.cancel()
                                 browserStack = arrayListOf()
                                 tracksOpen = false
                                 menuOpen = false
                             }
                         }
-                        if (destination.page.startsWith("album-")) {
+                        if (destination.page.startsWith("playlist-")) {
+                            PlaylistsPane(grid, destination.playlistId, playlistLibrary, playlistTracks, selectedTrackId, playing,
+                                browsingReturn, updatePlaylists, goBack,
+                                { navigate(BrowserDestination("playlist-detail", playlistId = it)) }, selectTrack,
+                                { playlistEditing = it })
+                        } else if (destination.page.startsWith("album-")) {
                             AlbumsPane(grid, destination, albumsPreview, selectedTrackId, playing, browsingReturn,
                                 { searchOpen = it }, goBack, navigate, selectTrack, playCollection)
                         } else {
@@ -199,6 +235,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                         if (it == "All tracks") tracksOpen = true
                         else if (it == "Artists") navigate(BrowserDestination("artists"))
                         else if (it == "Albums") navigate(BrowserDestination("album-list"))
+                        else if (it == "Playlists") navigate(BrowserDestination("playlist-list"))
                         else {
                             // Settings and playlist editing must never inherit a pending return.
                             if (it == "Settings" || it == "Playlists") browsingReturn.cancel()
@@ -236,7 +273,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                 }
                 AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, if (menuOpen) 74f else 93f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                 AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
-                    grid, 508f, 1137f, if (menuOpen) 123f else 110f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing }
+                    grid, 508f, 1137f, if (menuOpen) 123f else 110f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing; if (playing) selectedTrack?.let(recordDemoStart) }
                 AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, if (menuOpen) 74f else 93f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
             }
             ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
@@ -246,7 +283,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     dialog?.let { title ->
         AlertDialog(onDismissRequest = { dialog = null }, title = { Text(title) },
             text = { Text(when (title) {
-                "Add to playlist" -> "No playlists yet."
+                "Add to playlist" -> "Add to playlist is not available yet."
                 "Settings" -> "Settings are not available yet."
                 else -> "Your music library is empty. $title browsing is not available yet."
             }) },

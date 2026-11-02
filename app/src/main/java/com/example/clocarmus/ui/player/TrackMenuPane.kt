@@ -1,5 +1,8 @@
 package com.example.clocarmus.ui.player
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -75,6 +78,7 @@ internal fun TrackMenuPane(
     selectedId, playing, scroll, query, onQuery, onSearchVisibilityChanged, onSearchEdited,
     onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT))
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun BrowserPane(
     grid: PlayerGrid,
@@ -93,7 +97,14 @@ internal fun BrowserPane(
     icon: Int = R.drawable.menu_all_tracks,
     searchName: String = "tracks",
     showPlayback: Boolean = true,
-    searchInitiallyOpen: Boolean = false
+    searchInitiallyOpen: Boolean = false,
+    showSearch: Boolean = true,
+    showHeading: Boolean = true,
+    emptyMessage: String = "No matching $searchName",
+    onLongClick: ((String) -> Unit)? = null,
+    reordering: Boolean = false,
+    onMove: (String, Int) -> Unit = { _, _ -> },
+    showScrollbar: Boolean = true
 ) {
     val titles = remember(rows) { rows.map { it.title } }
     var searching by remember { mutableStateOf(searchInitiallyOpen) }
@@ -104,46 +115,74 @@ internal fun BrowserPane(
     }
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onBack)
-    BrowserHeading(grid, heading, icon, subtitle)
-    Box(grid.touchTarget(902f, 103f, 87f).semantics { contentDescription = "Search $searchName" }
+    if (showHeading) BrowserHeading(grid, heading, icon, subtitle)
+    if (showSearch) Box(grid.touchTarget(902f, 103f, 87f).semantics { contentDescription = "Search $searchName" }
         .clickable(role = Role.Button) { draft = query; searching = true }, contentAlignment = Alignment.Center) {
         Image(painterResource(R.drawable.track_search), null,
             Modifier.size((87f * grid.scale).dp), contentScale = ContentScale.Fit)
     }
 
-    Column(grid.place(53f, 293f, 827f, 700f).verticalScroll(scroll)) {
+    val latestRows by rememberUpdatedState(rows)
+    val latestMove by rememberUpdatedState(onMove)
+    val rowHeightPx = with(LocalDensity.current) { (140f * grid.scale).dp.toPx() }
+    Column(grid.place(if (showSearch) 53f else 42f, if (showSearch) 293f else 303f, 827f, 700f).verticalScroll(scroll)) {
         rows.forEachIndexed { index, row ->
-            val title = row.title
-            val selected = row.id == selectedId
-            Box(Modifier.fillMaxWidth().height((126f * grid.scale).dp)
-                .clip(RoundedCornerShape((36f * grid.scale).dp))
-                .background(if (selected) Color.White else Color.Transparent)
-                .semantics(mergeDescendants = true) {
-                    this.selected = selected
-                    if (selected && showPlayback) stateDescription = if (playing) "Playing" else "Paused"
+            key(row.id) {
+                val title = row.title
+                val selected = row.id == selectedId
+                Box(Modifier.fillMaxWidth().height((126f * grid.scale).dp)
+                    .clip(RoundedCornerShape((36f * grid.scale).dp))
+                    .background(if (selected) Color.White else Color.Transparent)
+                    .semantics(mergeDescendants = true) {
+                        this.selected = selected
+                        if (selected && showPlayback) stateDescription = if (playing) "Playing" else "Paused"
+                    }
+                    .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                        role = Role.Button, onLongClick = onLongClick?.let { { it(row.id) } },
+                        onClick = { if (!reordering) onSelect(row.id) })) {
+                    val textColor = if (selected) Color.Black else Color.White
+                    Column(Modifier.fillMaxSize().padding(start = (32f * grid.scale).dp,
+                        end = ((if (reordering || (selected && showPlayback)) 100f else 28f) * grid.scale).dp)) {
+                        PlayerLabel(title, Modifier.fillMaxWidth().height((76f * grid.scale).dp),
+                            58f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
+                        PlayerLabel(row.subtitle,
+                            Modifier.fillMaxWidth().height((42f * grid.scale).dp),
+                            34f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
+                    }
+                    if (reordering) Box(Modifier.align(Alignment.CenterEnd).width((100f * grid.scale).dp).fillMaxHeight()
+                        .semantics {
+                            contentDescription = "Reorder ${row.title}"
+                            customActions = listOf(
+                                CustomAccessibilityAction("Move up") { onMove(row.id, index - 1); true },
+                                CustomAccessibilityAction("Move down") { onMove(row.id, index + 1); true })
+                        }
+                        .pointerInput(row.id, rowHeightPx) {
+                            var distance = 0f
+                            detectDragGestures(onDragStart = { distance = 0f }, onDrag = { change, amount ->
+                                change.consume()
+                                distance += amount.y
+                                val steps = (distance / rowHeightPx).toInt()
+                                if (steps != 0) {
+                                    val current = latestRows.indexOfFirst { it.id == row.id }
+                                    latestMove(row.id, (current + steps).coerceIn(0, latestRows.lastIndex))
+                                    distance -= steps * rowHeightPx
+                                }
+                            })
+                        }) {
+                        PlayerLabel("≡", Modifier.fillMaxSize(), 58f * grid.scale, color = textColor)
+                    }
+                    if (!reordering && selected && showPlayback) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
+                        null, Modifier.align(Alignment.CenterEnd).padding(end = (42f * grid.scale).dp)
+                            .size((48f * grid.scale).dp), contentScale = ContentScale.Fit,
+                        colorFilter = if (playing) null else ColorFilter.tint(Color.Black))
                 }
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                    role = Role.Button) { onSelect(row.id) }) {
-                val textColor = if (selected) Color.Black else Color.White
-                Column(Modifier.fillMaxSize().padding(start = (32f * grid.scale).dp,
-                    end = ((if (selected && showPlayback) 100f else 28f) * grid.scale).dp)) {
-                    PlayerLabel(title, Modifier.fillMaxWidth().height((76f * grid.scale).dp),
-                        58f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
-                    PlayerLabel(row.subtitle,
-                        Modifier.fillMaxWidth().height((42f * grid.scale).dp),
-                        34f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
-                }
-                if (selected && showPlayback) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
-                    null, Modifier.align(Alignment.CenterEnd).padding(end = (42f * grid.scale).dp)
-                        .size((48f * grid.scale).dp), contentScale = ContentScale.Fit,
-                    colorFilter = if (playing) null else ColorFilter.tint(Color.Black))
+                if (index != rows.lastIndex) Spacer(Modifier.height((14f * grid.scale).dp))
             }
-            if (index != rows.lastIndex) Spacer(Modifier.height((14f * grid.scale).dp))
         }
     }
-    if (titles.isEmpty()) PlayerLabel("No matching $searchName", grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
+    if (titles.isEmpty() && emptyMessage.isNotEmpty()) PlayerLabel(emptyMessage, grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
         alignment = Alignment.CenterStart)
-    TrackScrollbar(grid, scroll, titles, searchName, proportional = heading == "ALBUM TRACKS")
+    if (showScrollbar) TrackScrollbar(grid, scroll, titles, searchName, proportional = heading == "ALBUM TRACKS" || !showSearch, top = if (showSearch) 312f else 319f)
 
     if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search $searchName") },
         text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Search $searchName") }) },
@@ -154,7 +193,7 @@ internal fun BrowserPane(
 private val ColorScrollRail = Color(0xff494949)
 
 @Composable
-private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String, proportional: Boolean = false) {
+internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String, proportional: Boolean = false, top: Float = 312f) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val railHeight = 708f * grid.scale
@@ -174,7 +213,7 @@ private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<S
     }
     val latestJump by rememberUpdatedState(jump)
 
-    Box(grid.place(908f, 312f, 48f, 708f)
+    Box(grid.place(908f, top, 48f, 708f)
         .semantics {
             contentDescription = "$searchName scrollbar"
             stateDescription = fastScrollLetter(titles, fraction)
@@ -213,7 +252,7 @@ private fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<S
     }
     if (scrollable && (dragging || scroll.isScrollInProgress)) {
         PlayerLabel(fastScrollLetter(titles, fraction),
-            grid.place(806f, 312f + (708f - 88f) * fraction, 88f, 88f)
+            grid.place(806f, top + (708f - 88f) * fraction, 88f, 88f)
                 .clip(RoundedCornerShape(percent = 50)).background(ColorScrollRail),
             54f * grid.scale, bold = true)
     }

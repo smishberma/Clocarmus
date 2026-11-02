@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, and the three-screen Albums demo flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, and Playlists browsing/management are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -138,12 +138,44 @@ Agreed scope: the Menu Albums list, shared album options, Album Tracks, and an A
 - Preserve each browser's query, scroll position, and last-opened album highlight, keyed by album/artist identity and scope. Navigation alone does not arm the browsing-return timer.
 - Search rules in this section are interim decisions. A dedicated app-wide search interview will revisit them; do not treat this as the final search specification.
 
+### Playlists browsing and management
+
+The visual/demo flow is implemented against the updated playlist mockups, retaining the fixed split, persistent clock, volume, and transport controls. Custom edits and built-in demo metadata persist locally in a temporary SharedPreferences store. Real library imports, transactional repository persistence, playback-start integration, and the separately scoped main-player Add to playlist popup remain planned.
+
+#### Overview and creation
+
+- Menu > Playlists opens the overview. Show Favorites, Recently added, and Recently played in that order above a horizontal divider, with custom playlists alphabetically below it. All entries and the divider form one scrolling list, not pinned sections.
+- Use `design/011-playlists-screen-no-custom-playlists.png` for the empty overview and `design/012-playlists-screen-populated-custom-playlists.png` for the populated overview. With no custom playlists, show “Tap + to create a playlist” below the divider; built-in lists remain available.
+- The plus button appears only on the overview, including its empty state. Use `design/assets/playlists-screen/add-playlist.svg` normally and `add-playlist-pressed.svg` while pressed, preserving the supplied white/magenta geometry. Android drawable resources: `add_playlist.xml` and `add_playlist_pressed.xml`.
+- Plus opens a name dialog with Create and Cancel. Trim surrounding whitespace; reject blank names and case-insensitive duplicates, including the reserved names Favorites, Recently added, and Recently played. Apply the same rules to rename, excluding the playlist being renamed from duplicate checking.
+- Create an empty playlist and remain on the overview. Do not navigate to a track picker or automatically add the current track.
+- Long-press a custom playlist to offer Rename and Remove. Rename edits its name and repositions it alphabetically while preserving its identity and tracks. Remove opens “Remove ‘playlist name’?” with Remove and Cancel. Confirmation deletes only the playlist and membership records, never audio files or the current playback queue.
+- Built-in playlists cannot be renamed or removed.
+
+#### Details and built-in lists
+
+- Use `design/013-playlists-favorites-list.png` for Favorites, `design/014-playlists-recently-added-list.png` for Recently added, and `design/015-playlists-user-custom-playlist.png` for custom playlists. Recently played reuses the Favorites/Recently added layout with its own icon and heading; `015` is not its reference.
+- Follow the updated detail mockups: no plus button in any detail view. Show track title and Artist - Album subtitle with the existing selected/playing indicator.
+- Favorites is populated through the main-player Add to playlist flow and sorts newest favorited first. That popup's detailed design and interaction remain reserved for a separate interview.
+- Recently added contains the 50 most recently imported tracks, newest first, whether imported individually or as part of an album. Unchanged rescans/reconnections and identity-preserving moves do not reset import time.
+- Recently played contains the 50 most recently played distinct track identities, newest first. Record when playback actually starts; replay moves that track to the top without duplicating it. Failed/unavailable playback and paused restoration do not count. This replaces both the previous 100-track requirement and the interim 20-track proposal.
+- Long-press a Favorites track to offer Remove from Favorites. Long-press a custom-playlist track to offer Remove from playlist and Reorder. Do not offer manual removal or manual reordering for recent lists. Favorites retains its timestamp ordering rather than manual ordering.
+- New custom-playlist tracks append at the bottom; duplicate membership remains disallowed. Reorder enters an editing mode with drag handles and a Done button. Creating, renaming, removing, and reordering cancel any pending automatic return so editing cannot be interrupted.
+- Empty detail messages: “No Favorites yet” for Favorites, “Empty” for Recently added and Recently played, and “Empty playlist” for custom playlists. All use centered bold gray text, with the actual playlist name above. Favorites follows `design/017-playlists-user-favorites-empty.png`, including the gray heart above its message (the mockup’s placeholder name is replaced by Favorites). For empty custom playlists, follow `design/016-playlists-user-custom-playlist-empty.png`: center the bold gray message in the left pane beneath the playlist heading, with no search, plus button, or scrollbar. Keep clock and transport controls available.
+
+#### Playback, navigation, and scope
+
+- Selecting a song in any of the four list types replaces the queue with a snapshot of displayed tracks in their current order, starts that song, preserves shuffle, and uses the existing 15-second inactivity return. Keep the queue stable as Recently played updates; playlist removal and subsequent membership/reordering edits do not rewrite the active snapshot.
+- Normal unavailable-track rules continue to apply; keep disconnected references instead of silently deleting them from playlists.
+- Both on-screen Back and Android Back follow details > Playlists overview > Menu, restoring each list's scroll position. Merely opening a playlist does not start playback or arm a return timer.
+- No search controls are added in this feature. App-wide search and the main-player Add to playlist popup remain separate interview topics.
+
 ### Sorting and metadata
 
 - All Tracks and song search results: alphabetical by title.
 - Album lists: alphabetical by title. Tracks within albums: disc/track number, with unnumbered tracks after numbered tracks within each disc, alphabetically by title.
 - Folders: filename order, including a deterministic ordering across descendant folders.
-- Playlists: user-controlled order.
+- Custom playlist names: alphabetical. Custom playlist tracks: user-controlled order, new tracks appended. Favorites: newest favorited first. Recent lists: newest import/playback first.
 - Missing title: filename. Missing artist/album: Unknown artist/Unknown album. Missing year: Unknown year; always retain the year row directly below Album on the main player. Missing artwork: local placeholder.
 - No online metadata/artwork lookups or metadata editor.
 
@@ -162,9 +194,9 @@ Recognize renamed/moved files using background content inspection, preserving th
 - Create, rename, delete playlists; add/remove tracks and manually reorder entries.
 - Disallow duplicate track membership within one playlist.
 - Add-to-playlist checkboxes immediately update membership; no Save button. The top-right toggle returns to artwork.
-- Favorites are a built-in collection.
-- Recently added: 100 most recently imported tracks, newest first; reconnecting unchanged files does not reset import time.
-- Recently played: 100 most recently played distinct tracks, newest first.
+- Favorites are a built-in collection ordered newest favorited first, with a membership timestamp.
+- Recently added: 50 most recently imported tracks, newest first; reconnecting unchanged files does not reset import time.
+- Recently played: 50 most recently played distinct tracks, newest first, updated when playback actually starts. Replays move existing entries to the top; failed starts and paused restoration do not count.
 - No local playlist/favorites export/import in v1.
 
 ### Logical data model
@@ -174,7 +206,7 @@ Keep all data on the device:
 - Selected source: stable ID, granted folder reference, display name, access/scan status.
 - Track: stable app ID, source/location reference, availability, metadata, duration, artwork reference, file attributes/content identity, first-import timestamp.
 - Playlist and ordered playlist membership, with unique track membership per playlist.
-- Favorites and distinct-track recent playback timestamps.
+- Favorites with membership timestamps, and distinct-track recent playback-start timestamps.
 - Playback snapshot: queue, selected track/index, position, shuffle order, repeat mode.
 - Preferences: onboarding state, appearance, clock/date formats, source configuration.
 - Bounded local diagnostic events.
@@ -238,6 +270,8 @@ Before committing to implementations, verify current official documentation for 
 
 - Add the Albums list, options, and numbered/duration track browser using the renamed references and new normal/pressed Album Tracks assets. Extend library metadata with Album Artist, disc/track numbers, and duration; keep stable album identities and explicit artist-scope navigation.
 
+- Implement the Playlists overview, named detail lists, creation/rename validation, confirmed deletion, track removal, and custom-track drag reordering. Use both supplied plus-button states only on the overview, and update bounded recent lists and favorites ordering as specified.
+
 ### Phase 4 — Playback integration and lifecycle
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
@@ -246,6 +280,8 @@ Before committing to implementations, verify current official documentation for 
 - Inactivity-return timer implemented for the browsing shell: arm after selection, reset on interaction, cancel on search typing or Settings/playlist editing entry. Complete service integration, screen-awake policy, best-effort boot entry, and distinguish sleep from ordinary background playback where platform signals allow.
 
 - Connect Play album to whole-album queue replacement, shuffle disablement, disc/track ordering, and immediate player return; integrate filtered individual selection with the existing delayed return.
+
+- Connect playlist selection to stable queue snapshots and the existing inactivity return; update Recently played on actual playback starts without reshuffling the current queue. Cancel automatic return throughout playlist editing.
 
 ### Phase 5 — Diagnostics and delivery
 
@@ -297,6 +333,16 @@ Before committing to implementations, verify current official documentation for 
 - Album navigation from Artists opens the whole compilation. Back retraces each entry path, restoring query, scroll, and selection without scope leakage.
 - Interim list/options search stays within the agreed album/title scope and preserves numeric ordering.
 - Compare all three panes against the renamed references and confirm both Album Tracks icon states use the supplied assets and colors.
+
+### Playlists-flow acceptance
+
+- Overview shows the three built-ins in fixed order, divider, alphabetical custom playlists, and the empty-custom-list message when appropriate; all rows scroll together. Both plus-button states match supplied SVGs, and no detail screen shows a plus button.
+- Create/rename trim names and reject blank, case-insensitive duplicate, and reserved names. Cancel leaves data unchanged. Create stays on the overview; rename preserves membership and stable identity.
+- Only custom playlists offer Rename/Remove. Remove requires confirmation and leaves audio files and the active queue intact, including when the deleted playlist supplied that queue.
+- Favorites sorts by most recent membership; removing a favorite does not delete its track. Custom-track removal affects only that playlist, new tracks append, duplicate membership is rejected, and drag reordering persists after Done.
+- Import/play 51 distinct tracks to verify each recent list holds 50. Replay an older track to verify it moves to the top without duplication. Failed starts and paused restoration do not update Recently played; unchanged reconnects do not update Recently added.
+- Selecting a song snapshots displayed order, preserves shuffle, and arms the 15-second return. Subsequent recent-list updates, playlist edits, or deletion do not mutate that queue; editing cancels pending return.
+- Verify distinct empty messages, track subtitles/indicators, Back hierarchy and restored scroll positions, and unchanged clock/transport availability. Recently played uses the shared built-in layout; populated custom playlists use `015` and empty custom playlists use `016`.
 
 ### AVD acceptance
 

@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Main player, menu, and All Tracks visual shells implemented.** The app renders the reference player with bundled Inter fonts, the supplied SVG artwork placeholder and sample metadata, a live clock/date, full-screen landscape layout, seek and media-volume sliders, and local transport/shuffle/repeat state. Music playback, library discovery, playlists, other category screens, and settings are not connected yet. The Menu button opens the supplied six-category menu; Back or Android Back returns to the player while preserving local transport state. All Tracks opens a searchable, alphabetically sorted demo library of 28 English titles, from Amber to Zenith. Other categories and Settings open placeholder dialogs. Play/pause currently changes the visual control state; it does not play audio. Normal launch starts paused.
+**Main player, menu, All Tracks, Artists, Albums, and Playlists demo flows implemented.** The app uses bundled Inter fonts, supplied vectors, a persistent live clock, full-screen landscape layout, media-volume controls, and local transport/shuffle/repeat state. Browsers support selection and retained navigation state; the track, artist, and album browsers also support search. Playlists includes built-in lists, custom playlist management, track removal, and drag reordering. Normal launch starts paused. Real library discovery and audio playback, the main-player Add to playlist popup, Genres, Folders, and Settings remain pending.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -30,7 +30,7 @@ See [PLAN.md](PLAN.md) for agreed requirements, implementation phases, acceptanc
 - Remember selected sources, refresh on detected reconnection, and offer manual rescanning.
 - Browse tracks, artists, albums, genres, folders, and playlists; search songs, albums, and artists.
 - Create, rename, delete, and reorder playlist tracks; mark favorites through immediately saved membership controls.
-- Show up to 100 recently added tracks and 100 recently played distinct tracks.
+- Show up to 50 recently added tracks and 50 recently played distinct tracks.
 - Preserve unavailable tracks and playlist references when a drive disconnects, and recognize renamed or moved files where identity can be established safely.
 - Keep identical copies at different storage locations as separate entries.
 - Remove selected sources only after confirmation, without deleting music files.
@@ -156,7 +156,7 @@ python3 scripts/compare-main-player.py --screen menu --install
 
 This uses `design/02-menu-screen.png`, the same proportional fitting and fixed clock fixture as the player comparison, and the supplied vectors in `design/assets/menu-page/`. Artifacts are saved under `build/visual-comparison/menu/`. Normal launch still opens the player; the menu fixture requires a debug build and `reference_preview=true` with `menu_preview=true`.
 
-The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, and Albums opens the album browser; other library categories and Settings remain placeholders.
+The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, Albums opens the album browser, and Playlists opens the playlist overview; Genres, Folders, and Settings remain placeholders.
 
 Regenerate only the menu vectors with `python3 scripts/import-player-assets.py --group menu-page`. The importer also accepts `--group main-player` and `--group shared`; complex SVG filters are rejected by Android's vector converter and require separate asset preparation.
 
@@ -233,3 +233,30 @@ Validated on `headunit_a6` (API 23, 1280×720): three reference comparisons; Men
 Overflowing track, artist, and album text scrolls automatically on the player and all track, artist, and album browsing screens, including options headings and row metadata. Each marquee pauses for 1.5 seconds before scrolling and between continuous loops. Text that fits stays still; long text keeps its original font size and stays clipped inside its label, clear of playback indicators and the clock. Changing a title restarts its marquee from the beginning.
 
 The demo library includes **Departing From a Station That Was Demolished Before It Was Ever Built**, by **Bartholomew Quillfeather-Ashworth & The Interdimensional Orchestra**, on **The Unabridged and Occasionally Contradictory Chronicles of Seventeen Thousand Midnight Trains**. Find it through All Tracks, Artists, or Albums to exercise long labels throughout each flow; select it to view all three marquees on the main player. Existing reference artist fixtures keep their original metadata.
+
+## Playlists
+
+Menu > Playlists follows the updated `011`–`017` references. Favorites, Recently added, and Recently played appear above alphabetically sorted custom playlists in one scrolling list. The supplied white/magenta plus icon appears only on the overview. Create stays on the overview; blank, reserved, and duplicate names are rejected after trimming. Long-press a custom playlist to rename or confirm removal. Removing a playlist leaves the selected track and queue intact.
+
+Empty custom playlists show a centered, bold gray “Empty playlist” message following `016`; the playlist name remains dynamic. Empty Favorites follows `017` with a gray heart and “No Favorites yet”; both recent lists use the same centered bold gray style with “Empty” beneath their own headings. Details show title/artist/album rows and selected playback indicators, with no search or plus controls. Long-press a favorite to remove its membership; long-press a custom track to remove it or enter Reorder. Drag the handles, then tap Done; accessibility actions also move entries up/down. Editing cancels automatic return. Both Back actions restore the overview and its scroll position; Back during reordering finishes editing first.
+
+Custom playlist changes and built-in metadata are saved locally in a demo SharedPreferences store. New playlists start empty. Favorites and custom membership APIs are ready for the separately planned Add to playlist popup; that popup is still a placeholder. Recently added uses stable demo import order; Recently played records successful **simulated** starts, including transport resume/skip, with at most 50 distinct entries. The real scanner, transactional database, and playback-start events remain pending. Selecting a playlist track captures its displayed order without changing shuffle, and arms the existing 15-second return. Later edits and recent-list changes leave that queue snapshot intact.
+
+Debug-only fixtures provide populated Favorites and Trip 02 for exercising removal/reordering without inventing a track-picker flow. Fixture edits do not overwrite normal saved playlist data.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen playlists-empty --install
+python3 scripts/compare-main-player.py --screen playlists
+python3 scripts/compare-main-player.py --screen playlist-favorites
+python3 scripts/compare-main-player.py --screen playlist-added
+python3 scripts/compare-main-player.py --screen playlist-custom
+python3 scripts/compare-main-player.py --screen playlist-custom-empty
+python3 scripts/compare-main-player.py --screen playlist-favorites-empty
+```
+
+Artifacts are written under `build/visual-comparison/<screen>/`. Debug fixtures use `reference_preview=true` and `playlists_preview` set to one of these names; `playlist-played` exercises the shared Recently played layout without a dedicated reference PNG. Regenerate the supplied plus vectors with `python3 scripts/import-player-assets.py --group playlists-screen`.
+
+Validated on `headunit_a6` (API 23, 1280×720): all five reference comparisons; Menu entry; custom creation, rename, restart persistence, canceled/confirmed deletion; Favorites/custom-track removal; drag reorder, Done and Back restoration; and editing surviving the inactivity interval. `assembleDebug`, all 45 unit tests, and `lintDebug` pass. Real audio, real imports, and physical head-unit behavior remain unvalidated.
+
+Debug fixtures `playlist-added-empty` and `playlist-played-empty` expose the empty recent-list states through the `playlists_preview` intent extra.
