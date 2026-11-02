@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, and the three-screen Albums demo flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, and the three-screen Albums demo flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -26,6 +26,19 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Preset backgrounds only: black, dark gray, dark blue, dark burgundy. Preserve readable white controls/text. No image backgrounds.
 - Configurable time and date formats. Default assumption: mockup-style 12-hour time and DD-MM-YYYY date.
 - English-only interface; preserve music metadata in its original language.
+
+### Long music titles — implemented
+
+- Apply automatic marquee scrolling only when text exceeds its available label width. Text that fits retains its existing alignment and stays still; overflowing text remains on one line at its original font size.
+- Cover all nine reference screens: main player (`01`), All Tracks (`03`), Artists list/options/tracks/albums (`04`–`07`), and Albums list/options/tracks (`08`–`010`). Scroll the player's track, artist, and album labels; browser row titles and metadata subtitles; and artist/album context headings, including combined `Album by Artist` headings.
+- Pause for 1.5 seconds before the first scroll and between subsequent loops; repeat continuously without requiring focus, selection, or playback. Changing the label text restarts from its beginning with a fresh pause.
+- Clip scrolling text to its label viewport so it stays clear of row playback indicators and the clock. Preserve existing selection colors, font sizes, navigation, and touch actions.
+- Reuse the opt-in marquee in `PlayerLabel`, backed by Compose `basicMarquee`. Speed is `size × 0.8` dp/second and the gap between copies is `size × 1.5` dp, where `size` is the label's scaled font-size value.
+- Include this selectable demo-library entry in All Tracks, Artists, and Albums to exercise the flows and all three player labels:
+  - Artist: Bartholomew Quillfeather-Ashworth & The Interdimensional Orchestra
+  - Album: The Unabridged and Occasionally Contradictory Chronicles of Seventeen Thousand Midnight Trains
+  - Track: Departing From a Station That Was Demolished Before It Was Ever Built
+- Validated on `headunit_a6` (API 23): long player labels, browser rows, and context headings animate while short rows remain stationary. `assembleDebug`, all 38 unit tests, and `lintDebug` passed; animation was checked on the emulator separately from the unit suite.
 
 ### Main-player inactivity fading
 
@@ -213,6 +226,7 @@ Before committing to implementations, verify current official documentation for 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Implement skippable onboarding, source management, empty/access-denied states, and browsing navigation.
 - Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the six designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
+- Implemented shared overflow-only marquees for music titles, row metadata, and artist/album context headings across the nine existing player/browser screens; retain this behavior when connecting real library data. See Long music titles above.
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
 
 ### Phase 3 — Local library
@@ -255,6 +269,12 @@ Before committing to implementations, verify current official documentation for 
 - Verify all six controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
 - Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
+
+### Long-title acceptance
+
+- Use the documented long artist, album, and track fixture across all nine screens; confirm overflowing titles, row metadata, and context headings scroll automatically, including selected rows with playback indicators.
+- Confirm the 1.5-second initial/repeat pauses, continuous looping, and restart from the beginning when text changes. Verify short text remains stationary with its existing alignment.
+- Confirm original font size, single-line layout, selection colors, and clipping within each label; ensure scrolling never draws into playback indicators or the clock and does not interfere with row taps or list scrolling.
 
 ### Artists-flow acceptance
 
