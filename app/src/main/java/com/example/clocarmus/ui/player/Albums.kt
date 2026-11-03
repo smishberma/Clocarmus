@@ -40,7 +40,8 @@ internal fun albumTrackRow(track: TrackMenuEntry): BrowserRow {
 /** Every pushed destination preserves its actual parent, including compilation shortcuts. */
 internal data class BrowserDestination(
     val page: String, val artist: String? = null, val scope: ArtistScope = ArtistScope.TRACK,
-    val album: AlbumIdentity? = null, val search: Boolean = false, val playlistId: String? = null
+    val album: AlbumIdentity? = null, val search: Boolean = false, val playlistId: String? = null,
+    val genre: String? = null
 ) : Serializable
 
 internal val demoAlbumTracks = demoTrackTitles.flatMapIndexed { albumIndex, album ->
@@ -55,7 +56,16 @@ internal val demoAlbumTracks = demoTrackTitles.flatMapIndexed { albumIndex, albu
     TrackMenuEntry("Together", "Ripple", "Road collection", "2024", "compilation:1", albumArtist = "Various Artists", trackNumber = 2, durationSeconds = 210),
     TrackMenuEntry("Journey", "Saffron", "Road collection", "2024", "compilation:2", albumArtist = "Various Artists", trackNumber = 10, durationSeconds = 245)
 )
-internal val demoLibraryTracks = demoArtistTracks + demoAlbumTracks + marqueeDemoTrack
+internal val demoLibraryTracks = (demoArtistTracks + demoAlbumTracks + marqueeDemoTrack).mapIndexed { index, track ->
+    track.copy(genres = when {
+        track.id == marqueeDemoTrack.id -> listOf("Alternative Rock")
+        track.title in setOf("Pebble", "New Day", "Oh, My", "Queen of me", "Stay with me") -> listOf("Alternative Rock")
+        index % 41 == 0 -> emptyList()
+        index % 43 == 0 -> listOf(" Rock ", "rock", "Pop/Rock")
+        index % 47 == 0 -> listOf("Folk", "Acoustic")
+        else -> listOf(listOf("Acoustic", "African", "Classical", "Folk", "Jazz", "Pop", "Rock")[index % 7])
+    })
+}
 
 /** Finite traversal of the displayed queue; never falls back to an unrelated collection. */
 internal fun playableTrack(tracks: List<TrackMenuEntry>, selectedId: String): TrackMenuEntry? {

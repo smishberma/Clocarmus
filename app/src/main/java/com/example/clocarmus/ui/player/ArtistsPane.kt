@@ -77,10 +77,11 @@ internal fun ArtistsPane(
     onSelectTrack: (String, List<TrackMenuEntry>) -> Unit,
     onPlayAll: (List<TrackMenuEntry>) -> Unit,
     scope: ArtistScope = ArtistScope.TRACK,
+    genre: String? = null,
     onAlbum: (AlbumIdentity) -> Unit
 ) {
     val states = rememberSaveableStateHolder()
-    val library = if (preview != null) demoArtistTracks else demoLibraryTracks
+    val library = genreCollection(if (preview != null) demoArtistTracks else demoLibraryTracks, genre)
     val artists = groupArtists(library)
     val artist = artistName?.let { ArtistEntry(it, artistCollection(library, it, scope)) }
     if (page == "detail" && artist != null) {
@@ -88,7 +89,7 @@ internal fun ArtistsPane(
             { onPlayAll(artist.tracks) }, { onPage("tracks") }, { onPage("albums") })
         return
     }
-    states.SaveableStateProvider(if (page == "artists") page else "$scope:$artistName:$page") {
+    states.SaveableStateProvider(if (page == "artists") page else "$genre:$scope:$artistName:$page") {
         var query by rememberSaveable { mutableStateOf("") }
         var selectedArtist by rememberSaveable { mutableStateOf(artistName) }
         var selectedAlbum by rememberSaveable { mutableStateOf<String?>(if (preview == "artist-albums") "Ripple" else null) }
@@ -157,15 +158,15 @@ internal fun ObserveBrowserScroll(scroll: ScrollState, inactivity: BrowsingRetur
 internal fun ArtistDetailPane(grid: PlayerGrid, name: String, onBack: () -> Unit,
                              onPlayAll: () -> Unit, onTracks: () -> Unit, onAlbums: () -> Unit,
                              album: Boolean = false, onSearch: (() -> Unit)? = null,
-                             albumArtist: String? = null) {
+                             albumArtist: String? = null, genre: Boolean = false, onArtists: (() -> Unit)? = null) {
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onBack)
-    BrowserHeading(grid, if (album) "ALBUMS" else "ARTISTS",
+    if (genre) GenreHeading(grid, "GENRES", name) else BrowserHeading(grid, if (album) "ALBUMS" else "ARTISTS",
         if (album) R.drawable.menu_albums else R.drawable.menu_artists,
         if (albumArtist != null) "${name.uppercase(Locale.ROOT)} by ${albumArtist.uppercase(Locale.ROOT)}"
         else name.uppercase(Locale.ROOT))
     onSearch?.let { search ->
-        Box(grid.touchTarget(902f, 103f, 87f).semantics { contentDescription = "Search album tracks" }
+        Box(grid.touchTarget(902f, 103f, 87f).semantics { contentDescription = if (genre) "Search genre tracks" else "Search album tracks" }
             .clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {
             Image(painterResource(R.drawable.track_search), null, Modifier.size((87f * grid.scale).dp))
         }
@@ -180,12 +181,18 @@ internal fun ArtistDetailPane(grid: PlayerGrid, name: String, onBack: () -> Unit
     }
     Box(grid.place(40f, 636f, 916f, 354f).clip(RoundedCornerShape((66f * grid.scale).dp)).background(Color(0xff333333)))
     PlayerLabel("BROWSE", grid.place(60f, 651f, 880f, 60f), 40f * grid.scale, bold = true)
-    ArtistBrowseButton(grid, if (album) "Album Tracks" else "Tracks",
-        if (album) R.drawable.album_tracks else R.drawable.menu_all_tracks,
-        if (album) R.drawable.album_tracks_pressed else R.drawable.menu_all_tracks_pressed, 146f, onTracks)
-    ArtistBrowseButton(grid, if (album) "Artist" else "Albums",
-        if (album) R.drawable.menu_artists else R.drawable.player_albums,
-        if (album) R.drawable.menu_artists_pressed else R.drawable.player_albums_pressed, 570f, onAlbums)
+    if (genre) {
+        ArtistBrowseButton(grid, "Tracks", R.drawable.menu_all_tracks, R.drawable.menu_all_tracks_pressed, 18f, onTracks)
+        ArtistBrowseButton(grid, "Artists", R.drawable.menu_artists, R.drawable.menu_artists_pressed, 358f, onArtists ?: {})
+        ArtistBrowseButton(grid, "Albums", R.drawable.player_albums, R.drawable.player_albums_pressed, 698f, onAlbums)
+    } else {
+        ArtistBrowseButton(grid, if (album) "Album Tracks" else "Tracks",
+            if (album) R.drawable.album_tracks else R.drawable.menu_all_tracks,
+            if (album) R.drawable.album_tracks_pressed else R.drawable.menu_all_tracks_pressed, 146f, onTracks)
+        ArtistBrowseButton(grid, if (album) "Artist" else "Albums",
+            if (album) R.drawable.menu_artists else R.drawable.player_albums,
+            if (album) R.drawable.menu_artists_pressed else R.drawable.player_albums_pressed, 570f, onAlbums)
+    }
 }
 
 private fun gridLocal(grid: PlayerGrid, x: Float, y: Float, width: Float, height: Float) = Modifier

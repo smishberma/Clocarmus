@@ -78,7 +78,7 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null) {
+fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null) {
     val context = LocalContext.current
     val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
     var playlistLibrary by remember { mutableStateOf(if (playlistsPreview != null) playlistFixture(playlistsPreview) else loadPlaylists(playlistPreferences)) }
@@ -102,7 +102,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     var position by rememberSaveable { mutableFloatStateOf(113f) }
     var shuffle by rememberSaveable { mutableStateOf(true) }
     var repeat by rememberSaveable { mutableIntStateOf(0) }
-    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null) }
+    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null) }
     var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
     var browserStack by rememberSaveable { mutableStateOf(arrayListOf<BrowserDestination>().apply {
         if (artistsPreview != null) {
@@ -123,6 +123,12 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
             }
             if (id != null) add(BrowserDestination("playlist-detail", playlistId = id))
         }
+        if (genresPreview != null) {
+            add(BrowserDestination("genre-list"))
+            if (genresPreview != "genres") add(BrowserDestination("genre-options", genre = "alternative rock"))
+            if (genresPreview in setOf("genre-tracks", "genre-artists", "genre-albums"))
+                add(BrowserDestination(genresPreview, genre = "alternative rock"))
+        }
         if (albumsPreview != null) {
             add(BrowserDestination("album-list"))
             if (albumsPreview != "albums") add(BrowserDestination("album-options", album = AlbumIdentity("Saffron", "Artist")))
@@ -131,7 +137,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     }) }
     val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
-    var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else null) }
+    var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (genresPreview == "genre-tracks") "genre:track:2" else if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else null) }
     val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
     val selectedTitle = selectedTrack?.title
     var demoQueue by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
@@ -206,7 +212,10 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                                 menuOpen = false
                             }
                         }
-                        if (destination.page.startsWith("playlist-")) {
+                        if (destination.page.startsWith("genre-")) {
+                            GenresPane(grid, destination, genresPreview, selectedTrackId, playing, browsingReturn,
+                                { searchOpen = it }, goBack, navigate, selectTrack, playCollection)
+                        } else if (destination.page.startsWith("playlist-")) {
                             PlaylistsPane(grid, destination.playlistId, playlistLibrary, playlistTracks, selectedTrackId, playing,
                                 browsingReturn, updatePlaylists, goBack,
                                 { navigate(BrowserDestination("playlist-detail", playlistId = it)) }, selectTrack,
@@ -217,9 +226,9 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                         } else {
                             ArtistsPane(grid, destination.page, destination.artist, artistsPreview, selectedTrackId, playing,
                                 browsingReturn, onSearchVisibilityChanged = { searchOpen = it }, onBack = goBack,
-                                onArtist = { navigate(BrowserDestination("detail", artist = it)) },
+                                onArtist = { navigate(BrowserDestination("detail", artist = it, genre = destination.genre)) },
                                 onPage = { navigate(destination.copy(page = it)) },
-                                onSelectTrack = selectTrack, onPlayAll = playCollection, scope = destination.scope,
+                                onSelectTrack = selectTrack, onPlayAll = playCollection, scope = destination.scope, genre = destination.genre,
                                 onAlbum = { navigate(BrowserDestination("album-options", album = it)) })
                         }
                     }
@@ -234,6 +243,7 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
                         browsingReturn.interaction()
                         if (it == "All tracks") tracksOpen = true
                         else if (it == "Artists") navigate(BrowserDestination("artists"))
+                        else if (it == "Genres") navigate(BrowserDestination("genre-list"))
                         else if (it == "Albums") navigate(BrowserDestination("album-list"))
                         else if (it == "Playlists") navigate(BrowserDestination("playlist-list"))
                         else {

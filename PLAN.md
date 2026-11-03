@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, and Playlists browsing/management are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, and the five-screen Genres flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -172,7 +172,7 @@ The visual/demo flow is implemented against the updated playlist mockups, retain
 
 ### Genres browsing flow
 
-This feature remains planned. Use the five genre mockups below and retain the fixed split, persistent clock, volume slider, transport controls, existing fast scrolling, and long-text behavior.
+The visual/demo flow is implemented using the five genre mockups below. Real library and playback-service integration remain planned. Retain the fixed split, persistent clock, volume slider, transport controls, existing fast scrolling, and long-text behavior.
 
 #### Genre membership and counts
 

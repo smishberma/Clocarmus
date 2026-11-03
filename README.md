@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Main player, menu, All Tracks, Artists, Albums, and Playlists demo flows implemented.** The app uses bundled Inter fonts, supplied vectors, a persistent live clock, full-screen landscape layout, media-volume controls, and local transport/shuffle/repeat state. Browsers support selection and retained navigation state; the track, artist, and album browsers also support search. Playlists includes built-in lists, custom playlist management, track removal, and drag reordering. Normal launch starts paused. Real library discovery and audio playback, the main-player Add to playlist popup, Genres, Folders, and Settings remain pending.
+**Main player, menu, All Tracks, Artists, Albums, Playlists, and Genres demo flows implemented.** The app uses bundled Inter fonts, supplied vectors, a persistent live clock, full-screen landscape layout, media-volume controls, and local transport/shuffle/repeat state. Browsers support selection and retained navigation state; the track, artist, and album browsers also support search. Playlists includes built-in lists, custom playlist management, track removal, and drag reordering. Normal launch starts paused. Real library discovery and audio playback, the main-player Add to playlist popup, Folders, and Settings remain pending.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -156,7 +156,7 @@ python3 scripts/compare-main-player.py --screen menu --install
 
 This uses `design/02-menu-screen.png`, the same proportional fitting and fixed clock fixture as the player comparison, and the supplied vectors in `design/assets/menu-page/`. Artifacts are saved under `build/visual-comparison/menu/`. Normal launch still opens the player; the menu fixture requires a debug build and `reference_preview=true` with `menu_preview=true`.
 
-The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, Albums opens the album browser, and Playlists opens the playlist overview; Genres, Folders, and Settings remain placeholders.
+The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, Albums opens the album browser, Playlists opens the playlist overview, and Genres opens its five-screen browsing flow; Folders and Settings remain placeholders.
 
 Regenerate only the menu vectors with `python3 scripts/import-player-assets.py --group menu-page`. The importer also accepts `--group main-player` and `--group shared`; complex SVG filters are rejected by Android's vector converter and require separate asset preparation.
 
@@ -260,3 +260,27 @@ Artifacts are written under `build/visual-comparison/<screen>/`. Debug fixtures 
 Validated on `headunit_a6` (API 23, 1280×720): all five reference comparisons; Menu entry; custom creation, rename, restart persistence, canceled/confirmed deletion; Favorites/custom-track removal; drag reorder, Done and Back restoration; and editing surviving the inactivity interval. `assembleDebug`, all 45 unit tests, and `lintDebug` pass. Real audio, real imports, and physical head-unit behavior remain unvalidated.
 
 Debug fixtures `playlist-added-empty` and `playlist-played-empty` expose the empty recent-list states through the `playlists_preview` intent extra.
+
+
+## Genres
+
+Menu > Genres follows references `018`–`022`: alphabetical genres with Track/Tracks counts, genre options with Play all and three equally spaced Browse buttons, and scoped Tracks, Artists, and Albums lists. Existing SVG-derived normal/pressed icons, Inter, marquees, search, fast scrolling, clock, volume, and transport controls are shared with the other browsers.
+
+Explicit genre values are trimmed and matched case-insensitively; blank/missing values use Unknown genre. Multiple stored values create separate memberships without splitting names such as Pop/Rock. Counts deduplicate repeated membership by track ID while retaining physical copies and unavailable entries. The demo library includes these metadata cases.
+
+Artist options and children keep the genre filter and count distinct matching album titles. Qualifying albums show full-library counts and open the entire album, including nonmatching tracks. The album's Artist shortcut uses unfiltered Album Artist scope. Both Back controls retrace the entry path, restoring query, scroll, and last-opened selection per genre and nested scope. Search filters the current list's names/titles; options search opens genre Tracks search.
+
+Genre/artist Play all snapshots alphabetically ordered matching tracks, disables shuffle, and returns immediately after a successful simulated start. Individual selection snapshots displayed results, preserves shuffle, and uses the existing 15-second return. Empty/unavailable collections never substitute unrelated tracks. Real scanning and audio playback remain pending.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen genres --install
+python3 scripts/compare-main-player.py --screen genre-options
+python3 scripts/compare-main-player.py --screen genre-tracks
+python3 scripts/compare-main-player.py --screen genre-artists
+python3 scripts/compare-main-player.py --screen genre-albums
+```
+
+Debug-only `genres_preview` fixtures reproduce the reference labels and selection; normal launch uses consistent shared demo-library metadata. Comparisons are saved to `build/visual-comparison/<screen>/`. Scrollbar visibility and position follow actual collection length; font rasterization and supplied vector geometry retain small differences from the PNGs. All 50 unit tests pass, including genre normalization, explicit multi-value membership, unavailable copies, partial-album qualification with full counts, scoped artists, and exhausted queues. `assembleDebug` and `lintDebug` pass.
+
+Validated on `headunit_a6` (API 23, 1280×720): five reference comparisons; Menu entry; genre search; genre-scoped artist Tracks; whole-album entry including nonmatching tracks; unfiltered Album Artist shortcut; nested Android Back route and retained genre query; individual selection remaining in browsing and returning after 15 seconds; immediate Genre Play all return.

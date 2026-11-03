@@ -45,7 +45,8 @@ internal data class TrackMenuEntry(
     val title: String, val artist: String, val album: String, val year: String? = null,
     val id: String = title, val available: Boolean = true,
     val albumArtist: String? = null, val discNumber: Int? = null,
-    val trackNumber: Int? = null, val durationSeconds: Int? = null
+    val trackNumber: Int? = null, val durationSeconds: Int? = null,
+    val genres: List<String> = emptyList()
 )
 
 // Placeholder metadata matches the visual fixture until the library supplies real tags.
@@ -104,7 +105,9 @@ internal fun BrowserPane(
     onLongClick: ((String) -> Unit)? = null,
     reordering: Boolean = false,
     onMove: (String, Int) -> Unit = { _, _ -> },
-    showScrollbar: Boolean = true
+    showScrollbar: Boolean = true,
+    proportionalScrollbar: Boolean = false,
+    listTop: Float = if (showSearch) 293f else 303f
 ) {
     val titles = remember(rows) { rows.map { it.title } }
     var searching by remember { mutableStateOf(searchInitiallyOpen) }
@@ -125,7 +128,7 @@ internal fun BrowserPane(
     val latestRows by rememberUpdatedState(rows)
     val latestMove by rememberUpdatedState(onMove)
     val rowHeightPx = with(LocalDensity.current) { (140f * grid.scale).dp.toPx() }
-    Column(grid.place(if (showSearch) 53f else 42f, if (showSearch) 293f else 303f, 827f, 700f).verticalScroll(scroll)) {
+    Column(grid.place(if (showSearch) 53f else 42f, listTop, 827f, 700f).verticalScroll(scroll)) {
         rows.forEachIndexed { index, row ->
             key(row.id) {
                 val title = row.title
@@ -182,7 +185,7 @@ internal fun BrowserPane(
     }
     if (titles.isEmpty() && emptyMessage.isNotEmpty()) PlayerLabel(emptyMessage, grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
         alignment = Alignment.CenterStart)
-    if (showScrollbar) TrackScrollbar(grid, scroll, titles, searchName, proportional = heading == "ALBUM TRACKS" || !showSearch, top = if (showSearch) 312f else 319f)
+    if (showScrollbar) TrackScrollbar(grid, scroll, titles, searchName, proportional = proportionalScrollbar || heading == "ALBUM TRACKS" || !showSearch, top = listTop + if (showSearch) 19f else 16f)
 
     if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search $searchName") },
         text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Search $searchName") }) },
