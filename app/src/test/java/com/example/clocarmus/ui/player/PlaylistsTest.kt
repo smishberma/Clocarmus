@@ -47,6 +47,34 @@ class PlaylistsTest {
         assertEquals(listOf("a", "b"), library.trackIds(FAVORITES))
         assertEquals(library, library.delete(FAVORITES).rename(FAVORITES, "Changed"))
     }
+    @Test fun playerCreationValidatesTargetAndAddsOnlyToTheNewPlaylist() {
+        val original = PlaylistLibrary().create("Existing").add(FAVORITES, "selected", 1)
+        assertEquals(original, original.createForTrack("New", "selected", "advanced", 2))
+        assertEquals(original, original.createForTrack("New", "selected", null, 2))
+        listOf(" ", "favorites", "EXISTING").forEach {
+            assertEquals(original, original.createForTrack(it, "selected", "selected", 2))
+        }
+        val created = original.createForTrack("  New  ", "selected", "selected", 2)
+        assertEquals("New", created.custom.last().name)
+        assertEquals(listOf("selected"), created.custom.last().tracks)
+        assertTrue(created.custom.first().tracks.isEmpty())
+        assertEquals(original.favorites, created.favorites)
+        assertTrue(original.create("Overview").custom.last().tracks.isEmpty())
+    }
+    @Test fun playerMembershipIndicatorExcludesRecentListsAndClearsWithLastMembership() {
+        var library = PlaylistLibrary().imported("selected", 1)
+            .playbackStarted(TrackMenuEntry("Selected", "Artist", "Album", id = "selected"), 1).create("Trip")
+        val id = library.custom.single().id
+        assertFalse(library.hasMembership("selected"))
+        library = library.toggleMembership(FAVORITES, "selected", 2)
+        assertTrue(library.hasMembership("selected"))
+        library = library.toggleMembership(id, "selected", 3).toggleMembership(FAVORITES, "selected", 4)
+        assertTrue(library.hasMembership("selected"))
+        assertEquals(listOf("selected"), library.trackIds(id))
+        library = library.toggleMembership(id, "selected", 5)
+        assertFalse(library.hasMembership("selected"))
+        assertEquals(listOf("selected"), library.trackIds(RECENT_PLAYED))
+    }
     @Test fun recentlyAddedBoundsDisplayAndPreservesEvictedImportTimesOnReconnect() {
         var library = PlaylistLibrary()
         repeat(51) { library = library.imported("$it", it.toLong()) }

@@ -67,7 +67,7 @@ internal fun fastScrollLetter(titles: List<String>, fraction: Float): String =
     titles.getOrNull(((titles.size - 1).coerceAtLeast(0) * fraction.coerceIn(0f, 1f)).roundToInt())
         ?.firstOrNull()?.uppercaseChar()?.toString().orEmpty()
 
-internal data class BrowserRow(val id: String, val title: String, val subtitle: String)
+internal data class BrowserRow(val id: String, val title: String, val subtitle: String, val rowIcon: Int? = null, val audio: Boolean = false)
 
 @Composable
 internal fun TrackMenuPane(
@@ -107,6 +107,10 @@ internal fun BrowserPane(
     onMove: (String, Int) -> Unit = { _, _ -> },
     showScrollbar: Boolean = true,
     proportionalScrollbar: Boolean = false,
+    folderRows: Boolean = false,
+    folderTextInset: Float = 130f,
+    folderRowGap: Float = 42f,
+    scrollbarTop: Float? = null,
     listTop: Float = if (showSearch) 293f else 303f
 ) {
     val titles = remember(rows) { rows.map { it.title } }
@@ -133,22 +137,28 @@ internal fun BrowserPane(
             key(row.id) {
                 val title = row.title
                 val selected = row.id == selectedId
-                Box(Modifier.fillMaxWidth().height((126f * grid.scale).dp)
-                    .clip(RoundedCornerShape((36f * grid.scale).dp))
+                Box(Modifier.fillMaxWidth().height(((if (folderRows && row.subtitle.isEmpty()) 98f else 126f) * grid.scale).dp)
+                    .clip(RoundedCornerShape(((if (folderRows) 28f else 36f) * grid.scale).dp))
                     .background(if (selected) Color.White else Color.Transparent)
                     .semantics(mergeDescendants = true) {
                         this.selected = selected
-                        if (selected && showPlayback) stateDescription = if (playing) "Playing" else "Paused"
+                        if (selected && showPlayback && (!folderRows || row.audio)) stateDescription = if (playing) "Playing" else "Paused"
                     }
                     .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
                         role = Role.Button, onLongClick = onLongClick?.let { { it(row.id) } },
                         onClick = { if (!reordering) onSelect(row.id) })) {
                     val textColor = if (selected) Color.Black else Color.White
-                    Column(Modifier.fillMaxSize().padding(start = (32f * grid.scale).dp,
-                        end = ((if (reordering || (selected && showPlayback)) 100f else 28f) * grid.scale).dp)) {
-                        PlayerLabel(title, Modifier.fillMaxWidth().height((76f * grid.scale).dp),
-                            58f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
-                        PlayerLabel(row.subtitle,
+                    row.rowIcon?.let { asset ->
+                        Image(painterResource(asset), null,
+                            Modifier.align(Alignment.CenterStart).padding(start = ((if (asset == R.drawable.folder_previous_folder) 27f else 36f) * grid.scale).dp)
+                                .size(((if (asset == R.drawable.folder_previous_folder) 60f else 48f) * grid.scale).dp), contentScale = ContentScale.Fit,
+                            colorFilter = ColorFilter.tint(if (selected) Color.Black else if (row.audio) Color(0xffaaaaaa) else Color.White))
+                    }
+                    Column(Modifier.fillMaxSize().padding(start = ((if (folderRows) folderTextInset else 32f) * grid.scale).dp,
+                        end = ((if (reordering || (selected && showPlayback && (!folderRows || row.audio))) 100f else 28f) * grid.scale).dp)) {
+                        PlayerLabel(title, Modifier.fillMaxWidth().height(((if (folderRows && row.subtitle.isEmpty()) 98f else 76f) * grid.scale).dp),
+                            (if (folderRows) 54f else 58f) * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
+                        if (row.subtitle.isNotEmpty()) PlayerLabel(row.subtitle,
                             Modifier.fillMaxWidth().height((42f * grid.scale).dp),
                             34f * grid.scale, alignment = Alignment.CenterStart, color = textColor, marquee = true)
                     }
@@ -174,18 +184,18 @@ internal fun BrowserPane(
                         }) {
                         PlayerLabel("≡", Modifier.fillMaxSize(), 58f * grid.scale, color = textColor)
                     }
-                    if (!reordering && selected && showPlayback) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
-                        null, Modifier.align(Alignment.CenterEnd).padding(end = (42f * grid.scale).dp)
-                            .size((48f * grid.scale).dp), contentScale = ContentScale.Fit,
+                    if (!reordering && selected && showPlayback && (!folderRows || row.audio)) Image(painterResource(if (playing) R.drawable.track_play_indicator else R.drawable.player_pause),
+                        null, Modifier.align(Alignment.CenterEnd).padding(end = ((if (folderRows) 56f else 42f) * grid.scale).dp)
+                            .size(((if (folderRows) 44f else 48f) * grid.scale).dp), contentScale = ContentScale.Fit,
                         colorFilter = if (playing) null else ColorFilter.tint(Color.Black))
                 }
-                if (index != rows.lastIndex) Spacer(Modifier.height((14f * grid.scale).dp))
+                if (index != rows.lastIndex) Spacer(Modifier.height(((if (folderRows) folderRowGap else 14f) * grid.scale).dp))
             }
         }
     }
     if (titles.isEmpty() && emptyMessage.isNotEmpty()) PlayerLabel(emptyMessage, grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
         alignment = Alignment.CenterStart)
-    if (showScrollbar) TrackScrollbar(grid, scroll, titles, searchName, proportional = proportionalScrollbar || heading == "ALBUM TRACKS" || !showSearch, top = listTop + if (showSearch) 19f else 16f)
+    if (showScrollbar) TrackScrollbar(grid, scroll, titles, searchName, proportional = proportionalScrollbar || heading == "ALBUM TRACKS" || !showSearch, top = scrollbarTop ?: (listTop + if (showSearch) 19f else 16f))
 
     if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search $searchName") },
         text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Search $searchName") }) },

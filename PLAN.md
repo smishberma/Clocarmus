@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, and the five-screen Genres flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, and the two-screen Folders demo flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -42,7 +42,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 
 ### Main-player inactivity fading
 
-- Only Menu, Add to playlist, Shuffle, Repeat, Skip forward 10 seconds, and Skip backward 10 seconds fade. All other elements retain their normal appearance.
+- Only Menu, Manage playlists, Shuffle, Repeat, Skip forward 10 seconds, and Skip backward 10 seconds fade. All other elements retain their normal appearance.
 - While the main player is active, 10 seconds without touch starts a 500 ms animation from 100% to 20% opacity, regardless of whether music is playing or paused.
 - Apply opacity to each control's existing appearance, including inactive Shuffle/Repeat styling; preserve active/inactive distinctions, hit areas, and accessibility semantics.
 - Touch anywhere on the player, including the clock pane, immediately restores all six controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
@@ -58,7 +58,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 2. Allow setup to be skipped into an empty player/clock with an Add music folder action.
 3. Remember selected folders and expose source management and manual rescan in Settings.
 4. Browse All Tracks, Artists, Albums, Genres, Folders, and Playlists. Search songs, albums, and artists.
-5. Selecting a song starts its collection in displayed order; search queues all matching songs. Folder playback includes descendants.
+5. Selecting a song starts its collection in displayed order; search queues all matching songs. Recursive folder playback remains the general plan except in the Folders browser: normal file taps queue only direct-directory audio, while recursive search queues all matching audio results.
 6. Remain in browsing after selection, then return to the player after 15 seconds of inactivity. Taps, scrolling, and typing reset inactivity; entering settings, playlist editing, or typing in search cancels the automatic return until another song is selected. Cancellation takes precedence over resetting.
 
 ### Artists browsing flow
@@ -140,7 +140,7 @@ Agreed scope: the Menu Albums list, shared album options, Album Tracks, and an A
 
 ### Playlists browsing and management
 
-The visual/demo flow is implemented against the updated playlist mockups, retaining the fixed split, persistent clock, volume, and transport controls. Custom edits and built-in demo metadata persist locally in a temporary SharedPreferences store. Real library imports, transactional repository persistence, playback-start integration, and the separately scoped main-player Add to playlist popup remain planned.
+The visual/demo flow is implemented against the updated playlist mockups, retaining the fixed split, persistent clock, volume, and transport controls. Custom edits and built-in demo metadata persist locally in a temporary SharedPreferences store. Real library imports, transactional repository persistence, and playback-start integration remain planned. The main-player Manage playlists popup below is implemented against this shared demo store.
 
 #### Overview and creation
 
@@ -156,7 +156,7 @@ The visual/demo flow is implemented against the updated playlist mockups, retain
 
 - Use `design/013-playlists-favorites-list.png` for Favorites, `design/014-playlists-recently-added-list.png` for Recently added, and `design/015-playlists-user-custom-playlist.png` for custom playlists. Recently played reuses the Favorites/Recently added layout with its own icon and heading; `015` is not its reference.
 - Follow the updated detail mockups: no plus button in any detail view. Show track title and Artist - Album subtitle with the existing selected/playing indicator.
-- Favorites is populated through the main-player Add to playlist flow and sorts newest favorited first. That popup's detailed design and interaction remain reserved for a separate interview.
+- Favorites is populated through the main-player Manage playlists popup specified below and sorts newest favorited first.
 - Recently added contains the 50 most recently imported tracks, newest first, whether imported individually or as part of an album. Unchanged rescans/reconnections and identity-preserving moves do not reset import time.
 - Recently played contains the 50 most recently played distinct track identities, newest first. Record when playback actually starts; replay moves that track to the top without duplicating it. Failed/unavailable playback and paused restoration do not count. This replaces both the previous 100-track requirement and the interim 20-track proposal.
 - Long-press a Favorites track to offer Remove from Favorites. Long-press a custom-playlist track to offer Remove from playlist and Reorder. Do not offer manual removal or manual reordering for recent lists. Favorites retains its timestamp ordering rather than manual ordering.
@@ -168,7 +168,7 @@ The visual/demo flow is implemented against the updated playlist mockups, retain
 - Selecting a song in any of the four list types replaces the queue with a snapshot of displayed tracks in their current order, starts that song, preserves shuffle, and uses the existing 15-second inactivity return. Keep the queue stable as Recently played updates; playlist removal and subsequent membership/reordering edits do not rewrite the active snapshot.
 - Normal unavailable-track rules continue to apply; keep disconnected references instead of silently deleting them from playlists.
 - Both on-screen Back and Android Back follow details > Playlists overview > Menu, restoring each list's scroll position. Merely opening a playlist does not start playback or arm a return timer.
-- No search controls are added in this feature. App-wide search and the main-player Add to playlist popup remain separate interview topics.
+- No search controls are added in this feature. App-wide search remains a separate interview topic. The main-player Manage playlists popup is specified below.
 
 ### Genres browsing flow
 
@@ -223,11 +223,85 @@ The visual/demo flow is implemented using the five genre mockups below. Real lib
 - Carry genre context explicitly while browsing artist options and children; drop the filter for whole-album entry but retain its originating navigation entry for Back.
 - Search choices here are provisional pending the dedicated app-wide search interview. Typing in search continues to cancel pending automatic return under the established rules.
 
+### Main-player Manage playlists popup
+
+This replaces the previously named Add to playlist UI. Implemented using the shared playlist state and a reusable creation/name-validation prompt also used by the Playlists overview. Membership changes persist in the temporary local demo store; real playback/service integration remains planned.
+
+#### Appearance and assets
+
+- Follow `design/023-track-collections-popup-add-to-favorites.png`, `024-track-collections-popup-no-custom-playlists.png`, and `025-track-collections-popup-add-to-custom-playlists.png`. Use `026-track-collections-track-present-in-playlists.png` for the closed-player membership indicator.
+- Overlay the left player area, covering artwork, metadata, and the seek bar. Retain the same panel bounds with or without custom playlists; never allow touches through the panel to hidden controls. Keep clock, Menu, volume, and bottom transport controls visible.
+- Keep Previous, Play/Pause, and Next at their main-player sizes while the popup is open.
+- Place Create playlist and Close above the panel. Inside, show the ADD/REMOVE TO heading, Favorites, a divider, and custom playlists alphabetically. Favorites, divider, and custom entries scroll together; the heading and top buttons stay outside that scrolling region.
+- With no custom playlists, retain the full panel and divider and show “No custom playlists”.
+- Use assets from `design/assets/track-collections/`: `playlist-button-toggle-on.svg` while open, `playlist-button-untoggled.svg` when closed without membership, and `track-present-in-playlists.svg` when closed and the selected track belongs to Favorites or any custom playlist. Open/toggled state takes precedence over membership; Recently added/played do not count as memberships.
+- Use `checkbox-favorites-active.svg` for checked Favorites, `checkbox-active.svg` for checked custom playlists, and `checkbox-inactive.svg` for unchecked entries. Preserve supplied colors and geometry at consistent visual sizes.
+- Create playlist and Close share the supplied `button-unpressed.svg` / `button-pressed.svg` backgrounds with their respective text labels. Import this asset group with the `collections_` resource prefix, preserving gradients and transparency. Use Manage playlists as the top-right control's accessibility label and expose its expanded state.
+
+#### Track identity and membership
+
+- Enable Manage playlists when a track is selected, whether playing or paused; disable it when there is no selected track.
+- On opening, show the selected track's existing memberships. Tapping either a checkbox or its row toggles membership exactly once, persists immediately, and leaves the popup open. No Save or removal-confirmation step.
+- Adding appends to a custom playlist or records a new Favorites membership timestamp. Removing affects only that membership, never music files or the active playback queue. Existing memberships remain unique.
+- Close the popup whenever selected track identity changes, including automatic advancement or Previous/Next. Do not silently retarget the visible checkboxes to another track. Playback state/position changes alone do not dismiss it.
+
+#### Create playlist from the popup
+
+- Reuse the overview's Create/Cancel name prompt and validation: trim surrounding whitespace; reject blank, case-insensitive duplicate, and reserved built-in names.
+- Unlike overview creation, successful creation here automatically includes the selected track. Return to the same popup with the new alphabetically positioned playlist checked; keep the top-right control toggled on.
+- Cancel returns to the popup without creating anything. If the selected track changes while the name dialog is open, close both dialog and popup and discard the draft without creating a playlist. Validate track identity again before committing creation/membership.
+- A completed membership edit or creation is not undone when the popup subsequently closes.
+
+#### Dismissal, controls, and inactivity
+
+- Close, tapping Manage playlists again, and Android Back dismiss the popup and reveal the main player. Back while the nested naming prompt is open dismisses that prompt first, returning to the popup.
+- Tapping the clock or blank space outside the popup does not dismiss it. Volume and play/pause remain usable without closing. Menu closes the popup and opens Menu; Previous/Next closes it when track identity changes.
+- Suspend player inactivity fading while the popup or its naming prompt is open; retain full opacity for the popup and toggled button indefinitely. Closing restores the player fully visible and starts a fresh normal fading interval.
+- Keep popup membership edits independent of playback queue contents and the browsing-return timer; no automatic popup dismissal based on inactivity.
+
+Validation: compared all four references on `headunit_a6` (API 23, 1280×720) and checked both pressed backgrounds. Emulator interaction checks cover single row/checkbox toggles, hidden controls, pause/resume, clock touches, nested Back, Close/Menu/Next, persistence after restart, creation with selected-track membership, and fade suspension/reset. `assembleDebug`, all 52 unit tests, and `lintDebug` pass. Automatic advancement and hardware/media-driven changes still require the real playback service; target-identity invalidation is wired in the demo shell.
+
+### Folders browser
+
+The visual/demo flow is implemented against `design/027-folders-screen-root-directory.png` and `design/028-folders-screen-subdirectory-playing-file.png`, retaining the fixed split, persistent clock, volume, transport controls, scrolling, and long-label behavior.
+
+This uses an explicit in-memory selected-source tree, shared demo playback, and SVG-derived Android vectors. Real setup-selected grants, provider traversal, source monitoring, and audio playback remain pending. Normal browsing sorts naturally; the debug root fixture preserves the reference drawing’s three-row order.
+
+#### Root and directory contents
+
+- Menu > Folders opens a virtual root containing only the music folders selected during setup/source management. It is not the device filesystem root or a list of all storage devices. Do not browse above granted source boundaries.
+- At virtual root, show FOLDERS without a directory subtitle or Previous directory row. Within a selected folder or its descendants, show the open directory's name beneath FOLDERS.
+- Display only directories and supported audio files; hide other files. Keep accessible empty folders visible. If an opened directory has no eligible contents, show “No folders or audio files”, retaining the parent navigation row.
+- Show filenames with extensions rather than metadata titles. Prefix folders with `design/assets/folders-screen/folder-icon.svg` and audio files with `audio-file-icon.svg` from the same directory. Preserve the selected/playing file highlight and indicator from the reference.
+- Below virtual root, Previous directory is the first list row, using `design/assets/folders-screen/previous-folder.svg` and the text “Previous directory”. Its icon and label scroll with the other rows; it is not pinned.
+- Order Previous directory first, then folders, then audio files. Sort each group by name using natural numeric order so 2-song.mp3 precedes 10-song.mp3.
+
+#### Navigation and unavailable sources
+
+- Tapping a folder opens it without changing playback or arming the automatic return timer.
+- On-screen Back and Android Back go to the parent directory, returning to Menu from virtual root. Previous directory performs the same parent navigation. From a selected source root, parent navigation returns to virtual root rather than accessing its physical parent outside the grant.
+- Restore directory scroll positions when returning. After opening a folder from recursive search, parent navigation follows its actual directory parent within the selected source.
+- Keep selected sources on disconnected USB/SD storage visible at virtual root as unavailable. Tapping one shows a reconnect message. If the browsed source is removed, return to virtual root; preserve the existing playback source-loss rules (pause if it held the active track).
+
+#### Playback queues
+
+- Tapping an audio file during normal directory browsing replaces the queue with audio files directly in that directory, in displayed natural filename order, starting at the selected file. Exclude audio in descendant directories from this queue.
+- This is an explicit Folders-screen exception to the earlier recursive folder-playback rule. It does not change other screens' queue behavior or recursive library discovery.
+- Preserve shuffle and stay in the browser until the existing 15-second inactivity return. Main-player labels use track metadata; the browser continues to use filenames. Preserve existing unavailable/unplayable-track handling and snapshot queue behavior.
+
+#### Recursive search — provisional
+
+- Search folder names and audio filenames recursively beneath the current directory. At virtual root, search across selected music folders; stay within granted sources. Do not search unrelated metadata or non-audio files.
+- Show relative paths beneath search results to distinguish duplicate names. Retain folders-before-audio grouping and natural name ordering; ties use relative path, then stable identity for deterministic ordering.
+- Opening a folder result navigates to that folder and exits search. Back first clears search and returns to normal contents before performing parent navigation on a subsequent press.
+- Tapping an audio search result queues all matching audio results in displayed order, including matches from multiple descendant directories. Folder results never become queue entries. This search-only exception is distinct from direct-directory playback.
+- Search typing retains the existing cancellation of a pending inactivity return. These rules remain provisional until the dedicated app-wide search interview.
+
 ### Sorting and metadata
 
 - All Tracks and song search results: alphabetical by title.
 - Album lists: alphabetical by title. Tracks within albums: disc/track number, with unnumbered tracks after numbered tracks within each disc, alphabetically by title.
-- Folders: filename order, including a deterministic ordering across descendant folders.
+- Folders browser: Previous directory first, folders before audio files, each group in natural numeric name order. Normal playback queues only direct-directory audio; recursive search queues matching audio results across descendants.
 - Custom playlist names: alphabetical. Custom playlist tracks: user-controlled order, new tracks appended. Favorites: newest favorited first. Recent lists: newest import/playback first.
 - Missing title: filename. Missing artist/album: Unknown artist/Unknown album. Missing year: Unknown year; always retain the year row directly below Album on the main player. Missing artwork: local placeholder.
 - No online metadata/artwork lookups or metadata editor.
@@ -246,7 +320,7 @@ Recognize renamed/moved files using background content inspection, preserving th
 
 - Create, rename, delete playlists; add/remove tracks and manually reorder entries.
 - Disallow duplicate track membership within one playlist.
-- Add-to-playlist checkboxes immediately update membership; no Save button. The top-right toggle returns to artwork.
+- Manage playlists checkboxes immediately update membership; no Save button or removal confirmation. The top-right toggle closes the popup and reveals the full main player.
 - Favorites are a built-in collection ordered newest favorited first, with a membership timestamp.
 - Recently added: 50 most recently imported tracks, newest first; reconnecting unchanged files does not reset import time.
 - Recently played: 50 most recently played distinct tracks, newest first, updated when playback actually starts. Replays move existing entries to the top; failed starts and paused restoration do not count.
@@ -328,6 +402,10 @@ Before committing to implementations, verify current official documentation for 
 
 - Add genre membership metadata and the five-screen Genres flow with normalized genre grouping, counts, filtered track/artist/album views, retained navigation state, and the explicit whole-album exception. Reuse existing normal/pressed icons in the three-button Browse layout.
 
+- Implemented Manage playlists as a player overlay using shared membership persistence and a reusable creation prompt. Imported the track-collections assets and added open/membership/empty icon states, fixed panel bounds, and automatic selected-track inclusion only for creation from this popup.
+
+- Add the Folders browser with selected-source virtual root, directory listing, supplied row icons, scrolling parent navigation, natural name ordering, relative-path recursive search, restored directory state, and disconnected-source recovery. Keep source boundaries explicit.
+
 ### Phase 4 — Playback integration and lifecycle
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
@@ -341,6 +419,10 @@ Before committing to implementations, verify current official documentation for 
 
 - Connect genre and genre-scoped artist Play all to filtered alphabetical queue replacement with shuffle disabled and immediate return; preserve shuffle and the inactivity return for individual selections. Whole-album entry uses normal album playback rules.
 
+- Implemented Manage playlists binding to stable selected-track identity in the demo shell: close popup and nested naming prompt on track change, preserve normal transport use, suspend fading while editing, and validate the target before committing changes. Connect automatic advancement when the real playback service is added.
+
+- Connect Folders file selection to direct-directory queue snapshots and recursive-search selection to matching-result snapshots, preserving shuffle and the existing inactivity return.
+
 ### Phase 5 — Diagnostics and delivery
 
 - Add bounded local event capture, diagnostic screen, redacted manual report export, and actionable storage/playback errors.
@@ -351,7 +433,7 @@ Before committing to implementations, verify current official documentation for 
 
 ### Automated behavior checks
 
-- Collection/search/folder queue creation and specified ordering, including recursive folders.
+- Collection/search/folder queue creation and specified ordering, including the Folders browser distinction between direct-directory playback and recursive search results.
 - Playlist uniqueness, ordering, rename/delete, favorites, and distinct recent-list bounds.
 - Metadata fallbacks and search across songs/artists/albums.
 - Source overlap, disconnect/reconnect, permission loss, interrupted scan, source removal, and rename/move reconciliation with duplicate ambiguity.
@@ -411,6 +493,27 @@ Before committing to implementations, verify current official documentation for 
 - Opening an artist retains genre filtering for Play all, Tracks, and qualifying Albums. Opening any whole album leaves that filter; its Artist shortcut is unfiltered Album Artist scope. Back restores the previous genre/artist context and list state.
 - Genre Play all replaces the queue, disables shuffle, and returns immediately. Individual track selection preserves shuffle, snapshots displayed results, and uses the 15-second return. Empty/unplayable collections never start unrelated tracks.
 - Compare the five panes with references 018–022; verify the equally spaced three-button Browse layout and existing pressed/unpressed assets, unchanged clock/transport access, retained selection, scrolling, and long-title behavior.
+
+### Manage playlists popup acceptance
+
+- Match references 023–026, including fixed panel size over the seek bar, empty-custom message/divider, shared scrolling, Favorites-specific checkbox color, top buttons, and both pressed backgrounds. Hidden controls cannot receive popup touches.
+- Open for playing and paused selected tracks; disable with no selection. Verify existing memberships, single-toggle row/checkbox behavior, immediate persistence, unique membership, and unchanged audio files/active queue.
+- Verify closed icon states for no membership, Favorites only, custom membership only, and removal of the last membership. Open/toggled state always wins while editing.
+- Creation uses the same validation as the overview but adds the selected track and returns with its new playlist checked; cancellation creates nothing. Overview creation still creates an empty playlist.
+- Automatic advancement and manual track changes close popup and nested creation prompt, discarding uncommitted drafts. Pause/resume, seeking to restart the same track, and volume changes do not close it or change the editing target.
+- Close, toggle, and Back dismiss correctly; nested Back first cancels naming. Clock/blank touches leave it open, and Menu closes it before navigation.
+- Keep popup/button fully opaque beyond the normal fade interval; dismissal restarts fading. Verify no inactivity-driven popup closure and no interference with the browsing-return timer.
+
+### Folders-flow acceptance
+
+- Virtual root contains only selected sources, with no subtitle or Previous directory row. Browsing stays within source grants; parent from a source root returns to virtual root.
+- Directory contents show folders and supported audio filenames/extensions only, with the supplied icons. Empty folders remain navigable and display the agreed empty message when appropriate.
+- Previous directory scrolls with rows and precedes naturally sorted folder/audio groups. Verify numeric names, duplicate filenames, and long labels.
+- Normal selection queues only the current directory's audio, excluding descendant files; recursive search selection queues all matching audio results, never folder results. Both preserve shuffle and use the existing inactivity return.
+- Search includes nested folder names/audio filenames, shows distinguishing relative paths, and respects selected sources. Back clears search first; opening a folder result exits search and parent navigation follows its actual parent.
+- Both Back controls restore directory scroll state and return to Menu at virtual root. Folder navigation alone does not start playback or arm automatic return.
+- Disconnected sources remain at root with a reconnect message. Removal while browsing returns to root and applies the existing active-playback pause rule without deleting library references.
+- Compare root/subdirectory layouts to references 027 and 028; confirm persistent clock/transport controls and metadata on the player versus filenames in the browser.
 
 ### AVD acceptance
 

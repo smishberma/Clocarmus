@@ -124,14 +124,10 @@ internal fun PlaylistsPane(
     val targetPlaylist = library.custom.firstOrNull { it.id == target }
     when (action) {
         "create", "rename" -> {
-            val error = library.nameError(draft, if (action == "rename") target else null)
-            AlertDialog(onDismissRequest = { action = null }, title = { Text(if (action == "create") "Create playlist" else "Rename playlist") },
-                text = { OutlinedTextField(draft, { draft = it }, label = { Text("Playlist name") }, singleLine = true,
-                    isError = error != null && draft.isNotEmpty(), supportingText = { if (error != null) Text(error) }) },
-                confirmButton = { TextButton(enabled = error == null, onClick = {
-                    onChange(if (action == "create") library.create(draft) else library.rename(target.orEmpty(), draft)); action = null
-                }) { Text(if (action == "create") "Create" else "Rename") } },
-                dismissButton = { TextButton(onClick = { action = null }) { Text("Cancel") } })
+            PlaylistNamePrompt(library, draft, { draft = it }, { action = null }, {
+                onChange(if (action == "create") library.create(draft) else library.rename(target.orEmpty(), draft))
+                action = null
+            }, renamingId = if (action == "rename") target else null)
         }
         "playlist" -> AlertDialog(onDismissRequest = { action = null }, title = { Text(targetPlaylist?.name.orEmpty()) },
             text = { Column {

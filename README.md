@@ -240,7 +240,7 @@ Menu > Playlists follows the updated `011`–`017` references. Favorites, Recent
 
 Empty custom playlists show a centered, bold gray “Empty playlist” message following `016`; the playlist name remains dynamic. Empty Favorites follows `017` with a gray heart and “No Favorites yet”; both recent lists use the same centered bold gray style with “Empty” beneath their own headings. Details show title/artist/album rows and selected playback indicators, with no search or plus controls. Long-press a favorite to remove its membership; long-press a custom track to remove it or enter Reorder. Drag the handles, then tap Done; accessibility actions also move entries up/down. Editing cancels automatic return. Both Back actions restore the overview and its scroll position; Back during reordering finishes editing first.
 
-Custom playlist changes and built-in metadata are saved locally in a demo SharedPreferences store. New playlists start empty. Favorites and custom membership APIs are ready for the separately planned Add to playlist popup; that popup is still a placeholder. Recently added uses stable demo import order; Recently played records successful **simulated** starts, including transport resume/skip, with at most 50 distinct entries. The real scanner, transactional database, and playback-start events remain pending. Selecting a playlist track captures its displayed order without changing shuffle, and arms the existing 15-second return. Later edits and recent-list changes leave that queue snapshot intact.
+Custom playlist changes and built-in metadata are saved locally in a demo SharedPreferences store. New playlists start empty. Favorites and custom memberships are managed through the main-player Manage playlists popup described below. Recently added uses stable demo import order; Recently played records successful **simulated** starts, including transport resume/skip, with at most 50 distinct entries. The real scanner, transactional database, and playback-start events remain pending. Selecting a playlist track captures its displayed order without changing shuffle, and arms the existing 15-second return. Later edits and recent-list changes leave that queue snapshot intact.
 
 Debug-only fixtures provide populated Favorites and Trip 02 for exercising removal/reordering without inventing a track-picker flow. Fixture edits do not overwrite normal saved playlist data.
 
@@ -284,3 +284,44 @@ python3 scripts/compare-main-player.py --screen genre-albums
 Debug-only `genres_preview` fixtures reproduce the reference labels and selection; normal launch uses consistent shared demo-library metadata. Comparisons are saved to `build/visual-comparison/<screen>/`. Scrollbar visibility and position follow actual collection length; font rasterization and supplied vector geometry retain small differences from the PNGs. All 50 unit tests pass, including genre normalization, explicit multi-value membership, unavailable copies, partial-album qualification with full counts, scoped artists, and exhausted queues. `assembleDebug` and `lintDebug` pass.
 
 Validated on `headunit_a6` (API 23, 1280×720): five reference comparisons; Menu entry; genre search; genre-scoped artist Tracks; whole-album entry including nonmatching tracks; unfiltered Album Artist shortcut; nested Android Back route and retained genre query; individual selection remaining in browsing and returning after 15 seconds; immediate Genre Play all return.
+
+
+## Manage playlists
+
+The main player's top-right Manage playlists control opens the overlay from references `023`–`026`. The panel keeps its size in the empty state, covers the seek bar and metadata, and leaves Menu, volume, clock, and transport usable. All geometry scales uniformly within the existing half-screen grid; supplied SVG-derived button gradients, checkbox colors, and open/closed membership icons retain their proportions.
+
+Favorites, the divider, and alphabetically sorted custom playlists scroll together. Row and checkbox taps toggle membership once and save immediately. Create playlist shares the overview's name validation and Create/Cancel prompt, but adds the selected track automatically; overview creation still starts empty. The demo player's existing Superman display now has an explicit stable selected-track identity so it can be managed while paused or playing.
+
+Close, the toggle, and Back dismiss the overlay; Back in the naming dialog first cancels the draft. Clock/blank touches leave it open. Changing track identity dismisses both popup and naming draft; pause/resume and volume retain the editing target. The popup suspends fading indefinitely, and dismissal starts a fresh fade interval. Membership edits leave the queue untouched. Audio playback and automatic service-driven advancement remain future integration; dismissal is bound to selected-track identity for those future events as well.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen collections-favorites --install
+python3 scripts/compare-main-player.py --screen collections-empty
+python3 scripts/compare-main-player.py --screen collections-custom
+python3 scripts/compare-main-player.py --screen collections-member
+```
+
+Debug-only `collections_preview` fixtures reproduce the four reference states without overwriting normal saved playlists. Comparison artifacts are saved under `build/visual-comparison/<screen>/`. Regenerate vectors with `python3 scripts/import-player-assets.py --group track-collections`.
+
+Validated on `headunit_a6` (API 23, 1280×720): four reference comparisons, both pressed backgrounds, single toggles through rows and checkboxes, hidden-control exclusion, clock touches, pause/resume, nested Back, Close, Menu, Next-track dismissal, saved membership restoration after restart, creation with the selected track checked, and popup fade suspension/dismissal reset. Previous demo playlist data was restored after the interaction checks. `assembleDebug`, all 52 unit tests, and `lintDebug` pass (lint reports no errors). Physical hardware and real playback remain unvalidated.
+
+
+## Folders
+
+Menu > Folders opens a virtual root containing the demo selected sources. Directory panes use the supplied folder, audio-file, and parent-arrow SVGs converted to Android vectors. The fixed halves and all assets scale uniformly. Rows display filenames with extensions, retain overflow marquees, and keep folders before naturally sorted audio filenames. Previous directory scrolls with the list. Both Back controls clear an active search first, then follow the actual directory parent to the source root, virtual root, and Menu. Directory scroll positions and last-opened folder highlights are retained.
+
+Normal file selection snapshots only the current directory’s audio. Recursive search matches folder names and audio filenames, adds relative paths, and snapshots matching audio across descendants. Opening a folder result exits search and follows that folder’s actual parent afterward. Both selection modes preserve shuffle and use the existing 15-second return; typing cancels a pending return. Player labels continue to use metadata. Empty folders remain navigable. Disconnected-source handling and source-boundary behavior are modeled; real storage grants, scanning, connection monitoring, and audio playback remain pending.
+
+The demo includes nested duplicate filenames, numeric filenames, an empty folder, and a long directory label with a scrollable collection under Music oriental.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen folders --install
+python3 scripts/compare-main-player.py --screen folder-directory
+python3 scripts/import-player-assets.py --group folders-screen
+```
+
+Debug-only `folders_preview=folders` and `folders_preview=folder-directory` with `reference_preview=true` provide the two visual fixtures. The root fixture retains the mockup’s drawn source order; normal browsing uses natural sorting. Reference 028 supplies the changed directory contents; its comparison retains the shared header, clock, and transport from 027 as required by the plan. The root scrollbar thumb appears only when contents overflow, so the three-row fixture has a rail without the mockup’s decorative thumb. Artifacts are saved under `build/visual-comparison/folders/` and `build/visual-comparison/folder-directory/`.
+
+Validated on `headunit_a6` (API 23, 1280×720): both visual comparisons; Menu entry; recursive filename/path search and Back clearing; opening a folder search result with actual parent navigation; empty-folder navigation; scroll restoration; Back to Menu; direct-directory queue boundaries; recursive-search queues; metadata on the player; and the 15-second return. `assembleDebug`, all 58 unit tests, and `lintDebug` pass (0 lint errors). Six new unit tests cover source boundaries, natural ordering, duplicate relative paths, supported-file filtering, search scope, direct/search queue snapshots, and disconnected-source behavior. Real storage and physical-device behavior remain unvalidated.

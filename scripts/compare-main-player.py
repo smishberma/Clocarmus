@@ -14,7 +14,7 @@ from PIL import Image, ImageChops, ImageStat, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--screen", choices=("genres", "genre-options", "genre-tracks", "genre-artists", "genre-albums", "player", "menu", "tracks", "artists", "artist-detail", "artist-tracks", "artist-albums", "albums", "album-options", "album-tracks", "playlists-empty", "playlists", "playlist-favorites", "playlist-added", "playlist-custom", "playlist-custom-empty", "playlist-favorites-empty"), default="player", help="Reference screen to capture")
+parser.add_argument("--screen", choices=("folders", "folder-directory", "collections-favorites", "collections-empty", "collections-custom", "collections-member", "genres", "genre-options", "genre-tracks", "genre-artists", "genre-albums", "player", "menu", "tracks", "artists", "artist-detail", "artist-tracks", "artist-albums", "albums", "album-options", "album-tracks", "playlists-empty", "playlists", "playlist-favorites", "playlist-added", "playlist-custom", "playlist-custom-empty", "playlist-favorites-empty"), default="player", help="Reference screen to capture")
 parser.add_argument("--serial", help="Optional adb serial; must be headunit_a6")
 parser.add_argument("--install", action="store_true", help="Install the current debug APK before capture")
 parser.add_argument("--output", type=Path, default=ROOT / "build/visual-comparison/final")
@@ -35,6 +35,10 @@ if serial is None:
 if args.install:
     print(adb(serial, "install", "-r", str(ROOT / "app/build/outputs/apk/debug/app-debug.apk")).decode())
 extras = []
+if args.screen in ("folders", "folder-directory"):
+    extras += ["--es", "folders_preview", args.screen]
+if args.screen.startswith("collections-"):
+    extras += ["--es", "collections_preview", args.screen]
 if args.screen.startswith("genre"):
     extras += ["--es", "genres_preview", args.screen]
 if args.screen.startswith("artist"):
@@ -46,7 +50,13 @@ if args.screen.startswith("album"):
 adb(serial, "shell", "am", "start", "-S", "-f", "0x10008000", "-n", "com.example.clocarmus/.MainActivity", "--ez", "reference_preview", "true", "--ez", "menu_preview", str(args.screen == "menu").lower(), "--ez", "tracks_preview", str(args.screen == "tracks").lower(), *extras)
 time.sleep(3)  # Allow activity startup and immersive-mode animation to finish.
 actual = Image.open(io.BytesIO(adb(serial, "exec-out", "screencap", "-p"))).convert("RGB")
-source = Image.open(ROOT / {"genres": "design/018-genres-screen.png", "genre-options": "design/019-genre-options.png", "genre-tracks": "design/020-genre-browse-tracks.png", "genre-artists": "design/021-genre-browse-artists.png", "genre-albums": "design/022-genre-browse-albums.png", "player": "design/01-main-player-screen.png", "menu": "design/02-menu-screen.png", "tracks": "design/03-track-screen.png", "artists": "design/04-artists-screen.png", "artist-detail": "design/05-artists-screen-artist-options.png", "artist-tracks": "design/06-artists-screen-artist-all-tracks.png", "artist-albums": "design/07-artists-screen-artist-all-albums.png", "albums": "design/08-albums-screen.png", "album-options": "design/09-albums-screen-album-options.png", "album-tracks": "design/010-albums-screen-album-tracks.png", "playlists-empty": "design/011-playlists-screen-no-custom-playlists.png", "playlists": "design/012-playlists-screen-populated-custom-playlists.png", "playlist-favorites": "design/013-playlists-favorites-list.png", "playlist-added": "design/014-playlists-recently-added-list.png", "playlist-custom": "design/015-playlists-user-custom-playlist.png", "playlist-custom-empty": "design/016-playlists-user-custom-playlist-empty.png", "playlist-favorites-empty": "design/017-playlists-user-favorites-empty.png", "playlist-played": "design/014-playlists-recently-added-list.png"}[args.screen]).convert("RGB")
+source = Image.open(ROOT / {"folders": "design/027-folders-screen-root-directory.png", "folder-directory": "design/028-folders-screen-subdirectory-playing-file.png", "collections-favorites": "design/023-track-collections-popup-add-to-favorites.png", "collections-empty": "design/024-track-collections-popup-no-custom-playlists.png", "collections-custom": "design/025-track-collections-popup-add-to-custom-playlists.png", "collections-member": "design/026-track-collections-track-present-in-playlists.png", "genres": "design/018-genres-screen.png", "genre-options": "design/019-genre-options.png", "genre-tracks": "design/020-genre-browse-tracks.png", "genre-artists": "design/021-genre-browse-artists.png", "genre-albums": "design/022-genre-browse-albums.png", "player": "design/01-main-player-screen.png", "menu": "design/02-menu-screen.png", "tracks": "design/03-track-screen.png", "artists": "design/04-artists-screen.png", "artist-detail": "design/05-artists-screen-artist-options.png", "artist-tracks": "design/06-artists-screen-artist-all-tracks.png", "artist-albums": "design/07-artists-screen-artist-all-albums.png", "albums": "design/08-albums-screen.png", "album-options": "design/09-albums-screen-album-options.png", "album-tracks": "design/010-albums-screen-album-tracks.png", "playlists-empty": "design/011-playlists-screen-no-custom-playlists.png", "playlists": "design/012-playlists-screen-populated-custom-playlists.png", "playlist-favorites": "design/013-playlists-favorites-list.png", "playlist-added": "design/014-playlists-recently-added-list.png", "playlist-custom": "design/015-playlists-user-custom-playlist.png", "playlist-custom-empty": "design/016-playlists-user-custom-playlist-empty.png", "playlist-favorites-empty": "design/017-playlists-user-favorites-empty.png", "playlist-played": "design/014-playlists-recently-added-list.png"}[args.screen]).convert("RGB")
+if args.screen == "folder-directory":
+    # 028 supplies the changed directory pane; 027 supplies shared chrome, which
+    # PLAN.md explicitly retains (header, clock, transport, fixed split).
+    shared = Image.open(ROOT / "design/027-folders-screen-root-directory.png").convert("RGB")
+    shared.paste(source.crop((0, 220, 1000, 1040)), (0, 220))
+    source = shared
 # Fit each half uniformly, matching the app's fixed split without distorting the mockup.
 reference = Image.new("RGB", actual.size)
 for side in range(2):

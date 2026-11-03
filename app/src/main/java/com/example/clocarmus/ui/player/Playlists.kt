@@ -25,6 +25,15 @@ internal data class PlaylistLibrary(
     }
     fun create(name: String): PlaylistLibrary = if (nameError(name) != null) this else
         copy(custom = custom + SavedPlaylist(UUID.randomUUID().toString(), name.trim()))
+    fun contains(id: String, track: String) = track in trackIds(id)
+    fun hasMembership(track: String) = contains(FAVORITES, track) || custom.any { track in it.tracks }
+    fun toggleMembership(id: String, track: String, now: Long): PlaylistLibrary =
+        if (contains(id, track)) remove(id, track) else add(id, track, now)
+    fun createForTrack(name: String, target: String, selected: String?, now: Long): PlaylistLibrary {
+        if (target != selected || nameError(name) != null) return this
+        val created = create(name)
+        return created.add(created.custom.last().id, target, now)
+    }
     fun rename(id: String, name: String): PlaylistLibrary = if (nameError(name, id) != null) this else
         copy(custom = custom.map { if (it.id == id) it.copy(name = name.trim()) else it })
     fun delete(id: String) = copy(custom = custom.filterNot { it.id == id })
@@ -65,4 +74,13 @@ internal fun playlistFixture(preview: String?): PlaylistLibrary {
     return PlaylistLibrary(custom = listOf(SavedPlaylist("demo:new", "New playlist 01"), SavedPlaylist("demo:special", "Special"),
         SavedPlaylist("demo:trip", "Trip 02", recent), SavedPlaylist("demo:weekend", "Weekend"), SavedPlaylist("demo:work", "Work")), favorites = (ids.take(5) + listOf("Amber", "Anchor")).mapIndexed { i, id -> TimedTrack(id, (10 - i).toLong()) },
         imported = recent.mapIndexed { i, id -> TimedTrack(id, (10 - i).toLong()) })
+}
+
+internal val demoPlayerTrack = TrackMenuEntry("Superman", "Lazlo Bane", "All the Time in the World", "2002", id = "demo:player")
+internal fun collectionsFixture(preview: String): PlaylistLibrary {
+    if (preview == "collections-empty") return PlaylistLibrary(favorites = listOf(TimedTrack(demoPlayerTrack.id, 1)))
+    val names = listOf("New playlist 01", "Special", "Trip 01", "Trip 02", "Weekend")
+    return PlaylistLibrary(custom = names.map { name -> SavedPlaylist("collections:$name", name,
+        if (preview == "collections-custom" && name in setOf("New playlist 01", "Trip 01")) listOf(demoPlayerTrack.id) else emptyList()) },
+        favorites = if (preview in setOf("collections-favorites", "collections-member")) listOf(TimedTrack(demoPlayerTrack.id, 1)) else emptyList())
 }

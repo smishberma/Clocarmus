@@ -1,0 +1,33 @@
+<!-- Loaded with Compose painterResource; gradient/fillType verified on API 23. -->
+<vector xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedAttribute" xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="173.906dp"
+    android:height="46.519dp"
+    android:viewportWidth="46.013"
+    android:viewportHeight="12.308">
+  <path
+      android:pathData="m28.868,0.008c-7.75,0.017 -15.501,-0.034 -23.249,0.025l-0.077,0.004c-3.022,0.234 -5.557,2.983 -5.537,6.015 -0.12,3.021 2.313,5.859 5.321,6.188 2.901,0.134 5.814,0.021 8.719,0.058 8.782,-0.016 17.566,0.032 26.348,-0.024 3.052,-0.19 5.636,-2.959 5.616,-6.017 0.123,-3.058 -2.37,-5.92 -5.42,-6.206 -3.903,-0.105 -7.814,-0.015 -11.721,-0.045zM6.145,0.538h33.721c3.111,0 5.616,2.505 5.616,5.616 0,3.111 -2.505,5.616 -5.616,5.616h-33.721c-3.111,0 -5.616,-2.505 -5.616,-5.616 0,-3.111 2.505,-5.616 5.616,-5.616z"
+      android:strokeLineJoin="round"
+      android:strokeWidth="0.695029"
+      android:strokeColor="#00000000"
+      android:strokeLineCap="round">
+    <aapt:attr name="android:fillColor">
+      <gradient
+          android:startX="42.197"
+          android:startY="-15.891"
+          android:endX="30.023"
+          android:endY="14.691"
+          android:type="linear">
+        <item android:offset="0" android:color="#FFFFFFFF"/>
+        <item android:offset="1" android:color="#00FFFFFF"/>
+      </gradient>
+    </aapt:attr>
+  </path>
+  <path
+      android:pathData="M6.145,0.538L39.867,0.538A5.616,5.616 0,0 1,45.483 6.154L45.483,6.154A5.616,5.616 0,0 1,39.867 11.77L6.145,11.77A5.616,5.616 0,0 1,0.529 6.154L0.529,6.154A5.616,5.616 0,0 1,6.145 0.538z"
+      android:strokeLineJoin="round"
+      android:strokeWidth="0.695029"
+      android:fillColor="#740b3c"
+      android:strokeColor="#00000000"
+      android:strokeLineCap="round"/>
+</vector>

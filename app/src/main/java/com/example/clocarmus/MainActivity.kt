@@ -24,6 +24,8 @@ class MainActivity : ComponentActivity() {
                     artistsPreview = if (referencePreview) intent.getStringExtra("artists_preview")?.takeIf { it in setOf("artists", "artist-detail", "artist-tracks", "artist-albums") } else null,
                     albumsPreview = if (referencePreview) intent.getStringExtra("albums_preview")?.takeIf { it in setOf("albums", "album-options", "album-tracks") } else null,
                     genresPreview = if (referencePreview) intent.getStringExtra("genres_preview")?.takeIf { it in setOf("genres", "genre-options", "genre-tracks", "genre-artists", "genre-albums") } else null,
+                    foldersPreview = if (referencePreview) intent.getStringExtra("folders_preview")?.takeIf { it in setOf("folders", "folder-directory") } else null,
+                    collectionsPreview = if (referencePreview) intent.getStringExtra("collections_preview")?.takeIf { it in setOf("collections-favorites", "collections-empty", "collections-custom", "collections-member") } else null,
                     playlistsPreview = if (referencePreview) intent.getStringExtra("playlists_preview")?.takeIf { it in setOf("playlists-empty", "playlists", "playlist-favorites", "playlist-added", "playlist-played", "playlist-custom", "playlist-custom-empty", "playlist-favorites-empty", "playlist-added-empty", "playlist-played-empty") } else null)
             }
         }

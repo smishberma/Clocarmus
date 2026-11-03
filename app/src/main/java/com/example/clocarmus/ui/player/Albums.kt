@@ -41,7 +41,7 @@ internal fun albumTrackRow(track: TrackMenuEntry): BrowserRow {
 internal data class BrowserDestination(
     val page: String, val artist: String? = null, val scope: ArtistScope = ArtistScope.TRACK,
     val album: AlbumIdentity? = null, val search: Boolean = false, val playlistId: String? = null,
-    val genre: String? = null
+    val genre: String? = null, val directory: String? = null
 ) : Serializable
 
 internal val demoAlbumTracks = demoTrackTitles.flatMapIndexed { albumIndex, album ->
