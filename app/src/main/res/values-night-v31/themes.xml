@@ -1,0 +1,14 @@
+<resources>
+    <!-- Use the platform API directly; API 23 keeps the existing black launch window. -->
+    <style name="Theme.Clocarmus" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_system_icon</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

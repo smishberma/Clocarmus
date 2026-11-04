@@ -2,11 +2,11 @@
 
 ## App logo and launcher icons
 
-The supplied [logo-brand/logo.svg](assets/shared/logo-brand/logo.svg) is imported as `drawable/brand_logo.xml`, retaining its transparent background and gradients. Use it with Compose `painterResource` for in-app branding, including on API 23.
+The supplied [logo-brand/logo-no-background.svg](assets/shared/logo-brand/logo-no-background.svg) is imported as `drawable/brand_logo.xml`, retaining its transparent background and gradients. Use it with Compose `painterResource` for in-app branding, including on API 23.
 
-[logo-brand/icon.svg](assets/shared/logo-brand/icon.svg) supplies the launcher artwork. Android 8.0+ uses `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml`, with a vector foreground derived from the SVG and an opaque `#CEB9D5` background sampled from its lavender circle. The original circular canvas fits inside the central 66dp safe circle of the 108dp adaptive layer, preserving the mark under launcher masks. See [Android's adaptive icon guidance](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive).
+[logo-brand/logo.svg](assets/shared/logo-brand/logo.svg) supplies the circular launcher artwork; [logo-square.svg](assets/shared/logo-brand/logo-square.svg) supplies the square version. Android 8.0+ uses `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml`, with a vector foreground derived from the circular SVG and a separate `drawable/ic_launcher_background.xml` vector preserving its orange gradient. `ic_launcher_foreground.xml` combines the SVG-derived `ic_launcher_mark.xml` vector with a transparent 432px `drawable-xxxhdpi/ic_launcher_highlight.png` overlay for the source Gaussian blur, which Android vectors cannot render. The circular backdrop is extended into a full-bleed square for adaptive masks. The original circular canvas fits inside the central 66dp safe circle of the 108dp adaptive layer, preserving the mark under launcher masks. See [Android's adaptive icon guidance](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive).
 
-Android 6.0–7.1 uses transparent, circular legacy PNGs exported directly from `icon.svg`: 48, 72, 96, 144, and 192px in `mipmap-mdpi` through `mipmap-xxxhdpi`. Both manifest icon entries have density-specific PNGs. There are no unqualified `mipmap-anydpi` overrides, so older devices select the PNGs.
+Android 6.0–7.1 uses legacy PNGs exported directly from `logo-square.svg` for `ic_launcher` and `logo.svg` for `ic_launcher_round`: 48, 72, 96, 144, and 192px in `mipmap-mdpi` through `mipmap-xxxhdpi`. Both manifest icon entries have density-specific PNGs. There are no unqualified `mipmap-anydpi` overrides, so older devices select the PNGs.
 
 Regenerate all branding resources with Inkscape, a JDK, and resolved Gradle dependencies:
 
@@ -91,3 +91,7 @@ Regenerate each new shared vector with `python3 scripts/import-player-assets.py 
 The supplied `assets/playlists-screen/add-playlist.svg` and `add-playlist-pressed.svg` are used as `add_playlist.xml` and `add_playlist_pressed.xml`, preserving their white/magenta paths and square viewports. They appear only on the overview. Regenerate them with `python3 scripts/import-player-assets.py --group playlists-screen`.
 
 The heading reuses `menu_playlists.xml`. The built-in heart and recent-history glyphs are local Android vectors (`playlist_favorites.xml`, `playlist_recent_added.xml`, `playlist_recent_played.xml`) drawn to match the updated mockups; no separate source SVGs were supplied for these glyphs. Detail rows reuse the supplied selected-track indicator and transport assets.
+
+## Splash screen
+
+Reference: `029-Splash-screen.png`. `scripts/import-splash-assets.py` exports `assets/splash-screen/splash-screen-background.svg` and `assets/shared/logo-brand/logo.svg` to `drawable-nodpi/splash_background.png` and `splash_logo.png`. Bitmap export preserves the SVG's elliptical gradient transforms. Compose fits the background and square logo uniformly inside one reference canvas; the wordmark uses bundled Inter Bold with measured spacing, without stretching. A separate padded `drawable-xxxhdpi/splash_system_icon.png` keeps the circular logo inside Android 12's mask-safe region. Inkscape is needed only for regeneration; all generated assets are checked in.

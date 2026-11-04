@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, and the two-screen Folders demo flow are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, and the fresh-start Splash screen are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -51,6 +51,26 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Suspend and reset fading while another screen or dialog is active or the app is backgrounded. Returning to the active player, including dismissing a dialog, restores full opacity and starts a fresh interval.
 - Keep this timer independent of the browsing-to-player return timer below. Its state is transient and is not persisted across screen recreation.
 - Keep static reference-preview mode fully opaque for deterministic mockup comparisons.
+
+### Splash screen and startup routing
+
+The splash composition and process-scoped startup gate are implemented. Follow `design/029-Splash-screen.png`: a full-screen landscape composition with the supplied warm glow on black, centered logo, and peach Clocarmus wordmark underneath in the bundled Inter Bold font. Use `design/assets/splash-screen/splash-screen-background.svg` for the background and the matching supplied brand logo. Preserve proportions across landscape sizes; there is no player/clock split on this screen.
+
+- Show the app-controlled splash only on a fresh app start, including a fresh boot-triggered launch. Do not replay it on a return to an already-running app, wake of an existing session, ordinary recomposition, or activity recreation within that session.
+- Display static branding with no sound or logo animation. Once essential startup state is ready, begin a 300 ms fade into the destination. There is no forced minimum display duration or artificial branding delay.
+- Essential readiness means local settings/onboarding status and sufficient saved session state to select and render the destination. Do not wait for a full library scan, removable storage to mount, artwork decoding, or metadata/content fingerprint processing. Continue discovery after showing the player.
+- First-time users go to onboarding. Users who completed or explicitly skipped onboarding go to the main player with restored playback paused. Until onboarding is implemented, route directly to the player after startup readiness.
+- Never start music because the splash completes. Returning to an existing background playback session skips the custom splash and leaves that session's playback unchanged.
+- Keep startup initialization separate from screen composition and gate navigation once per fresh startup. Recoverable storage/scan failures should appear in the destination UI rather than holding branding indefinitely.
+
+#### Android launch integration
+
+- Retain the single MainActivity architecture; coordinate launch-window appearance with the in-app branded composition instead of introducing a dedicated splash Activity or a second timed startup sequence.
+- Android 12+ can show its own system splash on cold and warm starts. The fresh-start-only requirement governs the app-controlled branding screen; do not claim suppression of every platform launch surface. Match the system launch palette/logo as closely as supported, with no extra hold before the custom composition.
+- The full mockup background/wordmark may require an in-app composition beyond the platform splash's styling. Validate the handoff on API 23 and Android 12+, avoiding blank flashes, unnecessary duplicate branding delays, and a cropped/masked custom logo.
+- Verify the exact compatible splash API/library version before adding dependencies; preserve minimum SDK 23. Reference: [Android splash-screen migration guidance](https://developer.android.com/develop/ui/views/launch/splash-screen/migrate), reviewed 2026-11-04.
+- Debug fixtures: existing debug screen-reference intents bypass startup branding so prior screenshot comparisons remain deterministic; `reference_preview=true` with `splash_preview=true` provides a dedicated static splash reference. Production startup remains readiness-driven.
+- Validated with the capture/compare loop on API 23 at native, small, and wide landscape viewport sizes, and on API 31 at native size. Fresh launch, resume, recreation, and paused fresh-session behavior are exercised; 63 unit tests, `assembleDebug`, and `lintDebug` pass. See README for artifacts and the remaining real-playback/onboarding/boot integration limits.
 
 ### First use and navigation
 
@@ -385,6 +405,7 @@ Before committing to implementations, verify current official documentation for 
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Implement skippable onboarding, source management, empty/access-denied states, and browsing navigation.
+- Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the six designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
 - Implemented shared overflow-only marquees for music titles, row metadata, and artist/album context headings across the nine existing player/browser screens; retain this behavior when connecting real library data. See Long music titles above.
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
@@ -514,6 +535,16 @@ Before committing to implementations, verify current official documentation for 
 - Both Back controls restore directory scroll state and return to Menu at virtual root. Folder navigation alone does not start playback or arm automatic return.
 - Disconnected sources remain at root with a reconnect message. Removal while browsing returns to root and applies the existing active-playback pause rule without deleting library references.
 - Compare root/subdirectory layouts to references 027 and 028; confirm persistent clock/transport controls and metadata on the player versus filenames in the browser.
+
+### Splash/startup acceptance
+
+- Compare the full-screen splash with reference 029 on small and wide landscape displays: warm background, proportionate logo, Inter Bold wordmark, no clock or player controls.
+- Fresh manual and boot-triggered starts show branding without a forced minimum duration; readiness triggers one 300 ms exit fade and a single destination transition.
+- First-time users route to onboarding, completed/skipped onboarding routes to the paused player, and the interim build routes directly to the player while onboarding is absent.
+- Return from background, wake of an existing session, recomposition, and same-session activity recreation do not replay app-controlled branding. Active background playback is unchanged; fresh restored sessions never autoplay.
+- Slow scans, missing USB/SD storage, and artwork work do not hold the splash. Recoverable failures reach an actionable destination state.
+- Validate API 23 and Android 12+ system-launch handoff for blank flashes, duplicate holds, aspect-ratio distortion, and logo masking. Distinguish the OS-provided launch surface from the custom splash in results.
+- Preserve existing debug screen fixtures through splash bypass and add a dedicated splash fixture; verify production launch uses normal readiness routing.
 
 ### AVD acceptance
 

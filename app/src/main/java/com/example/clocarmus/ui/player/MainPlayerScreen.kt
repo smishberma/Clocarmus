@@ -78,13 +78,16 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null) {
+internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
     val context = LocalContext.current
     val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
-    var playlistLibrary by remember { mutableStateOf(if (collectionsPreview != null) collectionsFixture(collectionsPreview) else if (playlistsPreview != null) playlistFixture(playlistsPreview) else loadPlaylists(playlistPreferences)) }
+    var playlistLibrary by remember { mutableStateOf(if (collectionsPreview != null) collectionsFixture(collectionsPreview) else if (playlistsPreview != null) playlistFixture(playlistsPreview) else initialPlaylists ?: loadPlaylists(playlistPreferences)) }
     val updatePlaylists: (PlaylistLibrary) -> Unit = {
         playlistLibrary = it
-        if (playlistsPreview == null && collectionsPreview == null) savePlaylists(playlistPreferences, it)
+        if (playlistsPreview == null && collectionsPreview == null) {
+            savePlaylists(playlistPreferences, it)
+            onPlaylistsChanged(it)
+        }
     }
     val playlistTracks = remember { (demoTracks + demoLibraryTracks + playlistFixtureTracks + demoPlayerTrack + demoFolderTree.entries.mapNotNull { it.track }).distinctBy { it.id } }
     LaunchedEffect(Unit) {
@@ -99,6 +102,11 @@ fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = f
     val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var volume by remember { mutableFloatStateOf(if (referencePreview) .62f else audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
     var playing by rememberSaveable { mutableStateOf(referencePreview) }
+    LaunchedEffect(Unit) {
+        // Even an Android-restored Activity bundle must not autoplay in a new process.
+        // Same-session recreation keeps its saved playing state.
+        if (freshStartup && !referencePreview) playing = false
+    }
     var position by rememberSaveable { mutableFloatStateOf(113f) }
     var shuffle by rememberSaveable { mutableStateOf(true) }
     var repeat by rememberSaveable { mutableIntStateOf(0) }
