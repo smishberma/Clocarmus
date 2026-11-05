@@ -52,6 +52,34 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Keep this timer independent of the browsing-to-player return timer below. Its state is transient and is not persisted across screen recreation.
 - Keep static reference-preview mode fully opaque for deterministic mockup comparisons.
 
+### Drag-only seek and volume sliders
+
+This behavior is planned and replaces tap-to-coordinate interaction in the shared slider component. Apply volume behavior everywhere that slider appears, including browsing screens.
+
+- Neither slider changes value on pointer down, a tap, a stationary hold, or movement below the horizontal drag threshold. Use the platform touch-slop threshold to distinguish an intentional horizontal drag from finger jitter; vertical-only gestures do not adjust values.
+- A drag must begin within the slider's current thumb/endpoint hit area. Starting elsewhere on the bar and later crossing that area must not activate adjustment.
+- Use a generous invisible hit target without expanding the visible artwork. Implementation default: at least 48 dp wide and high, or the visible seek thumb size if larger, centered on the current thumb/fill endpoint and constrained to the slider's bounds. Keep it reachable at minimum and maximum values.
+- Capture the value and pointer location at gesture start. Once horizontal drag is recognized, apply horizontal displacement relative to that starting value; never snap to the initial touch coordinate. Preserve the finger's grab offset and clamp values to the slider range.
+
+#### Track seek bar
+
+- Require dragging from the visible thumb's hit area. During a valid drag, show the preview position through the thumb, filled progress, and elapsed-time label, without issuing playback seeks.
+- On normal release, commit the preview position with one seek. Keep the current playing/paused state; dragging does not implicitly pause or resume playback.
+- On gesture cancellation, discard the preview and display the actual playback position without seeking. If the selected track changes during the gesture, cancel it rather than applying an old preview to a new track.
+- Do not allow scrubbing without a valid seekable track/duration. Preserve the existing +/-10-second controls and intentional accessibility progress adjustments; the drag-only requirement applies to pointer interaction.
+
+#### Volume slider
+
+- Keep its existing visual design with no visible thumb. The filled bar's endpoint is the invisible drag target, using the generous hit area above.
+- Update Android media volume continuously after a valid horizontal drag begins, giving audible feedback. Do not defer volume changes until release, and do not adjust volume merely because the pointer touches the bar.
+- On cancellation, retain the last applied volume; do not unexpectedly revert an audible adjustment. Preserve hardware volume keys and intentional accessibility progress adjustments.
+
+#### Shared interaction rules
+
+- Maintain existing inactivity observation: touching/holding a slider still restores player-control visibility and prevents fading while contact remains, even when the touch does not qualify as an adjustment.
+- Track only the initiating pointer for the gesture; additional fingers must not retarget the slider or cause coordinate jumps. Losing the initiating pointer cancels that gesture rather than transferring it to another finger.
+- The 48 dp target and platform drag threshold are implementation defaults to validate on the AVD; no visual thumb is added to volume and no new user setting is introduced.
+
 ### Splash screen and startup routing
 
 The splash composition and process-scoped startup gate are implemented. Follow `design/029-Splash-screen.png`: a full-screen landscape composition with the supplied warm glow on black, centered logo, and peach Clocarmus wordmark underneath in the bundled Inter Bold font. Use `design/assets/splash-screen/splash-screen-background.svg` for the background and the matching supplied brand logo. Preserve proportions across landscape sizes; there is no player/clock split on this screen.
@@ -366,9 +394,9 @@ A location identifies a physical copy; a content fingerprint is evidence for rel
 Validate MP3, M4A containing AAC, OPUS, FLAC, OGG Vorbis, and WAV using representative fixtures. Do not promise every codec profile or container variant merely because an extension is recognized.
 
 - Playback runs independently of UI navigation and continues in the background.
-- Support seek bar, +/-10 seconds, shuffle, repeat one, repeat all, and repeat off.
+- Support thumb-drag-only seeking with preview and release-to-commit, +/-10 seconds, shuffle, repeat one, repeat all, and repeat off. Taps on the seek bar never seek.
 - Previous restarts the current track after three seconds of playback; otherwise selects the previous track.
-- Volume slider controls Android media volume. Integrate standard media-session controls for supported steering-wheel/media buttons.
+- Volume slider controls Android media volume continuously during valid drags from its invisible fill-endpoint target; taps never change volume. Integrate standard media-session controls for supported steering-wheel/media buttons.
 - Persist track, position, entire queue, shuffle order, and repeat mode. Restore paused after fresh app restart, boot, or head-unit sleep/wake.
 - Returning to a still-running background session leaves playback unchanged. Do not equate ordinary UI backgrounding with head-unit sleep.
 - Navigation prompts temporarily lower volume. Calls and another music app taking over pause playback; remain paused until explicit Play.
@@ -443,6 +471,8 @@ Before committing to implementations, verify current official documentation for 
 - Implemented Manage playlists binding to stable selected-track identity in the demo shell: close popup and nested naming prompt on track change, preserve normal transport use, suspend fading while editing, and validate the target before committing changes. Connect automatic advancement when the real playback service is added.
 
 - Connect Folders file selection to direct-directory queue snapshots and recursive-search selection to matching-result snapshots, preserving shuffle and the existing inactivity return.
+
+- Replace shared slider tap/absolute-coordinate gestures with start-target validation and relative horizontal dragging. Separate seek preview/commit/cancel from continuous volume updates, retaining accessibility actions, hardware controls, and inactivity observation.
 
 ### Phase 5 — Diagnostics and delivery
 
@@ -545,6 +575,15 @@ Before committing to implementations, verify current official documentation for 
 - Slow scans, missing USB/SD storage, and artwork work do not hold the splash. Recoverable failures reach an actionable destination state.
 - Validate API 23 and Android 12+ system-launch handoff for blank flashes, duplicate holds, aspect-ratio distortion, and logo masking. Distinguish the OS-provided launch surface from the custom splash in results.
 - Preserve existing debug screen fixtures through splash bypass and add a dedicated splash fixture; verify production launch uses normal readiness routing.
+
+### Drag-only slider acceptance
+
+- Taps anywhere, stationary holds, below-threshold jitter, and vertical-only movement issue neither seeks nor volume changes. A drag beginning outside the thumb/endpoint target never activates adjustment by crossing it later.
+- Start off-center within the generous target and confirm no initial coordinate jump. Valid horizontal movement changes the preview/value smoothly and clamps at both range endpoints.
+- Seek drag updates visual progress/time only; release commits exactly one seek, and cancellation commits none. Track changes cancel stale previews. Playing/paused state remains unchanged and invalid/nonseekable tracks cannot scrub.
+- Volume retains its thumb-free appearance, supports easy endpoint grabbing including 0%/100%, updates continuously only after drag recognition, and retains its last applied value on cancellation. Verify this on player and browsing screens.
+- Additional fingers cannot retarget the gesture. Losing the initiating pointer cancels safely; touch activity still participates in normal inactivity handling.
+- Accessibility progress adjustments, hardware volume keys, and +/-10-second controls remain available. Existing popup coverage still prevents touches reaching a hidden seek bar.
 
 ### AVD acceptance
 
