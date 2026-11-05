@@ -76,7 +76,7 @@ internal fun playlistFixture(preview: String?): PlaylistLibrary {
         imported = recent.mapIndexed { i, id -> TimedTrack(id, (10 - i).toLong()) })
 }
 
-internal val demoPlayerTrack = TrackMenuEntry("Superman", "Lazlo Bane", "All the Time in the World", "2002", id = "demo:player")
+internal val demoPlayerTrack = TrackMenuEntry("Superman", "Lazlo Bane", "All the Time in the World", "2002", id = "demo:player", durationSeconds = 225)
 internal fun collectionsFixture(preview: String): PlaylistLibrary {
     if (preview == "collections-empty") return PlaylistLibrary(favorites = listOf(TimedTrack(demoPlayerTrack.id, 1)))
     val names = listOf("New playlist 01", "Special", "Trip 01", "Trip 02", "Weekend")

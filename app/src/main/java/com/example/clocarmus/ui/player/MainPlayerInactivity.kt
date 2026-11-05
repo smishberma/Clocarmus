@@ -84,17 +84,19 @@ internal fun rememberMainPlayerInactivity(enabled: Boolean): MainPlayerInactivit
 }
 
 /** Observe before child handlers, including consumed drags, without consuming any pointer changes. */
-internal fun Modifier.observePlayerTouches(inactivity: MainPlayerInactivity): Modifier = pointerInput(inactivity) {
+internal fun Modifier.observePlayerTouches(inactivity: MainPlayerInactivity, sliderPointers: SliderPointers): Modifier = pointerInput(inactivity, sliderPointers) {
     try {
         awaitPointerEventScope {
             while (true) {
                 val changes = awaitPointerEvent(PointerEventPass.Initial).changes
+                sliderPointers.pressedCount = changes.count { it.pressed }
                 if (changes.any { it.pressed || it.previousPressed }) {
                     inactivity.touch(changes.any { it.pressed })
                 }
             }
         }
     } finally {
+        sliderPointers.pressedCount = 0
         inactivity.cancelTouches()
     }
 }

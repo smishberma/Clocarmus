@@ -2,17 +2,21 @@ package com.example.clocarmus.ui.player
 
 import android.content.Context
 import android.media.AudioManager
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.MarqueeSpacing
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -28,14 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -101,6 +99,25 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var volume by remember { mutableFloatStateOf(if (referencePreview) .62f else audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(audio, lifecycle, referencePreview) {
+        val syncVolume = {
+            if (!referencePreview) volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+        }
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { syncVolume() }
+        }
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) syncVolume()
+        }
+        context.contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observer)
+        lifecycle.addObserver(lifecycleObserver)
+        syncVolume()
+        onDispose {
+            context.contentResolver.unregisterContentObserver(observer)
+            lifecycle.removeObserver(lifecycleObserver)
+        }
+    }
     var playing by rememberSaveable { mutableStateOf(referencePreview) }
     LaunchedEffect(Unit) {
         // Even an Android-restored Activity bundle must not autoplay in a new process.
@@ -149,6 +166,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var selectedTrackId by rememberSaveable { mutableStateOf<String?>(if (foldersPreview == "folder-directory") "folder:alley" else if (genresPreview == "genre-tracks") "genre:track:2" else if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else demoPlayerTrack.id) }
     val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
     val selectedTitle = selectedTrack?.title
+    val duration = selectedTrack?.durationSeconds?.takeIf { it > 0 }?.toFloat()
+    var seekPreview by remember(selectedTrackId, duration) { mutableStateOf<Float?>(null) }
+    val displayedPosition = seekPreview?.let { it * (duration ?: 0f) } ?: position
+    val seekable = selectedTrack?.available == true && duration != null
     var demoQueue by rememberSaveable { mutableStateOf(arrayListOf(demoPlayerTrack.id, *demoTracks.map { it.id }.toTypedArray())) }
     var trackQuery by rememberSaveable { mutableStateOf("") }
     val trackScroll = rememberScrollState()
@@ -207,9 +228,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }
 
     val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !collectionsOpen && !referencePreview)
+    val sliderPointers = remember { SliderPointers() }
     val controlOpacity = if (dialog == null && !collectionsOpen && !referencePreview) inactivity.opacity else 1f
 
-    Box(Modifier.fillMaxSize().background(Color.Black).observePlayerTouches(inactivity)
+    Box(Modifier.fillMaxSize().background(Color.Black).observePlayerTouches(inactivity, sliderPointers)
         .observeBrowsingTouches(browsingReturn).onPreviewKeyEvent { browsingReturn.interaction(); false }) {
         Row(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
@@ -287,7 +309,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                     browsingReturn.interaction()
                     volume = it
                     audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0)
-                }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true)
+                }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true, pointers = sliderPointers)
                 if (!menuOpen) {
                     AssetButton("Manage playlists", when {
                         collectionsOpen -> R.drawable.collections_playlist_button_toggle_on
@@ -309,14 +331,18 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             else -> R.drawable.player_repeat_inactive
                         }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
                         AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
-                        AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(225f) }
+                        AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
                         PlayerLabel(selectedTitle ?: "Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
                         PlayerLabel(if (selectedTitle == null) "Lazlo Bane" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
                         PlayerLabel(if (selectedTitle == null) "All the Time in the World" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
                         PlayerLabel(if (selectedTitle == null) "2002" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
-                        PlayerSlider(position / 225f, { position = it * 225f }, grid.place(79f, 944f, 841f, 87f), "Track position", grid.scale)
-                        PlayerLabel(formatPosition(position), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
-                        PlayerLabel("3:45", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
+                        PlayerSlider(if (duration != null) position / duration else 0f,
+                            { if (duration != null) position = it * duration },
+                            grid.place(79f, 944f, 841f, 87f), "Track position", grid.scale,
+                            enabled = seekable, gestureKey = selectedTrackId to duration, pointers = sliderPointers,
+                            onPreview = { seekPreview = it })
+                        PlayerLabel(formatPosition(displayedPosition), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
+                        PlayerLabel(duration?.let(::formatPosition) ?: "--:--", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                     }
                 }
                 if (collectionsOpen) TrackCollectionsPopup(grid, playlistLibrary, collectionsTarget!!,
@@ -453,40 +479,6 @@ private fun ClockPane(referencePreview: Boolean, modifier: Modifier) {
             }
         }
         PlayerLabel(date, grid.place(15f, 800f, 900f, 120f), 100f * grid.scale)
-    }
-}
-
-@Composable
-private fun PlayerSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier,
-                         label: String, scale: Float, volume: Boolean = false) {
-    val update by rememberUpdatedState(onValueChange)
-    val trackHeight = (if (volume) 61f else 36f) * scale
-    val thumbRadius = 33f * scale
-    val density = LocalDensity.current
-    val trackPx = with(density) { trackHeight.dp.toPx() }
-    val thumbPx = with(density) { thumbRadius.dp.toPx() }
-    Box(modifier.defaultMinSize(minHeight = 48.dp).semantics {
-        contentDescription = label
-        progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
-        setProgress { update(it.coerceIn(0f, 1f)); true }
-    }.pointerInput(Unit) { detectTapGestures { update((it.x / size.width).coerceIn(0f, 1f)) } }
-        .pointerInput(Unit) { detectDragGestures { change, _ ->
-            change.consume(); update((change.position.x / size.width).coerceIn(0f, 1f))
-        } }, contentAlignment = Alignment.Center) {
-        if (volume) {
-            Image(painterResource(R.drawable.player_volume_track), null,
-                Modifier.fillMaxWidth().height(trackHeight.dp), contentScale = ContentScale.Fit)
-        }
-        Canvas(Modifier.fillMaxSize()) {
-            val top = (size.height - trackPx) / 2
-            val radius = if (volume) CornerRadius(trackPx / 2) else CornerRadius(5f * scale * density.density, trackPx / 2)
-            val outline = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, top, size.width, top + trackPx, radius.x, radius.y)) }
-            if (!volume) drawPath(outline, Color(0xff494949))
-            clipPath(outline) { drawRect(Color.White, Offset(0f, top), Size(size.width * value, trackPx)) }
-            if (!volume) drawCircle(Color.White, thumbPx, Offset(size.width * value, size.height / 2))
-        }
-        if (volume) Image(painterResource(R.drawable.player_volume_slider_icon), null,
-            Modifier.align(Alignment.CenterStart).padding(start = (15f * scale).dp).size(trackHeight.dp), contentScale = ContentScale.Fit)
     }
 }
 

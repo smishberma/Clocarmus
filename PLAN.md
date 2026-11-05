@@ -52,9 +52,9 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Keep this timer independent of the browsing-to-player return timer below. Its state is transient and is not persisted across screen recreation.
 - Keep static reference-preview mode fully opaque for deterministic mockup comparisons.
 
-### Drag-only seek and volume sliders
+### Drag-only seek and volume sliders — implemented in the demo
 
-This behavior is planned and replaces tap-to-coordinate interaction in the shared slider component. Apply volume behavior everywhere that slider appears, including browsing screens.
+Implemented in the shared slider component, replacing tap-to-coordinate interaction on the player and browsing screens. Seek previews are separate from the committed demo position; Android media volume changes continuously. Real playback-service seeks remain pending with audio playback. Tracks without a known positive duration, or unavailable tracks, cannot scrub; the main reference track now declares its existing 225-second demo duration.
 
 - Neither slider changes value on pointer down, a tap, a stationary hold, or movement below the horizontal drag threshold. Use the platform touch-slop threshold to distinguish an intentional horizontal drag from finger jitter; vertical-only gestures do not adjust values.
 - A drag must begin within the slider's current thumb/endpoint hit area. Starting elsewhere on the bar and later crossing that area must not activate adjustment.
@@ -78,7 +78,8 @@ This behavior is planned and replaces tap-to-coordinate interaction in the share
 
 - Maintain existing inactivity observation: touching/holding a slider still restores player-control visibility and prevents fading while contact remains, even when the touch does not qualify as an adjustment.
 - Track only the initiating pointer for the gesture; additional fingers must not retarget the slider or cause coordinate jumps. Losing the initiating pointer cancels that gesture rather than transferring it to another finger.
-- The 48 dp target and platform drag threshold are implementation defaults to validate on the AVD; no visual thumb is added to volume and no new user setting is introduced.
+- The 48 dp target and platform drag threshold are implementation defaults; no visual thumb is added to volume and no new user setting is introduced.
+- Validation: `assembleDebug`, all 71 unit tests (including eight gesture tests), and `lintDebug` pass. On API 23 (`headunit_a6`), verified ignored taps/holds/jitter/vertical and outside-start gestures, relative off-center seeking, range limits, preserved playing state, held previews and cancellation, continuous volume with cancellation retention on the player and dragging in the menu, initiating-pointer loss with another finger held elsewhere, and cancellation on a mid-drag track change. Real playback-service seeks, audible playback feedback, and physical-head-unit tuning remain pending.
 
 ### Splash screen and startup routing
 
