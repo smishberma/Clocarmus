@@ -55,5 +55,5 @@ internal fun AlbumsPane(
         }, heading = if (tracksPage) "ALBUM TRACKS" else "ALBUMS",
         subtitle = if (tracksPage && album != null) "${album.identity.title.uppercase(Locale.ROOT)} by ${album.identity.artist.uppercase(Locale.ROOT)}" else null,
         icon = R.drawable.menu_albums, searchName = if (tracksPage) "tracks" else "albums",
-        showPlayback = tracksPage, searchInitiallyOpen = destination.search)
+        trackRows = tracksPage, showPlayback = tracksPage, searchInitiallyOpen = destination.search)
 }

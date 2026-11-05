@@ -86,7 +86,7 @@ private fun CollectionMembershipRow(grid: PlayerGrid, name: String, checked: Boo
 }
 
 @Composable
-private fun CollectionsButton(label: String, grid: PlayerGrid, x: Float, onClick: () -> Unit) {
+internal fun CollectionsButton(label: String, grid: PlayerGrid, x: Float, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     Box(grid.place(x, 169f, 419f, 113f).clip(RoundedCornerShape(percent = 50))

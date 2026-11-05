@@ -95,3 +95,8 @@ The heading reuses `menu_playlists.xml`. The built-in heart and recent-history g
 ## Splash screen
 
 Reference: `029-Splash-screen.png`. `scripts/import-splash-assets.py` exports `assets/splash-screen/splash-screen-background.svg` and `assets/shared/logo-brand/logo.svg` to `drawable-nodpi/splash_background.png` and `splash_logo.png`. Bitmap export preserves the SVG's elliptical gradient transforms. Compose fits the background and square logo uniformly inside one reference canvas; the wordmark uses bundled Inter Bold with measured spacing, without stretching. A separate padded `drawable-xxxhdpi/splash_system_icon.png` keeps the circular logo inside Android 12's mask-safe region. Inkscape is needed only for regeneration; all generated assets are checked in.
+
+
+## Track Options
+
+References `030`–`031` use the supplied `assets/long-press/info-icon.svg`, imported as `options_info_icon.xml`. Regenerate with `python3 scripts/import-player-assets.py --group long-press`. The popup reuses the collections Close button assets and shared Back/transport controls. Option pills use the reference's gray fill with white text, switching to white with black text while pressed; deferred actions use muted text and have no click action.

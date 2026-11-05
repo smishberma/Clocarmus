@@ -90,7 +90,7 @@ internal fun GenresPane(
             }
         }, heading = "GENRES", icon = R.drawable.menu_genres,
         searchName = when (page) { "genre-list" -> "genres"; "genre-artists" -> "artists"; "genre-albums" -> "albums"; else -> "tracks" },
-        showPlayback = page == "genre-tracks", showHeading = false, searchInitiallyOpen = destination.search,
+        trackRows = page == "genre-tracks", showPlayback = page == "genre-tracks", showHeading = false, searchInitiallyOpen = destination.search,
         proportionalScrollbar = page == "genre-tracks",
         listTop = when (page) { "genre-tracks" -> 282f; "genre-artists" -> 301f; "genre-albums" -> 295f; else -> 293f })
     GenreHeading(grid, if (page == "genre-list") "GENRES" else name,

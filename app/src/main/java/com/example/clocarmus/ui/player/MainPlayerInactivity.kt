@@ -31,10 +31,10 @@ internal class MainPlayerInactivity(private val scope: CoroutineScope) {
     private var fingerDown = false
     private var countdown: Job? = null
 
-    fun setActive(value: Boolean) {
+    fun setActive(value: Boolean, anyFingerDown: Boolean = false) {
         if (active == value) return
         active = value
-        fingerDown = false
+        fingerDown = value && anyFingerDown
         restart()
     }
 
@@ -64,17 +64,18 @@ internal class MainPlayerInactivity(private val scope: CoroutineScope) {
 }
 
 @Composable
-internal fun rememberMainPlayerInactivity(enabled: Boolean): MainPlayerInactivity {
+internal fun rememberMainPlayerInactivity(enabled: Boolean, pointers: SliderPointers): MainPlayerInactivity {
     val scope = rememberCoroutineScope()
     val inactivity = remember(scope) { MainPlayerInactivity(scope) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, enabled, inactivity) {
+    DisposableEffect(lifecycle, enabled, inactivity, pointers) {
         // Observe lifecycle events directly so suspension also happens when no UI frames are drawn.
         val observer = LifecycleEventObserver { _, _ ->
-            inactivity.setActive(enabled && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+            inactivity.setActive(enabled && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED), pointers.pressedCount > 0)
         }
         lifecycle.addObserver(observer)
-        inactivity.setActive(enabled && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        // A long-press can navigate home while the initiating finger is still held.
+        inactivity.setActive(enabled && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED), pointers.pressedCount > 0)
         onDispose {
             lifecycle.removeObserver(observer)
             inactivity.setActive(false)

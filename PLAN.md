@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, and the fresh-start Splash screen are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, and shared Track Options with next/stop scheduling are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -26,6 +26,18 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Preset backgrounds only: black, dark gray, dark blue, dark burgundy. Preserve readable white controls/text. No image backgrounds.
 - Configurable time and date formats. Default assumption: mockup-style 12-hour time and DD-MM-YYYY date.
 - English-only interface; preserve music metadata in its original language.
+
+### Long-press Back to main player — implemented in the demo
+
+- Long-pressing the top-left in-app Back button returns directly to the main player from every screen or popup where that button is displayed, dismissing the open popup stack.
+- Ordinary taps retain each screen's existing Back hierarchy. Android system Back remains unchanged. The shortcut does not add Back buttons where none currently exist.
+- Use the platform's normal long-press threshold. Navigate once when that threshold is reached; releasing the finger must not also trigger the ordinary Back action.
+- Preserve the current track, playback position, queue, shuffle/repeat settings, and playing/paused state. This is navigation only and must not restart or pause playback.
+- Cancel unsaved text input and dismiss unfinished prompts. Retain changes already applied immediately, including playlist membership; do not implicitly submit an unfinished edit.
+- Preserve browsing location, selection, query, and scroll state according to each section's existing restoration rules. Do not introduce a separate restoration policy for this shortcut.
+- Cancel any pending browsing-return timer when returning home. Restore the main-player controls to full opacity and follow the existing fading/reset rules.
+- Implemented through the shared Back asset button using Compose `combinedClickable`, with a “Return to main player” accessibility action. Unfinished playlist state is cleared before the existing browser state holder saves it. Held fingers defer the player fade countdown until release.
+- Validation: `assembleDebug`, all 88 unit tests, and `lintDebug` pass (0 lint errors). API 23 (`headunit_a6`) checks cover all seven browsing sections, nested Track Options/collections, ordinary tap/system Back hierarchy, navigation before release with no extra release tap, and preserved paused state. Artifacts: `build/visual-comparison/back-shortcut/`. Physical-head-unit validation remains pending.
 
 ### Long music titles — implemented
 
@@ -346,9 +358,9 @@ This uses an explicit in-memory selected-source tree, shared demo playback, and 
 - Tapping an audio search result queues all matching audio results in displayed order, including matches from multiple descendant directories. Folder results never become queue entries. This search-only exception is distinct from direct-directory playback.
 - Search typing retains the existing cancellation of a pending inactivity return. These rules remain provisional until the dedicated app-wide search interview.
 
-### Track Options from long-press
+### Track Options from long-press — implemented in the demo
 
-This feature remains planned. Use `design/030-long-press-main.png` for the normal popup and `design/031-long-press-main-button-pressed.png` for pressed styling. Hide the underlying track list and its heading while the popup is foregrounded; prevent interaction with hidden rows. Retain the clock, volume, and bottom transport controls. Show the target track title and Artist - Album subtitle in the popup, independent of the currently playing track.
+The shared popup, fixed-target collections nesting, and occurrence-aware scheduling are implemented against the demo library/queue. Real audio and playback-service integration remain pending. Use `design/030-long-press-main.png` for the normal popup and `design/031-long-press-main-button-pressed.png` for pressed styling. Hide the underlying track list and its heading while the popup is foregrounded; prevent interaction with hidden rows. Retain the clock, volume, and bottom transport controls. Show the target track title and Artist - Album subtitle in the popup, independent of the currently playing track.
 
 #### Entry points and popup navigation
 
@@ -387,6 +399,10 @@ This feature remains planned. Use `design/030-long-press-main.png` for the norma
 
 - Display Add to queue, Remove from queue, and Track info as disabled until their respective features are implemented. Do not show success toasts for disabled actions or simulate changes.
 - Future Add to queue/Remove from queue operations will show confirmation toasts after actual success. Their detailed queue semantics and the Track info tag popup remain deferred to later interviews.
+
+Demo scheduling uses stable occurrence IDs in effective playback order, a latest-first explicit scheduling list, and one optional stop marker. The local demo-session snapshot restores the queue, position, shuffle/repeat, scheduling, and marker paused on process restart. Known-duration demo tracks use a simulated position/completion clock; no audio playback is claimed. Validation: `assembleDebug`, all 85 unit tests (including 14 scheduling tests), and `lintDebug` pass. Device interaction artifacts are in `build/visual-comparison/track-options/`.
+
+Validated on `headunit_a6` (API 23, 1280×720): all eight track-browser entry types, retained Favorites/custom-playlist menu nesting, hidden-row input blocking, disabled actions, blank taps, one-level Back/Close (including Folders), fixed-target collections after transport changes, playlist creation with the target included, paused scheduling and process restoration, stop-marker consumption despite Repeat all with the remaining queue retained, pressed styling, and cancellation of an armed return timer without rearming on close. The emulator’s original preferences were restored byte for byte after testing.
 
 ### Sorting and metadata
 
@@ -479,6 +495,7 @@ Before committing to implementations, verify current official documentation for 
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the six designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
 - Implemented shared overflow-only marquees for music titles, row metadata, and artist/album context headings across the nine existing player/browser screens; retain this behavior when connecting real library data. See Long music titles above.
+- Add the shared top-left Back long-press shortcut across screens and popups, preserving ordinary Back behavior, playback, existing restoration rules, and immediately applied edits.
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
 
 ### Phase 3 — Local library
@@ -528,6 +545,15 @@ Before committing to implementations, verify current official documentation for 
 - Document reproducible build/install steps and signing-key handling for subsequent updates. Do not commit signing secrets.
 
 ## 7. Test and acceptance criteria
+
+### Long-press Back acceptance
+
+- From browsers, nested options, settings, and popup flows that expose the top-left Back button, hold it to reach the main player directly and dismiss the entire open popup stack.
+- A short tap follows the existing hierarchy; a recognized long-press navigates once at the normal threshold and release does not fire a second navigation action. Android system Back is unchanged.
+- Verify both playing and paused sessions retain track, position, queue, shuffle/repeat, and playback state.
+- Verify unfinished text prompts are cancelled without submission, while previously applied membership changes remain saved.
+- Reopen each browsing section and verify its existing location, selection, query, and scroll restoration rules still apply.
+- Verify the browsing-return timer is cancelled and player controls return fully visible under the existing fading rules.
 
 ### Automated behavior checks
 

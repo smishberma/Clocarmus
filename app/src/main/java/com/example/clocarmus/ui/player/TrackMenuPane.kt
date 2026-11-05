@@ -77,7 +77,7 @@ internal fun TrackMenuPane(
     onBack: () -> Unit, onSelect: (String) -> Unit, artist: String? = null
 ) = BrowserPane(grid, tracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") },
     selectedId, playing, scroll, query, onQuery, onSearchVisibilityChanged, onSearchEdited,
-    onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT))
+    onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT), trackRows = true)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -103,6 +103,7 @@ internal fun BrowserPane(
     showHeading: Boolean = true,
     emptyMessage: String = "No matching $searchName",
     onLongClick: ((String) -> Unit)? = null,
+    trackRows: Boolean = false,
     reordering: Boolean = false,
     onMove: (String, Int) -> Unit = { _, _ -> },
     showScrollbar: Boolean = true,
@@ -113,6 +114,7 @@ internal fun BrowserPane(
     scrollbarTop: Float? = null,
     listTop: Float = if (showSearch) 293f else 303f
 ) {
+    val trackOptions = LocalTrackOptions.current
     val titles = remember(rows) { rows.map { it.title } }
     var searching by remember { mutableStateOf(searchInitiallyOpen) }
     var draft by remember { mutableStateOf(query) }
@@ -145,7 +147,9 @@ internal fun BrowserPane(
                         if (selected && showPlayback && (!folderRows || row.audio)) stateDescription = if (playing) "Playing" else "Paused"
                     }
                     .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                        role = Role.Button, onLongClick = onLongClick?.let { { it(row.id) } },
+                        role = Role.Button, onLongClickLabel = if (trackRows || row.audio) "Track options" else null,
+                        onLongClick = if (reordering) null else onLongClick?.let { { it(row.id) } }
+                            ?: if (trackRows || row.audio) { { trackOptions.open(row.id) } } else null,
                         onClick = { if (!reordering) onSelect(row.id) })) {
                     val textColor = if (selected) Color.Black else Color.White
                     row.rowIcon?.let { asset ->

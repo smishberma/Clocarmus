@@ -45,7 +45,7 @@ internal fun FoldersPane(
             else -> onExit()
         }
     }
-    BackHandler(onBack = back)
+    BackHandler(enabled = !LocalTrackOptions.current.active, onBack = back)
     val contents = tree.contents(directory, query).let { entries ->
         // The reference root preserves its drawn order; normal browsing always sorts naturally.
         if (preview == "folders" && directory == null && query.isEmpty())

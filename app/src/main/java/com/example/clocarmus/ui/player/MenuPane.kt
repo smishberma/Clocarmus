@@ -1,6 +1,8 @@
 package com.example.clocarmus.ui.player
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -56,16 +58,20 @@ private fun MenuCategory(destination: String, label: String, @DrawableRes asset:
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MenuAssetButton(label: String, @DrawableRes asset: Int, @DrawableRes pressedAsset: Int, grid: PlayerGrid,
                             x: Float, y: Float, width: Float, height: Float, onClick: () -> Unit) {
+    val onHome = if (asset == R.drawable.menu_back_button) LocalPlayerHome.current?.let { { it.returnToPlayer() } } else null
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     // Restrict touch targets to the visible pill rather than the SVG's transparent square.
     val visibleHeight = if (label == "Back") width * 19.9322f / 48f else width / 4f
     Box(grid.place(x, y + (height - visibleHeight) / 2, width, visibleHeight)
         .semantics { contentDescription = label }
-        .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        .combinedClickable(interactionSource = interaction, indication = null, role = Role.Button,
+            onLongClickLabel = if (onHome != null) "Return to main player" else null,
+            onLongClick = onHome, onClick = onClick), contentAlignment = Alignment.Center) {
         Image(painterResource(if (pressed) pressedAsset else asset), null, Modifier.requiredSize((width * grid.scale).dp, (height * grid.scale).dp),
             contentScale = ContentScale.Fit)
     }

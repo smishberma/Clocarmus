@@ -139,7 +139,7 @@ internal fun ArtistsPane(
             subtitle = if (page == "artists") null else artistName?.uppercase(Locale.ROOT),
             icon = when (page) { "artists" -> R.drawable.menu_artists; "albums" -> R.drawable.menu_albums; else -> R.drawable.menu_all_tracks },
             searchName = when (page) { "artists" -> "artists"; "albums" -> "albums"; else -> "tracks" },
-            showPlayback = page == "tracks")
+            showPlayback = page == "tracks", trackRows = page == "tracks")
     }
 }
 

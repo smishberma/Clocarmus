@@ -95,6 +95,15 @@ class MainPlayerInactivityTest {
         advance(502); faded(player)
     }
 
+    @Test fun returningHomeDuringLongPressWaitsForReleaseBeforeFading() = runTest {
+        val player = player(active = false)
+        player.setActive(true, anyFingerDown = true)
+        advance(30_000); full(player)
+        player.touch(false); runCurrent()
+        advance(9_999); full(player)
+        advance(502); faded(player)
+    }
+
     @Test fun suspendingDuringAnimationCancelsStaleUpdatesAndHeldPointers() = runTest {
         val player = player()
         advance(10_250)

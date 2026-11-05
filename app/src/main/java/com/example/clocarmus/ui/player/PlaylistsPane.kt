@@ -41,12 +41,27 @@ internal fun PlaylistsPane(
     onBack: () -> Unit, onOpen: (String) -> Unit,
     onSelect: (String, List<TrackMenuEntry>) -> Unit, onEditingChanged: (Boolean) -> Unit
 ) {
+    val trackOptions = LocalTrackOptions.current
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     ObserveBrowserScroll(scroll, inactivity)
     var action by rememberSaveable { mutableStateOf<String?>(null) }
     var target by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastCompletion by rememberSaveable { mutableIntStateOf(trackOptions.completed) }
+    LaunchedEffect(trackOptions.completed) {
+        if (lastCompletion != trackOptions.completed) { action = null; lastCompletion = trackOptions.completed }
+    }
     var draft by rememberSaveable { mutableStateOf("") }
     var editing by rememberSaveable { mutableStateOf(false) }
+    val homeNavigation = LocalPlayerHome.current
+    DisposableEffect(homeNavigation) {
+        val unregister = homeNavigation?.registerCancellation {
+            action = null
+            target = null
+            draft = ""
+            editing = false
+        }
+        onDispose { unregister?.invoke() }
+    }
     val activeEditing = action != null || editing
     DisposableEffect(activeEditing) {
         onEditingChanged(activeEditing)
@@ -54,7 +69,7 @@ internal fun PlaylistsPane(
         onDispose { onEditingChanged(false) }
     }
     val finishEditing = { editing = false }
-    BackHandler(enabled = editing, onBack = finishEditing)
+    BackHandler(enabled = editing && !trackOptions.active, onBack = finishEditing)
     val custom = library.custom.firstOrNull { it.id == playlistId }
     val title = builtInPlaylists[playlistId] ?: custom?.name.orEmpty()
     val shownTracks = library.trackIds(playlistId.orEmpty()).mapNotNull { id -> tracks.firstOrNull { it.id == id } }
@@ -93,7 +108,7 @@ internal fun PlaylistsPane(
     } else {
         BrowserPane(grid, shownTracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") }, selectedTrackId, playing,
             scroll, "", {}, {}, {}, { if (editing) finishEditing() else onBack() }, { onSelect(it, shownTracks.toList()) },
-            showSearch = false, showHeading = false, emptyMessage = "", onLongClick = if (custom != null || playlistId == FAVORITES) { id ->
+            trackRows = true, showSearch = false, showHeading = false, emptyMessage = "", onLongClick = if (custom != null || playlistId == FAVORITES) { id ->
                 inactivity.cancel(); target = id; action = "track"
             } else null, reordering = editing,
             onMove = { id, index -> onChange(library.reorder(playlistId, id, index)) },
@@ -122,7 +137,7 @@ internal fun PlaylistsPane(
             40f * grid.scale, bold = true, marquee = true)
     }
     val targetPlaylist = library.custom.firstOrNull { it.id == target }
-    when (action) {
+    when (if (trackOptions.active || lastCompletion != trackOptions.completed) null else action) {
         "create", "rename" -> {
             PlaylistNamePrompt(library, draft, { draft = it }, { action = null }, {
                 onChange(if (action == "create") library.create(draft) else library.rename(target.orEmpty(), draft))
@@ -139,6 +154,7 @@ internal fun PlaylistsPane(
             dismissButton = { TextButton(onClick = { action = null }) { Text("Cancel") } })
         "track" -> AlertDialog(onDismissRequest = { action = null }, title = { Text(shownTracks.firstOrNull { it.id == target }?.title.orEmpty()) },
             text = { Column {
+                TextButton(onClick = { target?.let { trackOptions.open(it) } }) { Text("Track options") }
                 TextButton(onClick = { onChange(library.remove(playlistId.orEmpty(), target.orEmpty())); action = null }) {
                     Text(if (playlistId == FAVORITES) "Remove from Favorites" else "Remove from playlist")
                 }
