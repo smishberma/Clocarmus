@@ -211,7 +211,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         }
     }
     var optionsTarget by rememberSaveable { mutableStateOf<String?>(null) }
-    var optionsInfo by rememberSaveable { mutableStateOf(false) }
+    var infoRequest by rememberSaveable { mutableStateOf<TrackInfoRequest?>(null) }
     var optionsCollections by rememberSaveable { mutableStateOf(false) }
     var optionsCompleted by rememberSaveable { mutableIntStateOf(0) }
     var collectionsTarget by remember { mutableStateOf(if (collectionsPreview != null && collectionsPreview != "collections-member") selectedTrackId else null) }
@@ -234,7 +234,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var dialog by remember { mutableStateOf<String?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
     var playlistEditing by remember { mutableStateOf(false) }
-    val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen || playlistEditing || optionsTarget != null) {
+    val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen || playlistEditing || optionsTarget != null || infoRequest != null) {
         tracksOpen = false
         browserStack = arrayListOf()
         menuOpen = false
@@ -253,7 +253,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             else -> { browsingReturn.cancel(); menuOpen = false }
         }
     }
-    BackHandler(enabled = menuOpen && optionsTarget == null, onBack = goBack)
+    BackHandler(enabled = menuOpen && optionsTarget == null && infoRequest == null, onBack = goBack)
     val selectTrack: (String, List<TrackMenuEntry>) -> Unit = { id, tracks ->
         val playable = playableTrack(tracks, id)
         queue = TrackQueue.fromTracks(tracks.map { it.id }, playable?.id, shuffle)
@@ -263,27 +263,30 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }
 
     val sliderPointers = remember { SliderPointers() }
-    val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !collectionsOpen && !referencePreview, pointers = sliderPointers)
-    val controlOpacity = if (dialog == null && !collectionsOpen && !referencePreview) inactivity.opacity else 1f
+    val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !collectionsOpen && infoRequest == null && !referencePreview, pointers = sliderPointers)
+    val controlOpacity = if (dialog == null && !collectionsOpen && infoRequest == null && !referencePreview) inactivity.opacity else 1f
 
     val closeOptions: () -> Unit = {
         when {
             collectionNaming -> { collectionNaming = false; collectionDraft = "" }
-            optionsInfo -> optionsInfo = false
+            infoRequest != null -> {
+                if (infoRequest?.returnTo == TrackInfoDestination.MAIN_PLAYER) optionsTarget = null
+                infoRequest = null
+            }
             optionsCollections -> optionsCollections = false
             else -> optionsTarget = null
         }
     }
     val trackOptionsEntry = TrackOptionsEntry({ id ->
         browsingReturn.cancel()
-        optionsTarget = id; optionsCollections = false; optionsInfo = false
+        optionsTarget = id; optionsCollections = false; infoRequest = null
     }, optionsTarget != null, optionsCompleted)
     val returnHome by rememberUpdatedState<() -> Unit> {
         browsingReturn.cancel()
         collectionNaming = false
         collectionDraft = ""
         optionsCollections = false
-        optionsInfo = false
+        infoRequest = null
         optionsTarget = null
         collectionsTarget = null
         dialog = null
@@ -300,7 +303,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             Row(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
-                    Box(if (optionsTarget != null) Modifier.fillMaxSize().alpha(0f).clearAndSetSemantics {} else Modifier.fillMaxSize()) {
+                    Box(if (optionsTarget != null || infoRequest != null) Modifier.fillMaxSize().alpha(0f).clearAndSetSemantics {} else Modifier.fillMaxSize()) {
                         if (browserStack.isNotEmpty()) {
                             val destination = browserStack.last()
                             artistStates.SaveableStateProvider(destination.copy(search = false)) {
@@ -370,7 +373,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             MenuButton(grid, controlOpacity) { closeCollections(); menuOpen = true }
                         }
                     }
-                    if (optionsTarget != null) {
+                    if (optionsTarget != null || infoRequest != null) {
                         // Opaque input shield keeps source composition/state while hiding its controls.
                         Box(Modifier.fillMaxSize()
                             .background(Color.Black).pointerInput(Unit) { detectTapGestures {} })
@@ -380,7 +383,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         volume = it
                         audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0)
                     }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true, pointers = sliderPointers)
-                    if (!menuOpen) {
+                    if (!menuOpen && infoRequest == null && optionsTarget == null) {
                         AssetButton("Manage playlists", when {
                             collectionsOpen -> R.drawable.collections_playlist_button_toggle_on
                             selectedTrackId?.let(playlistLibrary::hasMembership) == true -> R.drawable.collections_track_present_in_playlists
@@ -394,7 +397,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
                                 grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
                             AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
-                                grid, 141f, 291f, 93f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
+                                grid, 105f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
                                 shuffle = !shuffle
                                 val head = queue.entries.take(queue.currentIndex + 1)
                                 val tail = queue.entries.drop(queue.currentIndex + 1)
@@ -406,27 +409,35 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 1 -> R.drawable.player_repeat_one_active
                                 2 -> R.drawable.player_repeat_active
                                 else -> R.drawable.player_repeat_inactive
-                            }, grid, 850f, 291f, 93f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
-                            AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 538f, 93f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
-                            AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 850f, 538f, 93f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
+                            }, grid, 846f, 230f, 78.3f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
+                            AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 105f, 409f, 90f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
+                            AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 846f, 409f, 90f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
+                            AssetButton("Queues", R.drawable.player_queue_button, grid, 105f, 624f, 67.5f,
+                                opacity = controlOpacity, enabled = false) {}
+                            AssetButton("Track info", R.drawable.player_info_icon, grid, 846f, 612f, 67.5f,
+                                opacity = controlOpacity, enabled = selectedTrackId != null) {
+                                browsingReturn.cancel()
+                                infoRequest = TrackInfoRequest(selectedTrackId!!, TrackInfoDestination.MAIN_PLAYER)
+                            }
                             PlayerLabel(selectedTitle ?: "Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
                             PlayerLabel(if (selectedTitle == null) "Lazlo Bane" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
                             PlayerLabel(if (selectedTitle == null) "All the Time in the World" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
                             PlayerLabel(if (selectedTitle == null) "2002" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
                             PlayerSlider(if (duration != null) position / duration else 0f,
                                 { if (duration != null) position = it * duration },
-                                grid.place(79f, 944f, 841f, 87f), "Track position", grid.scale,
+                                grid.place(79f, 970f, 841f, 87f), "Track position", grid.scale,
                                 enabled = seekable, gestureKey = queue.currentId to duration, pointers = sliderPointers,
                                 onPreview = { seekPreview = it })
-                            PlayerLabel(formatPosition(displayedPosition), grid.place(79f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
-                            PlayerLabel(duration?.let(::formatPosition) ?: "--:--", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
+                            PlayerLabel(formatPosition(displayedPosition), grid.place(79f, 925f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
+                            PlayerLabel(duration?.let(::formatPosition) ?: "--:--", grid.place(740f, 925f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                         }
                     }
-                    if (optionsTarget != null && optionsInfo) TrackInfoPanel(grid,
-                        playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions)
-                    if (optionsTarget != null && !optionsCollections && !optionsInfo) TrackOptionsPopup(grid,
+                    infoRequest?.let { request ->
+                        TrackInfoPanel(grid, playlistTracks.firstOrNull { it.id == request.trackId }, closeOptions)
+                    }
+                    if (optionsTarget != null && !optionsCollections && infoRequest == null) TrackOptionsPopup(grid,
                         playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions,
-                        onCollections = { optionsCollections = true }, onInfo = { optionsInfo = true }, onSchedule = { stop ->
+                        onCollections = { optionsCollections = true }, onInfo = { infoRequest = TrackInfoRequest(optionsTarget!!, TrackInfoDestination.TRACK_OPTIONS) }, onSchedule = { stop ->
                             val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
                             if (target == null) Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
                             else {
@@ -447,16 +458,16 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             if (playlistTracks.any { it.id == membershipTarget }) { collectionDraft = ""; collectionNaming = true }
                             else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
                         }, onClose = closeCollections)
-                    AssetButton("Previous track", R.drawable.player_skip_back, grid, 238f, 1136f, if (menuOpen) 74f else 93f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
+                    AssetButton("Previous track", R.drawable.player_skip_back, grid, 108f, 1136f, 74f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                     AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
                         grid, 508f, 1137f, if (menuOpen) 123f else 110f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing; if (playing) selectedTrack?.let(recordDemoStart) }
-                    AssetButton("Next track", R.drawable.player_skip_next, grid, 778f, 1136f, if (menuOpen) 74f else 93f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
+                    AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
                 ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
             }
             Box(Modifier.align(Alignment.Center).width(1.dp).fillMaxHeight().background(Color(0xffdddddd)))
         }
-        BackHandler(enabled = optionsTarget != null, onBack = closeOptions)
+        BackHandler(enabled = optionsTarget != null || infoRequest != null, onBack = closeOptions)
     }
     if (collectionsOpen && collectionNaming) PlaylistNamePrompt(playlistLibrary, collectionDraft, { collectionDraft = it },
         onDismiss = { collectionNaming = false; collectionDraft = "" }, onConfirm = {
@@ -513,7 +524,7 @@ private fun AssetButton(label: String, @DrawableRes asset: Int, grid: PlayerGrid
                         size: Float, state: String? = null, opacity: Float = 1f, @DrawableRes pressedAsset: Int? = null, enabled: Boolean = true, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    Box(grid.touchTarget(cx, cy, size).alpha(opacity).semantics {
+    Box(grid.touchTarget(cx, cy, size).alpha(opacity * if (enabled) 1f else 0.4f).semantics {
         contentDescription = label
         if (state != null) stateDescription = state
     }.clickable(interactionSource = interaction, indication = if (pressedAsset != null) null else androidx.compose.foundation.LocalIndication.current,

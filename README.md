@@ -393,3 +393,21 @@ This only changes navigation: current track, position, queue, shuffle/repeat, an
 Implementation uses the existing Compose version and its standard `combinedClickable` gesture handling; see [Android’s tap and press guidance](https://developer.android.com/develop/ui/compose/touch-input/pointer-input/tap-and-press).
 
 Validation: `assembleDebug`, all 88 unit tests, and `lintDebug` pass (0 lint errors). Three new unit tests cover cleanup before navigation, disposal of cancellation handlers, and returning home while a finger remains held. On API 23 (`headunit_a6`), checked Menu, All Tracks, artist tracks, album tracks, genre albums, folder directories, custom playlists, nested Track Options/collections, ordinary tap and system Back hierarchy, navigation before release, no extra release tap, and paused-state preservation. Captures and the local interaction-check script are under `build/visual-comparison/back-shortcut/`. Physical-head-unit validation remains pending.
+
+
+## Main player redesign
+
+The player adds Queues beneath −10 seconds and Track info beneath +10 seconds, using the supplied queue and shared info SVGs. Queues stays visibly disabled until its dedicated screen is implemented. Track info is disabled without a selected track; otherwise it opens the existing read-only tag panel while playing or paused. Its saved request captures the track ID and an explicit return destination, retaining that target through transport changes. Close and either Back action return directly home from player entry; Track Options entry retains its existing parent. Holding Back still returns home.
+
+The new controls share the existing inactivity opacity and touch restoration. Disabled opacity multiplies that fade without enabling the buttons. Overlays hide and block the underlying controls; Track info suspends fading, and closing it starts a fresh interval. Previous/Next now sit at the seek bar's ends across the shared player/browser/popup transport. Elapsed/total labels sit above the existing seek bar; drag-only slider behavior is retained.
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen player --install --output build/visual-comparison/player-redesign
+python3 scripts/import-player-assets.py --group main-player --asset queue-button
+python3 scripts/import-player-assets.py --group shared --asset info-icon
+```
+
+The player comparison now uses reference `033` for the redesign. Existing demo metadata, artwork geometry, top controls, and clock remain as implemented, so the complete image difference includes those reference differences. Real playback and physical-head-unit validation remain pending.
+
+Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint errors, 39 warnings). API 23 (`headunit_a6`, 1280×720) checks cover disabled Queues, disabled Track info without a selection, playing/paused entry, fixed nonempty tags after Next, scrolling through Publisher, Close/app Back/system Back/held Back, retained Track Options parent, hidden-control exclusion, collections coverage, both new buttons fading/restoring together, clock-touch restoration, and panel fade suspension/close reset. Original emulator preferences were restored after interaction checks. Captures and local interaction scripts are under `build/visual-comparison/player-redesign/`. Physical-head-unit and real-playback validation remain pending.

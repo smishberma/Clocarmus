@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, and shared Track Options with next/stop scheduling and Track info are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, and the main-player Queues/Track info button redesign are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -52,13 +52,30 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
   - Track: Departing From a Station That Was Demolished Before It Was Ever Built
 - Validated on `headunit_a6` (API 23): long player labels, browser rows, and context headings animate while short rows remain stationary. `assembleDebug`, all 38 unit tests, and `lintDebug` passed; animation was checked on the emulator separately from the unit suite.
 
+### Main player redesign — Queues and Track info buttons — implemented in the demo
+
+Reference: `design/033-main-player-redesign.png`. This reference supersedes older mockups for the new main-player buttons and shared transport/time-label positions.
+
+- Add Queues below the left −10-second button and Track info below the right +10-second button, flanking the album artwork. Use `design/assets/main-player/queue-button.svg` and reuse `design/assets/shared/info-icon.svg`.
+- Keep Queues visible but disabled until the dedicated Queues screen is specified and implemented. Do not navigate or simulate queue functionality from this placeholder.
+- Main-player Track info opens the existing read-only panel for the currently selected track, whether playing or paused. Disable the entry when no track is selected.
+- Capture the selected track ID when opening; keep that target fixed if playback advances or transport controls change the playing track. Reuse all existing tag formatting, cached/unavailable handling, scrolling, and read-only behavior.
+- For entry from the main player, Close and Back return directly to the main player. Entry from Track Options continues returning to Track Options. Carry the entry destination explicitly; do not introduce a synthetic Track Options level for main-player entry.
+- Keep the new buttons covered/noninteractive while the info panel or other player overlays occupy their area. Suspend fading while the panel is open and restore full visibility with the existing timer reset on close.
+- Align Previous and Next below the seek bar with its left and right ends respectively; retain centered Play/Pause. Apply these shared transport positions everywhere transport controls already appear, including browsers and popup flows.
+- Move elapsed time and total duration above the seek bar, aligned to its respective ends, on every screen that already displays these labels and the seek bar. Do not add seek bars to screens that do not have them.
+- Preserve top Menu, volume, and Manage playlists controls, the fixed 50/50 split, and the clock pane. Existing transport actions and drag-only slider behavior remain unchanged.
+- Add both new buttons to the existing inactivity fading group, using the same timing, opacity, animation, and touch restoration. Preserve disabled styling and semantics when fading Queues or a Track info button without a target.
+
+Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint errors, 39 warnings). API 23 (`headunit_a6`, 1280×720) checks cover disabled Queues, disabled Track info without a selection, playing/paused entry, fixed nonempty tags after Next, scrolling through Publisher, Close/app Back/system Back/held Back, retained Track Options parent, hidden-control exclusion, collections coverage, both new buttons fading/restoring together, clock-touch restoration, and panel fade suspension/close reset. Original emulator preferences were restored after interaction checks. Captures and local interaction scripts are under `build/visual-comparison/player-redesign/`. Physical-head-unit and real-playback validation remain pending.
+
 ### Main-player inactivity fading
 
-- Only Menu, Manage playlists, Shuffle, Repeat, Skip forward 10 seconds, and Skip backward 10 seconds fade. All other elements retain their normal appearance.
+- Only Menu, Manage playlists, Shuffle, Repeat, Skip forward 10 seconds, Skip backward 10 seconds, Queues, and Track info fade. All other elements retain their normal appearance.
 - While the main player is active, 10 seconds without touch starts a 500 ms animation from 100% to 20% opacity, regardless of whether music is playing or paused.
 - Apply opacity to each control's existing appearance, including inactive Shuffle/Repeat styling; preserve active/inactive distinctions, hit areas, and accessibility semantics.
-- Touch anywhere on the player, including the clock pane, immediately restores all six controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
-- Keep controls fully visible while any finger remains down. Start a fresh 15-second countdown when the last finger lifts, including after holds, drags, or multi-touch gestures.
+- Touch anywhere on the player, including the clock pane, immediately restores all eight controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
+- Keep controls fully visible while any finger remains down. Start a fresh 10-second countdown when the last finger lifts, including after holds, drags, or multi-touch gestures.
 - Hardware/media buttons, physical volume keys, clock updates, playback progress, and track changes do not reset the countdown.
 - Suspend and reset fading while another screen or dialog is active or the app is backgrounded. Returning to the active player, including dismissing a dialog, restores full opacity and starts a fresh interval.
 - Keep this timer independent of the browsing-to-player return timer below. Its state is transient and is not persisted across screen recreation.
@@ -416,7 +433,7 @@ Reference: `design/032-track-info-tags.png`. Open this read-only panel from Trac
 - Join separately stored artist values with commas, preserving their order and spelling. Do not split artist names on `/` or `&`.
 - Show only the year from a full release date, for example `2004-06-15` becomes `2004`. Keep Comment and Description as separate fields.
 - Keep the captured target fixed even when playback advances or transport controls change the playing track. Opening, reading, and closing this panel do not select a track, start playback, or alter the queue. Tag editing is out of scope.
-- Close, a normal top-left Back tap, and Android Back return one level to Track Options. Long-pressing the top-left Back returns directly to the main player under the existing shortcut rules. Blank-space taps do not dismiss the panel.
+- Close, a normal top-left Back tap, and Android Back return to the entry destination: Track Options for the existing nested flow, or the main player for the planned direct entry. Long-pressing the top-left Back returns directly to the main player under the existing shortcut rules. Blank-space taps do not dismiss the panel.
 - Keep automatic browsing return cancelled throughout this nested flow; closing the panel does not re-arm it. Preserve the originating browser's existing restoration behavior.
 - If the file is unavailable, show cached tags when available with “File unavailable — showing saved tags”. If no metadata was cached, show an unavailable message instead of presenting every field as “Empty”; unavailable metadata is not evidence of absent tags.
 
@@ -513,7 +530,8 @@ Before committing to implementations, verify current official documentation for 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Implement skippable onboarding, source management, empty/access-denied states, and browsing navigation.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
-- Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the six designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
+- Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues remains disabled pending its own feature.
+- Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the eight designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
 - Implemented shared overflow-only marquees for music titles, row metadata, and artist/album context headings across the nine existing player/browser screens; retain this behavior when connecting real library data. See Long music titles above.
 - Add the shared top-left Back long-press shortcut across screens and popups, preserving ordinary Back behavior, playback, existing restoration rules, and immediately applied edits.
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
@@ -587,7 +605,7 @@ Before committing to implementations, verify current official documentation for 
 - Browsing-return timer starts only after selection, resets on interaction, cancels in editing/search/settings, and cannot navigate away after cancellation.
 - Main-player fading: full opacity before 10 seconds, animation begins at 10 seconds, and 20% opacity is reached after another 500 ms in both playing and paused states.
 - Touch on either pane immediately restores opacity without suppressing the same touch's action; holds, drags, and multiple fingers prevent fading until the final release.
-- Verify all six controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
+- Verify all eight controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
 - Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
 
@@ -689,6 +707,14 @@ Before committing to implementations, verify current official documentation for 
 - Paused scheduling stays paused; no-current-track scheduling creates a paused first occurrence. Neither operation restarts the current song or changes its position.
 - Stop after this song attaches one marker to the scheduled occurrence, replaces only the previous marker, survives other Play next requests, stops at marked completion despite repeat, and retains remaining queue content. Verify paused restoration of scheduling state.
 - Deferred Add to queue and Remove from queue remain disabled and never emit false success notifications. Track info opens its specified panel.
+
+### Main player redesign acceptance
+
+- Compare reference 033 for the two new buttons, endpoint-aligned Previous/Next, centered Play/Pause, and time labels above the seek bar. Verify consistent transport positions across screens and overlays without changing top controls or the clock split.
+- Verify supplied Queues/shared info icons, visible disabled Queues behavior, and disabled Track info with no selected track.
+- Open Track info directly while playing and paused; preserve playback and queue, retain the captured target after Next, and return home via Close or Back. Verify the existing Track Options entry still returns to Track Options.
+- Verify panel coverage blocks underlying new-button input, all eight designated controls share fading/restoration, and disabled controls remain disabled after touch restores opacity.
+- Verify seek/time labels move only where already present, and transport actions plus drag-only seek/volume behavior are unchanged.
 
 ### Track info acceptance
 
