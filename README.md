@@ -364,7 +364,7 @@ Long-press a track in All Tracks, artist/album/genre track lists and search resu
 
 Save to playlist reuses the existing collections popup for both adding and removing membership. Its target stays fixed while playback advances, including during playlist creation; creation includes that track. Close/Back returns to Track Options, then to the source or retained playlist action menu. The main-player collections entry still dismisses on a playing-track change.
 
-Play next moves the earliest upcoming occurrence in effective playback order, or inserts one if absent. Scheduling the current track uses a separate occurrence. The latest request goes next; untouched queue occurrences keep their order, shuffle stays enabled, and playing/paused state and position are preserved. Stop after this song schedules the target and attaches the sole stop marker to that occurrence. Other Play next requests retain that marker. Marked completion consumes it and stops despite repeat, preserving the rest of the queue and the user's modes. Success returns to the source list with a toast. Add to queue, Remove from queue, and Track info remain disabled.
+Play next moves the earliest upcoming occurrence in effective playback order, or inserts one if absent. Scheduling the current track uses a separate occurrence. The latest request goes next; untouched queue occurrences keep their order, shuffle stays enabled, and playing/paused state and position are preserved. Stop after this song schedules the target and attaches the sole stop marker to that occurrence. Other Play next requests retain that marker. Marked completion consumes it and stops despite repeat, preserving the rest of the queue and the user's modes. Success returns to the source list with a toast. Add to queue and Remove from queue remain disabled. Track info opens the read-only tag panel.
 
 The demo queue now has stable occurrence IDs, effective shuffle order, explicit scheduling order, and a stop marker. A local demo-session snapshot persists these with position and modes; process restart restores paused. Known-duration demo tracks advance a simulated position and exercise completion, including the one-shot stop. This is still a visual demo; real audio/service integration remains pending.
 
@@ -372,6 +372,17 @@ Validation: `assembleDebug`, all 85 unit tests, and `lintDebug` pass. Fourteen s
 
 Validated on `headunit_a6` (API 23, 1280×720): all eight track-browser entry types, retained Favorites/custom-playlist menu nesting, hidden-row input blocking, disabled actions, blank taps, one-level Back/Close (including Folders), fixed-target collections after transport changes, playlist creation with the target included, paused scheduling and process restoration, stop-marker consumption despite Repeat all with the remaining queue retained, pressed styling, and cancellation of an armed return timer without rearming on close. The emulator’s original preferences were restored byte for byte after testing.
 
+
+## Track info
+
+Track Options > Track info opens the read-only panel from reference `032`. Its fixed heading and Close button sit above ten scrolling tag fields with wrapped values and subdued Empty placeholders. Search and source rows stay hidden; clock, volume, and transport remain usable. Close, app Back, and system Back return to Track Options; holding Back returns home. The target stays fixed through transport changes, and opening/closing does not re-arm automatic browsing return.
+
+`TrackTags` keeps raw artists, album, release date, comment, description, album total, track number, composer, copyright, and publisher separate from browser fallbacks. Compound `3/12` tags provide both numbers, full dates display their year, and separately stored artists join with commas without splitting `/` or `&`. An unavailable track with cached tags shows the saved-tags notice; without a snapshot it shows an unavailable message. The snapshot type supports serialization; real scanning, persistent library metadata storage, and hardware source-disconnection integration remain pending.
+
+Demo fixtures in All Tracks: **Amber** matches the reference tags, **Anchor** shows Empty fields, and the long-title track exercises wrapped artists, multiline Comment/Description, and the lower fields.
+
+
+Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint errors). API 23 (`headunit_a6`) checks cover reference layout, wrapped long values, scrolling to the final fields, fixed target after Next, blank taps, Close/app Back/system Back, long-press Back to home, and cancellation of an armed return timer without rearming on close. Screenshots, comparison, and interaction scripts are under `build/visual-comparison/track-info/`. Cache/unavailable states and raw snapshot serialization are unit-tested; real source detachment and physical-head-unit testing remain pending.
 
 ## Long-press Back to main player
 

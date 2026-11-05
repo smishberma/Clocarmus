@@ -211,6 +211,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         }
     }
     var optionsTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var optionsInfo by rememberSaveable { mutableStateOf(false) }
     var optionsCollections by rememberSaveable { mutableStateOf(false) }
     var optionsCompleted by rememberSaveable { mutableIntStateOf(0) }
     var collectionsTarget by remember { mutableStateOf(if (collectionsPreview != null && collectionsPreview != "collections-member") selectedTrackId else null) }
@@ -268,19 +269,21 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val closeOptions: () -> Unit = {
         when {
             collectionNaming -> { collectionNaming = false; collectionDraft = "" }
+            optionsInfo -> optionsInfo = false
             optionsCollections -> optionsCollections = false
             else -> optionsTarget = null
         }
     }
     val trackOptionsEntry = TrackOptionsEntry({ id ->
         browsingReturn.cancel()
-        optionsTarget = id; optionsCollections = false
+        optionsTarget = id; optionsCollections = false; optionsInfo = false
     }, optionsTarget != null, optionsCompleted)
     val returnHome by rememberUpdatedState<() -> Unit> {
         browsingReturn.cancel()
         collectionNaming = false
         collectionDraft = ""
         optionsCollections = false
+        optionsInfo = false
         optionsTarget = null
         collectionsTarget = null
         dialog = null
@@ -419,9 +422,11 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             PlayerLabel(duration?.let(::formatPosition) ?: "--:--", grid.place(740f, 1029f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                         }
                     }
-                    if (optionsTarget != null && !optionsCollections) TrackOptionsPopup(grid,
+                    if (optionsTarget != null && optionsInfo) TrackInfoPanel(grid,
+                        playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions)
+                    if (optionsTarget != null && !optionsCollections && !optionsInfo) TrackOptionsPopup(grid,
                         playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions,
-                        onCollections = { optionsCollections = true }, onSchedule = { stop ->
+                        onCollections = { optionsCollections = true }, onInfo = { optionsInfo = true }, onSchedule = { stop ->
                             val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
                             if (target == null) Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
                             else {

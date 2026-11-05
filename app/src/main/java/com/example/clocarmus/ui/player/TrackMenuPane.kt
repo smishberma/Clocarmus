@@ -46,7 +46,8 @@ internal data class TrackMenuEntry(
     val id: String = title, val available: Boolean = true,
     val albumArtist: String? = null, val discNumber: Int? = null,
     val trackNumber: Int? = null, val durationSeconds: Int? = null,
-    val genres: List<String> = emptyList()
+    val genres: List<String> = emptyList(),
+    val tags: TrackTags? = null
 )
 
 // Placeholder metadata matches the visual fixture until the library supplies real tags.
@@ -54,9 +55,18 @@ internal val marqueeDemoTrack = TrackMenuEntry(
     title = "Departing From a Station That Was Demolished Before It Was Ever Built",
     artist = "Bartholomew Quillfeather-Ashworth & The Interdimensional Orchestra",
     album = "The Unabridged and Occasionally Contradictory Chronicles of Seventeen Thousand Midnight Trains",
-    year = "2026", id = "demo:long-metadata", trackNumber = 1, durationSeconds = 225
+    year = "2026", id = "demo:long-metadata", trackNumber = 1, durationSeconds = 225,
+    tags = TrackTags(
+        artists = listOf("Bartholomew Quillfeather-Ashworth & The Interdimensional Orchestra", "AC/DC"),
+        album = "The Unabridged and Occasionally Contradictory Chronicles of Seventeen Thousand Midnight Trains",
+        releaseDate = "2026-06-15", trackNumber = "1/12",
+        comment = "A long saved comment.\nRecorded beside the midnight trains, with the entire orchestra playing across several platforms.",
+        description = "An independent description that stays separate from the comment. ".repeat(8),
+        composer = "Bartholomew Quillfeather-Ashworth", copyright = "© 2026", publisher = "Midnight Trains")
 )
-internal val demoTracks = (demoTrackTitles.map { TrackMenuEntry(it, "Artist", "Album", "Year") } + marqueeDemoTrack)
+internal val demoTracks = (demoTrackTitles.map { TrackMenuEntry(it, "Artist", "Album", "Year", tags = if (it == "Amber")
+        TrackTags(artists = listOf("The Push Stars"), album = "Paint The Town", releaseDate = "2004-06-15", trackNumber = "3/12")
+        else TrackTags()) } + marqueeDemoTrack)
     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
 
 // Both gestures and accessibility use the same clamped mapping, including both endpoints.

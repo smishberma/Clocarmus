@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, and shared Track Options with next/stop scheduling are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, and shared Track Options with next/stop scheduling and Track info are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -397,12 +397,32 @@ The shared popup, fixed-target collections nesting, and occurrence-aware schedul
 
 #### Deferred actions
 
-- Display Add to queue, Remove from queue, and Track info as disabled until their respective features are implemented. Do not show success toasts for disabled actions or simulate changes.
-- Future Add to queue/Remove from queue operations will show confirmation toasts after actual success. Their detailed queue semantics and the Track info tag popup remain deferred to later interviews.
+- Display Add to queue and Remove from queue as disabled until their respective features are implemented. Track info opens its read-only child panel. Do not show success toasts for disabled actions or simulate changes.
+- Future Add to queue/Remove from queue operations will show confirmation toasts after actual success. Their detailed queue semantics remain deferred to a later interview. Track info is implemented below.
 
 Demo scheduling uses stable occurrence IDs in effective playback order, a latest-first explicit scheduling list, and one optional stop marker. The local demo-session snapshot restores the queue, position, shuffle/repeat, scheduling, and marker paused on process restart. Known-duration demo tracks use a simulated position/completion clock; no audio playback is claimed. Validation: `assembleDebug`, all 85 unit tests (including 14 scheduling tests), and `lintDebug` pass. Device interaction artifacts are in `build/visual-comparison/track-options/`.
 
 Validated on `headunit_a6` (API 23, 1280×720): all eight track-browser entry types, retained Favorites/custom-playlist menu nesting, hidden-row input blocking, disabled actions, blank taps, one-level Back/Close (including Folders), fixed-target collections after transport changes, playlist creation with the target included, paused scheduling and process restoration, stop-marker consumption despite Repeat all with the remaining queue retained, pressed styling, and cancellation of an armed return timer without rearming on close. The emulator’s original preferences were restored byte for byte after testing.
+
+### Track info — implemented in the demo
+
+Reference: `design/032-track-info-tags.png`. Open this read-only panel from Track Options for its captured track ID; enable that action when the panel is implemented.
+
+- Replace the foreground Track Options content with the Track info panel in the left half, keeping underlying track rows hidden and noninteractive. Preserve the 50/50 split, clock, volume, and bottom transport controls. Hide the search icon while this panel is shown.
+- Keep Close above the panel and the Track info heading fixed. Display all ten fields in one vertically scrolling list in this order: Artist(s), Album, Year, Comment, Description, Total album tracks, Track number, Composer, Copyright, Publisher. Use the mockup's label Year for the release year.
+- Show labels and values with the mockup's hierarchy, including subdued “Empty” values. A missing, nonexistent, or blank tag displays “Empty”; never omit its row.
+- Wrap long values over multiple lines, including comments, descriptions, and artists, so the full value can be read through vertical scrolling rather than truncation or a single-line marquee.
+- Display file metadata only. Do not substitute library fallback names or infer album totals from the library. A compound track tag such as `3/12` supplies Track number 3 and Total album tracks 12; without a tagged total, show “Empty”.
+- Join separately stored artist values with commas, preserving their order and spelling. Do not split artist names on `/` or `&`.
+- Show only the year from a full release date, for example `2004-06-15` becomes `2004`. Keep Comment and Description as separate fields.
+- Keep the captured target fixed even when playback advances or transport controls change the playing track. Opening, reading, and closing this panel do not select a track, start playback, or alter the queue. Tag editing is out of scope.
+- Close, a normal top-left Back tap, and Android Back return one level to Track Options. Long-pressing the top-left Back returns directly to the main player under the existing shortcut rules. Blank-space taps do not dismiss the panel.
+- Keep automatic browsing return cancelled throughout this nested flow; closing the panel does not re-arm it. Preserve the originating browser's existing restoration behavior.
+- If the file is unavailable, show cached tags when available with “File unavailable — showing saved tags”. If no metadata was cached, show an unavailable message instead of presenting every field as “Empty”; unavailable metadata is not evidence of absent tags.
+
+Implementation: the existing Track Options target ID owns the panel; Close/Back only removes its child state. The source input shield and cancelled browsing timer remain active. Raw `TrackTags` snapshots are separate from browser fallback labels and serializable for future metadata storage. Demo All Tracks: Amber matches the reference tags, Anchor has empty tags, and the long-title track exercises multiple artists, a compound track number, and wrapped multiline Comment/Description. Real file scanning, source disconnection events, and persistent library metadata storage remain pending with library integration.
+
+Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint errors). API 23 (`headunit_a6`) checks cover reference layout, wrapped long values, scrolling to the final fields, fixed target after Next, blank taps, Close/app Back/system Back, long-press Back to home, and cancellation of an armed return timer without rearming on close. Screenshots, comparison, and interaction scripts are under `build/visual-comparison/track-info/`. Cache/unavailable states and raw snapshot serialization are unit-tested; real source detachment and physical-head-unit testing remain pending.
 
 ### Sorting and metadata
 
@@ -516,6 +536,7 @@ Before committing to implementations, verify current official documentation for 
 - Add the Folders browser with selected-source virtual root, directory listing, supplied row icons, scrolling parent navigation, natural name ordering, relative-path recursive search, restored directory state, and disconnected-source recovery. Keep source boundaries explicit.
 
 - Add shared Track Options entry to eligible track lists, preserving Favorites/custom-playlist context menus. Reuse track collections with an explicit fixed target and return destination; keep deferred actions disabled and cancel automatic return throughout the popup stack.
+- Implemented the read-only Track info child panel from reference 032 with wrapped values, fixed-target navigation, hidden search, and cached/unavailable states. `TrackTags` retains all ten raw fields separately from browser labels and supports snapshot serialization. Connecting these fields to scanned-file metadata storage remains part of the pending real-library integration.
 
 ### Phase 4 — Playback integration and lifecycle
 
@@ -667,7 +688,17 @@ Before committing to implementations, verify current official documentation for 
 - Play next moves the earliest upcoming occurrence or inserts when absent; repeated A then B requests yield B then A. Verify shuffle stays enabled and untouched queue order is preserved, including repeated track identities and targeting the current track.
 - Paused scheduling stays paused; no-current-track scheduling creates a paused first occurrence. Neither operation restarts the current song or changes its position.
 - Stop after this song attaches one marker to the scheduled occurrence, replaces only the previous marker, survives other Play next requests, stops at marked completion despite repeat, and retains remaining queue content. Verify paused restoration of scheduling state.
-- Deferred Add to queue, Remove from queue, and Track info are disabled and never emit false success notifications.
+- Deferred Add to queue and Remove from queue remain disabled and never emit false success notifications. Track info opens its specified panel.
+
+### Track info acceptance
+
+- Match reference 032: fixed left/right split, fixed Close and heading, scrolling tag values, visible clock/volume/transport, hidden search icon, and no interaction with hidden track rows.
+- Verify all ten fields appear in the specified order. Missing and blank tags show “Empty” without library fallbacks; a tagged `3/12` supplies both numbers, while a missing album total is never inferred from library size.
+- Verify separate artists retain order/spelling when comma-joined, names containing `/` or `&` remain intact, full release dates display their year, and Comment/Description remain separate.
+- Verify long multiline values remain fully readable through wrapping and scrolling.
+- Open info for a track other than the playing track and advance playback: the inspected track remains fixed, with no unintended playback or queue changes.
+- Verify Close/normal Back/system Back return to Track Options, long-press Back returns home, blank taps do nothing, and no automatic return interrupts reading or is re-armed on close.
+- Disconnect a source: cached metadata remains readable with its saved-tags notice; without cached metadata, show an unavailable message instead of falsely empty tags.
 
 ### AVD acceptance
 

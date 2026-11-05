@@ -25,7 +25,7 @@ internal val LocalTrackOptions = staticCompositionLocalOf { TrackOptionsEntry({}
 
 @Composable
 internal fun TrackOptionsPopup(grid: PlayerGrid, track: TrackMenuEntry?, onClose: () -> Unit,
-    onCollections: () -> Unit, onSchedule: (Boolean) -> Unit) {
+    onCollections: () -> Unit, onInfo: () -> Unit, onSchedule: (Boolean) -> Unit) {
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onClose)
     Image(painterResource(R.drawable.track_search), null, grid.place(858.5f, 59.5f, 87f, 87f))
@@ -48,7 +48,7 @@ internal fun TrackOptionsPopup(grid: PlayerGrid, track: TrackMenuEntry?, onClose
     OptionButton(grid, "Add to queue", 83f, 644f, false) {}
     OptionButton(grid, "Stop after this song", 512f, 644f, track?.available == true) { onSchedule(true) }
     OptionButton(grid, "Remove from queue", 83f, 742f, false) {}
-    OptionButton(grid, "Track info", 512f, 742f, false) {}
+    OptionButton(grid, "Track info", 512f, 742f, true, onInfo)
 }
 
 @Composable
