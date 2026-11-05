@@ -397,7 +397,7 @@ Validation: `assembleDebug`, all 88 unit tests, and `lintDebug` pass (0 lint err
 
 ## Main player redesign
 
-The player adds Queues beneath −10 seconds and Track info beneath +10 seconds, using the supplied queue and shared info SVGs. Queues stays visibly disabled until its dedicated screen is implemented. Track info is disabled without a selected track; otherwise it opens the existing read-only tag panel while playing or paused. Its saved request captures the track ID and an explicit return destination, retaining that target through transport changes. Close and either Back action return directly home from player entry; Track Options entry retains its existing parent. Holding Back still returns home.
+The player adds Queues beneath −10 seconds and Track info beneath +10 seconds, using the supplied queue and shared info SVGs. Queues opens playback Queue management, including when the queue is empty. Track info is disabled without a selected track; otherwise it opens the existing read-only tag panel while playing or paused. Its saved request captures the track ID and an explicit return destination, retaining that target through transport changes. Close and either Back action return directly home from player entry; Track Options entry retains its existing parent. Holding Back still returns home.
 
 The new controls share the existing inactivity opacity and touch restoration. Disabled opacity multiplies that fade without enabling the buttons. Overlays hide and block the underlying controls; Track info suspends fading, and closing it starts a fresh interval. Previous/Next now sit at the seek bar's ends across the shared player/browser/popup transport. Elapsed/total labels sit above the existing seek bar; drag-only slider behavior is retained.
 
@@ -411,3 +411,28 @@ python3 scripts/import-player-assets.py --group shared --asset info-icon
 The player comparison now uses reference `033` for the redesign. Existing demo metadata, artwork geometry, top controls, and clock remain as implemented, so the complete image difference includes those reference differences. Real playback and physical-head-unit validation remain pending.
 
 Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint errors, 39 warnings). API 23 (`headunit_a6`, 1280×720) checks cover disabled Queues, disabled Track info without a selection, playing/paused entry, fixed nonempty tags after Next, scrolling through Publisher, Close/app Back/system Back/held Back, retained Track Options parent, hidden-control exclusion, collections coverage, both new buttons fading/restoring together, clock-touch restoration, and panel fade suspension/close reset. Original emulator preferences were restored after interaction checks. Captures and local interaction scripts are under `build/visual-comparison/player-redesign/`. Physical-head-unit and real-playback validation remain pending.
+
+
+## Playback Queue
+
+Queues on the player opens reference `034` using the shared Back, volume, transport, clock, heading, and scrollbar components. The list shows every occurrence in effective playback order, including earlier entries, shuffled order, and duplicates. It opens at the current occurrence, with the existing white highlight and playback indicator. Empty queues show “Queue is empty”.
+
+Tap a row to play that exact occurrence without rebuilding the queue or changing shuffle/repeat. Drag from the supplied handle to preview a move, including moving the current occurrence. Only a completed drop commits; it preserves the current occurrence, playback position, and playing/paused state. Edge scrolling reaches offscreen destinations. A changed/replaced queue cancels the preview; a playback advance retains its current occurrence. Accessibility actions also move entries up or down.
+
+Long-press a row for shared Track Options. Queue entry disables Add to queue and enables exact-occurrence removal; Play next is disabled on the current occurrence, and Stop after this song marks it without duplication. Other browsers enable Add to queue, appending a distinct occurrence without starting playback, and disable Remove. Adding to an empty queue selects the new entry paused. Removing the current entry selects the next playable occurrence without wrapping, preserving paused/playing state or stopping if none remains. Successful actions close the popup stack with a toast.
+
+Manual ordering clears old scheduling priorities while retaining the stop marker on its occurrence. Marked completion consumes the marker and stops despite repeat; explicit Play continues at the next playable entry, if present. The snapshot persists occurrence order, current selection, modes, marker, and pending continuation; process restarts restore paused.
+
+Queue arms the shared 15-second return timer on entry. Touch, scrolling, and handle dragging reset/suspend it. Track Options and nested popups suspend return; returning to Queue starts a fresh interval. Popup scroll position is retained. Ordinary Back returns home, and the existing held-Back shortcut applies throughout.
+
+Use the established build → capture/compare → adjust loop, retaining shared controls:
+
+```sh
+./gradlew assembleDebug testDebugUnitTest lintDebug
+python3 scripts/compare-main-player.py --screen queue --install
+python3 scripts/import-player-assets.py --group queue-screen --asset handle
+```
+
+Comparison artifacts and local interaction checks are under `build/visual-comparison/queue/`. This remains simulated demo playback; real audio/service and physical-head-unit validation are pending.
+
+Validation: `assembleDebug`, all 104 unit tests, and `lintDebug` pass (0 errors, 39 warnings). API 23 (`headunit_a6`, 1280×720) checks cover exact duplicate selection, current-entry scheduling restrictions, handle reordering with preserved modes/position/marker, paused restart, exact removal while playing/paused, unavailable-entry skipping, end removal without wrapping, empty-queue addition and contextual disabled actions, entry timeout, popup suspension/rearming, marked completion with Repeat all and explicit Play continuation, playback advancement during a drag, and navigation cancellation without committing. The build → install → capture/compare → adjust loop corrected immersive-layout entry scrolling; final comparison artifacts and interaction scripts are under `build/visual-comparison/queue/`. The scrollbar reflects the full demo queue rather than the shorter reference fixture; shared chrome remains unchanged. Original emulator preferences were restored after tests. Real audio/service and physical-head-unit validation remain pending.

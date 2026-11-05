@@ -79,7 +79,7 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
+internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, queuePreview: Boolean = false, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
     val context = LocalContext.current
     val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
     var playlistLibrary by remember { mutableStateOf(if (collectionsPreview != null) collectionsFixture(collectionsPreview) else if (playlistsPreview != null) playlistFixture(playlistsPreview) else initialPlaylists ?: loadPlaylists(playlistPreferences)) }
@@ -133,7 +133,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var position by rememberSaveable { mutableFloatStateOf(savedSession?.position ?: 113f) }
     var shuffle by rememberSaveable { mutableStateOf(savedSession?.shuffle ?: true) }
     var repeat by rememberSaveable { mutableIntStateOf(savedSession?.repeat ?: 0) }
-    var menuOpen by rememberSaveable { mutableStateOf(menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
+    var menuOpen by rememberSaveable { mutableStateOf(queuePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
+    var queueOpen by rememberSaveable { mutableStateOf(queuePreview) }
+    val queueScroll = rememberScrollState()
     var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
     var browserStack by rememberSaveable { mutableStateOf(arrayListOf<BrowserDestination>().apply {
         if (foldersPreview != null) add(BrowserDestination("folders", directory = if (foldersPreview == "folder-directory") "music" else null))
@@ -170,7 +172,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
     val initialSelectedId = if (foldersPreview == "folder-directory") "folder:alley" else if (genresPreview == "genre-tracks") "genre:track:2" else if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else demoPlayerTrack.id
-    var queue by rememberSaveable { mutableStateOf(savedSession?.queue ?: TrackQueue.fromTracks(
+    var queue by rememberSaveable { mutableStateOf(savedSession?.queue ?: if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
         listOf(initialSelectedId) + demoTracks.map { it.id }.filterNot { it == initialSelectedId }, initialSelectedId, shuffle)) }
     val selectedTrackId = queue.current?.trackId
     val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
@@ -210,6 +212,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             }
         }
     }
+    var optionsOccurrence by rememberSaveable { mutableStateOf<String?>(null) }
     var optionsTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var infoRequest by rememberSaveable { mutableStateOf<TrackInfoRequest?>(null) }
     var optionsCollections by rememberSaveable { mutableStateOf(false) }
@@ -235,9 +238,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var searchOpen by remember { mutableStateOf(false) }
     var playlistEditing by remember { mutableStateOf(false) }
     val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen || playlistEditing || optionsTarget != null || infoRequest != null) {
+        queueOpen = false
         tracksOpen = false
         browserStack = arrayListOf()
         menuOpen = false
+    }
+    LaunchedEffect(queueOpen, optionsTarget, infoRequest) {
+        if (queueOpen && optionsTarget == null && infoRequest == null) browsingReturn.trackSelected()
     }
     LaunchedEffect(trackScroll, browsingReturn) {
         snapshotFlow { tracksOpen && browserStack.isEmpty() && trackScroll.isScrollInProgress }.collect { browsingReturn.setScrolling(it) }
@@ -248,6 +255,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val goBack: () -> Unit = {
         browsingReturn.interaction()
         when {
+            queueOpen -> { queueOpen = false; menuOpen = false; browsingReturn.cancel() }
             browserStack.isNotEmpty() -> browserStack = ArrayList(browserStack.dropLast(1))
             tracksOpen -> tracksOpen = false
             else -> { browsingReturn.cancel(); menuOpen = false }
@@ -274,11 +282,12 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                 infoRequest = null
             }
             optionsCollections -> optionsCollections = false
-            else -> optionsTarget = null
+            else -> { optionsTarget = null; optionsOccurrence = null }
         }
     }
     val trackOptionsEntry = TrackOptionsEntry({ id ->
         browsingReturn.cancel()
+        optionsOccurrence = null
         optionsTarget = id; optionsCollections = false; infoRequest = null
     }, optionsTarget != null, optionsCompleted)
     val returnHome by rememberUpdatedState<() -> Unit> {
@@ -288,6 +297,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         optionsCollections = false
         infoRequest = null
         optionsTarget = null
+        optionsOccurrence = null
+        queueOpen = false
         collectionsTarget = null
         dialog = null
         searchOpen = false
@@ -304,7 +315,20 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                 BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
                     Box(if (optionsTarget != null || infoRequest != null) Modifier.fillMaxSize().alpha(0f).clearAndSetSemantics {} else Modifier.fillMaxSize()) {
-                        if (browserStack.isNotEmpty()) {
+                        if (queueOpen) {
+                            QueuePane(grid, queue, playlistTracks, playing, queueScroll, browsingReturn,
+                                interactive = optionsTarget == null && infoRequest == null, onBack = goBack,
+                                onSelect = { id ->
+                                    val occurrence = queue.entries.firstOrNull { it.id == id }
+                                    if (occurrence != null && available(occurrence.trackId)) {
+                                        if (id != queue.currentId || queue.resumeAfterStop) position = 0f
+                                        queue = queue.select(id); playing = true
+                                        playlistTracks.firstOrNull { it.id == occurrence.trackId }?.let(recordDemoStart)
+                                    }
+                                }, onOptions = { entry ->
+                                    browsingReturn.cancel(); optionsOccurrence = entry.id; optionsTarget = entry.trackId
+                                }, onReorder = { original, id, index -> queue = queue.reorder(original, id, index) })
+                        } else if (browserStack.isNotEmpty()) {
                             val destination = browserStack.last()
                             artistStates.SaveableStateProvider(destination.copy(search = false)) {
                                 val playCollection: (List<TrackMenuEntry>) -> Unit = { tracks ->
@@ -413,7 +437,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 409f, 90f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
                             AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 846f, 409f, 90f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
                             AssetButton("Queues", R.drawable.player_queue_button, grid, 141f, 624f, 67.5f,
-                                opacity = controlOpacity, enabled = false) {}
+                                opacity = controlOpacity) { queueOpen = true; menuOpen = true; browsingReturn.trackSelected() }
                             AssetButton("Track info", R.drawable.player_info_icon, grid, 846f, 612f, 67.5f,
                                 opacity = controlOpacity, enabled = selectedTrackId != null) {
                                 browsingReturn.cancel()
@@ -439,12 +463,36 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions,
                         onCollections = { optionsCollections = true }, onInfo = { infoRequest = TrackInfoRequest(optionsTarget!!, TrackInfoDestination.TRACK_OPTIONS) }, onSchedule = { stop ->
                             val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
-                            if (target == null) Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
+                            if (target == null || (optionsOccurrence != null && queue.entries.none { it.id == optionsOccurrence }))
+                                Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
                             else {
                                 if (queue.current == null) { playing = false; position = 0f }
-                                queue = queue.schedule(target.id, stop)
-                                optionsCollections = false; optionsTarget = null; optionsCompleted++
+                                queue = optionsOccurrence?.let { queue.scheduleOccurrence(it, stop) } ?: queue.schedule(target.id, stop)
+                                optionsCollections = false; optionsTarget = null; optionsOccurrence = null; optionsCompleted++
                                 Toast.makeText(context, if (stop) "Will stop after this song" else "Will play next", Toast.LENGTH_SHORT).show()
+                            }
+                        }, fromQueue = optionsOccurrence != null,
+                        currentOccurrence = optionsOccurrence != null && optionsOccurrence == queue.currentId,
+                        onAdd = {
+                            val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
+                            if (target != null) {
+                                if (queue.entries.isEmpty()) { playing = false; position = 0f }
+                                queue = queue.append(target.id)
+                                optionsTarget = null; optionsOccurrence = null; optionsCollections = false; optionsCompleted++
+                                Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
+                            }
+                        }, onRemove = {
+                            val id = optionsOccurrence
+                            if (id != null && queue.entries.any { it.id == id }) {
+                                val wasCurrent = id == queue.currentId
+                                queue = queue.remove(id, available)
+                                if (wasCurrent) {
+                                    position = 0f
+                                    if (queue.current == null) playing = false
+                                    else if (playing) playlistTracks.firstOrNull { it.id == queue.current?.trackId }?.let(recordDemoStart)
+                                }
+                                optionsTarget = null; optionsOccurrence = null; optionsCollections = false; optionsCompleted++
+                                Toast.makeText(context, "Removed from queue", Toast.LENGTH_SHORT).show()
                             }
                         })
                     if (optionsCollections) MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
@@ -460,7 +508,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         }, onClose = closeCollections)
                     AssetButton("Previous track", R.drawable.player_skip_back, grid, 108f, 1136f, 74f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                     AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
-                        grid, 508f, 1137f, 123f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing; if (playing) selectedTrack?.let(recordDemoStart) }
+                        grid, 508f, 1137f, 123f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); if (playing) playing = false else {
+                            val before = queue.currentId
+                            val resumed = queue.resume(available)
+                            queue = resumed.queue; playing = resumed.playing
+                            if (queue.currentId != before) position = 0f
+                            if (playing) playlistTracks.firstOrNull { it.id == queue.current?.trackId }?.let(recordDemoStart)
+                        } }
                     AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
                 ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())

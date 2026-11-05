@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, and the main-player Queues/Track info button redesign are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, the main-player Queues/Track info button redesign, and playback Queue management are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
 
 ## 1. Product and constraints
 
@@ -57,7 +57,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 Reference: `design/033-main-player-redesign.png`. This reference supersedes older mockups for the new main-player buttons and shared transport/time-label positions.
 
 - Add Queues below the left −10-second button and Track info below the right +10-second button, flanking the album artwork. Use `design/assets/main-player/queue-button.svg` and reuse `design/assets/shared/info-icon.svg`.
-- Keep Queues visible but disabled until the dedicated Queues screen is specified and implemented. Do not navigate or simulate queue functionality from this placeholder.
+- Keep Queues visible but disabled until the planned Queue screen below is implemented; then enable it even for an empty queue.
 - Main-player Track info opens the existing read-only panel for the currently selected track, whether playing or paused. Disable the entry when no track is selected.
 - Capture the selected track ID when opening; keep that target fixed if playback advances or transport controls change the playing track. Reuse all existing tag formatting, cached/unavailable handling, scrolling, and read-only behavior.
 - For entry from the main player, Close and Back return directly to the main player. Entry from Track Options continues returning to Track Options. Carry the entry destination explicitly; do not introduce a synthetic Track Options level for main-player entry.
@@ -412,14 +412,54 @@ The shared popup, fixed-target collections nesting, and occurrence-aware schedul
 - At marked completion, stop automatic playback without clearing the remaining queue. The stop overrides repeat at that completion; retain the user's shuffle/repeat settings for later use. Treat the stop marker as one-shot and consume it after it takes effect.
 - Show a confirmation toast only after scheduling and marking succeeds, such as “Will stop after this song”.
 
-#### Deferred actions
+#### Queue actions
 
-- Display Add to queue and Remove from queue as disabled until their respective features are implemented. Track info opens its read-only child panel. Do not show success toasts for disabled actions or simulate changes.
-- Future Add to queue/Remove from queue operations will show confirmation toasts after actual success. Their detailed queue semantics remain deferred to a later interview. Track info is implemented below.
+- Add to queue and Remove from queue are specified in the planned Queue screen section below. Keep them disabled until implemented, then apply its entry-context rules and confirmation toasts. Track info opens its read-only child panel. Never simulate success for disabled actions.
 
 Demo scheduling uses stable occurrence IDs in effective playback order, a latest-first explicit scheduling list, and one optional stop marker. The local demo-session snapshot restores the queue, position, shuffle/repeat, scheduling, and marker paused on process restart. Known-duration demo tracks use a simulated position/completion clock; no audio playback is claimed. Validation: `assembleDebug`, all 85 unit tests (including 14 scheduling tests), and `lintDebug` pass. Device interaction artifacts are in `build/visual-comparison/track-options/`.
 
 Validated on `headunit_a6` (API 23, 1280×720): all eight track-browser entry types, retained Favorites/custom-playlist menu nesting, hidden-row input blocking, disabled actions, blank taps, one-level Back/Close (including Folders), fixed-target collections after transport changes, playlist creation with the target included, paused scheduling and process restoration, stop-marker consumption despite Repeat all with the remaining queue retained, pressed styling, and cancellation of an armed return timer without rearming on close. The emulator’s original preferences were restored byte for byte after testing.
+
+### Queue screen — implemented in the demo
+
+Reference: `design/034-queues-screen.png`. Accessible from the main-player Queue button using `design/assets/main-player/queue-button.svg`; enable this entry when the screen is implemented, including for an empty queue.
+
+#### Layout and navigation
+
+- Reuse existing Back, volume, transport, and clock components and their shared positions. Implement only the queue-specific list, QUEUE title/icon, and drag handles; do not duplicate shared controls or create unique variants. Preserve the fixed 50/50 split.
+- Show the entire active queue in actual playback order: earlier, current, and upcoming occurrences, including shuffle and explicit Play next scheduling. Queue entries are tracks only; duplicates have distinct stable occurrence IDs.
+- On entry, scroll to the current occurrence. Show title and Artist - Album subtitle, the mockup's white current-entry highlight, existing playback indicators, and existing drag-handle asset. Use “Queue is empty” when there are no entries, retaining shared controls.
+- Back returns to the main player under the existing shared navigation rules. Returning from Track Options preserves queue scroll where possible.
+- Unlike other browsers, start the 15-second inactivity return on opening Queue, without requiring song selection. Reset on interaction; suspend throughout dragging and Track Options or nested popup flows. Start a fresh interval after the drag ends or the popup flow returns to Queue. Do not let a stale timer interrupt interaction. This explicitly overrides the normal popup rule that closing does not re-arm a browser timer, for Queue only.
+
+#### Selection and reordering
+
+- Tapping a different entry starts that exact occurrence from its beginning without rebuilding/reordering the queue; preserve shuffle/repeat. Tapping the current entry resumes if paused and otherwise leaves playback uninterrupted.
+- Drag only from the handle; long-pressing the track row opens the existing Track Options pane. A drag must not also play the track or open options.
+- Allow moving any occurrence, including the current one. Preview its position during dragging and apply the order immediately on drop without Save. Preserve the currently playing occurrence, position, and playing/paused state.
+- Reorder the actual playback sequence without disabling shuffle. The resulting visible order governs subsequent playback; old shuffle or Play next scheduling must not silently undo a manual reorder.
+- If playback advances during dragging, keep the dragged occurrence identified by its stable ID. If the queue is replaced or the dragged entry disappears, cancel safely. A cancelled drag commits no ordering changes and must not roll back unrelated playback/queue changes.
+- Persist the resulting occurrence order and stop marker through the existing playback snapshot; restore paused after restart.
+
+#### Add and remove queue entries
+
+- Enable Add to queue from other eligible track-list Track Options entries. Append a new occurrence to the end of the actual playback order, allowing duplicates, without starting playback or changing shuffle. If the queue was empty, select the added entry but remain paused.
+- Keep Add to queue greyed out/disabled when Track Options was opened from Queue. Enable Remove from queue only for Queue entry; disable it in other browsers to avoid ambiguous duplicate removal.
+- Remove the exact long-pressed occurrence immediately, without confirmation. Never modify library entries, playlists, or music files.
+- Removing the current occurrence advances to the next playable entry, continuing if playing and remaining paused if paused. If no next playable entry remains, stop and clear the current selection without wrapping automatically. Retain other queue entries.
+- Successful addition shows “Added to queue” and closes the popup stack to the originating list. Successful removal shows “Removed from queue” and returns to Queue, preserving scroll where possible and restarting its inactivity interval. Disabled/failed actions never show false success.
+
+#### Exact-occurrence scheduling and stop marker
+
+- From Queue, Play next and Stop after this song target the exact long-pressed occurrence, not another copy. Move that occurrence next when appropriate; preserve the existing latest-request-first scheduling semantics.
+- For the current occurrence, disable Play next. Stop after this song marks its completion without moving or duplicating it.
+- Retain the existing track-based scheduling behavior when entered from other browsers (move earliest upcoming matching occurrence, otherwise insert).
+- Keep one stop marker attached to its occurrence through reordering. Removing the marked occurrence clears it. Marked completion stops automatic playback despite repeat and consumes the marker while preserving the remaining queue.
+- After that stop, explicit Play continues with the next remaining entry. If none remains, there is no next entry to start; do not invent or duplicate a track.
+
+Implementation: `QueuePane` uses the shared chrome and supplied `queue-screen/handle.svg`. Stable occurrence IDs own selection, drag previews, exact scheduling, and removal. Preview drops validate against the live occurrence sequence, retain playback advances, and cancel after queue replacement/membership changes. The entry scroll recalculates when immersive layout changes the actual row size. The existing snapshot now also retains continuation after a consumed stop; no dependency or minimum-SDK changes were introduced.
+
+Validation: `assembleDebug`, all 104 unit tests, and `lintDebug` pass (0 errors, 39 warnings). API 23 (`headunit_a6`, 1280×720) checks cover exact duplicate selection, current-entry scheduling restrictions, handle reordering with preserved modes/position/marker, paused restart, exact removal while playing/paused, unavailable-entry skipping, end removal without wrapping, empty-queue addition and contextual disabled actions, entry timeout, popup suspension/rearming, marked completion with Repeat all and explicit Play continuation, playback advancement during a drag, and navigation cancellation without committing. The build → install → capture/compare → adjust loop corrected immersive-layout entry scrolling; final comparison artifacts and interaction scripts are under `build/visual-comparison/queue/`. The scrollbar reflects the full demo queue rather than the shorter reference fixture; shared chrome remains unchanged. Original emulator preferences were restored after tests. Real audio/service and physical-head-unit validation remain pending.
 
 ### Track info — implemented in the demo
 
@@ -530,7 +570,7 @@ Before committing to implementations, verify current official documentation for 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Implement skippable onboarding, source management, empty/access-denied states, and browsing navigation.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
-- Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues remains disabled pending its own feature.
+- Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues now opens the implemented Queue screen described above.
 - Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the eight designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
 - Implemented shared overflow-only marquees for music titles, row metadata, and artist/album context headings across the nine existing player/browser screens; retain this behavior when connecting real library data. See Long music titles above.
 - Add the shared top-left Back long-press shortcut across screens and popups, preserving ordinary Back behavior, playback, existing restoration rules, and immediately applied edits.
@@ -557,6 +597,8 @@ Before committing to implementations, verify current official documentation for 
 - Implemented the read-only Track info child panel from reference 032 with wrapped values, fixed-target navigation, hidden search, and cached/unavailable states. `TrackTags` retains all ten raw fields separately from browser labels and supports snapshot serialization. Connecting these fields to scanned-file metadata storage remains part of the pending real-library integration.
 
 ### Phase 4 — Playback integration and lifecycle
+
+- Implemented the demo Queue screen from reference 034 with shared controls, occurrence-aware selection and handle-only preview/drop reordering, context-dependent Add/Remove actions, exact-occurrence scheduling, and its entry-armed inactivity timer. Manual playback order, stop marker, and continuation after a consumed stop use the existing paused-restoration snapshot. Real playback-service integration remains pending.
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
 - Connect artist Play all to queue replacement, alphabetical track ordering, shuffle disablement, and immediate player return; preserve the existing delayed return for individual artist-track selection.
@@ -706,12 +748,12 @@ Before committing to implementations, verify current official documentation for 
 - Play next moves the earliest upcoming occurrence or inserts when absent; repeated A then B requests yield B then A. Verify shuffle stays enabled and untouched queue order is preserved, including repeated track identities and targeting the current track.
 - Paused scheduling stays paused; no-current-track scheduling creates a paused first occurrence. Neither operation restarts the current song or changes its position.
 - Stop after this song attaches one marker to the scheduled occurrence, replaces only the previous marker, survives other Play next requests, stops at marked completion despite repeat, and retains remaining queue content. Verify paused restoration of scheduling state.
-- Deferred Add to queue and Remove from queue remain disabled and never emit false success notifications. Track info opens its specified panel.
+- Once Queue is implemented, Add to queue is enabled outside Queue and disabled within it; Remove from queue is enabled only within Queue. Until implementation both remain disabled. Track info opens its specified panel.
 
 ### Main player redesign acceptance
 
 - Compare reference 033 for the two new buttons, endpoint-aligned Previous/Next, centered Play/Pause, and time labels above the seek bar. Verify consistent transport positions across screens and overlays without changing top controls or the clock split.
-- Verify supplied Queues/shared info icons, visible disabled Queues behavior, and disabled Track info with no selected track.
+- Verify supplied Queues/shared info icons, Queues opening its screen once implemented (disabled until then), and disabled Track info with no selected track.
 - Open Track info directly while playing and paused; preserve playback and queue, retain the captured target after Next, and return home via Close or Back. Verify the existing Track Options entry still returns to Track Options.
 - Verify panel coverage blocks underlying new-button input, all eight designated controls share fading/restoration, and disabled controls remain disabled after touch restores opacity.
 - Verify seek/time labels move only where already present, and transport actions plus drag-only seek/volume behavior are unchanged.
@@ -725,6 +767,18 @@ Before committing to implementations, verify current official documentation for 
 - Open info for a track other than the playing track and advance playback: the inspected track remains fixed, with no unintended playback or queue changes.
 - Verify Close/normal Back/system Back return to Track Options, long-press Back returns home, blank taps do nothing, and no automatic return interrupts reading or is re-armed on close.
 - Disconnect a source: cached metadata remains readable with its saved-tags notice; without cached metadata, show an unavailable message instead of falsely empty tags.
+
+### Queue screen acceptance
+
+- Match reference 034 with shared controls, QUEUE title/icon, handles, subtitles, current highlight, and empty state. Show the full effective queue, including duplicates and earlier entries, and open at the current occurrence.
+- Tap a different occurrence to play from its start without queue replacement; tap current to resume paused playback or leave active playback uninterrupted. Preserve shuffle/repeat.
+- Drag handles reorder any occurrence without interrupting audio or resetting position; row long-press opens Track Options. Drop commits immediately, cancellation does not commit, and shuffled playback follows the displayed edited order.
+- Advance playback during a drag and verify identity remains stable. Replace the queue/remove the target and verify safe cancellation without reverting unrelated changes.
+- Add outside Queue appends a distinct occurrence, preserves playback/shuffle, selects paused when empty, and confirms by toast. Verify Add is disabled in Queue and Remove is disabled elsewhere.
+- Remove one exact duplicate without confirmation or file/library changes; verify current-entry removal while playing and paused, skip failures, and no wrapping when no next playable entry remains.
+- Verify exact-occurrence Play next/Stop actions, disabled Play next on current, current Stop without duplication, marker retention on drag, clearing on removal, repeat override at completion, and explicit Play continuing after the marked entry.
+- Verify the 15-second timer starts on entry, resets on interaction, cannot interrupt dragging/popups, and restarts after returning to Queue. Check scroll restoration after actions and normal Back to player.
+- Restart after queue edits and verify occurrence order and marker persist with playback restored paused.
 
 ### AVD acceptance
 
@@ -743,7 +797,7 @@ Actual USB/SD detach/reinsert, real sleep/ignition cycles, steering-wheel/media/
 
 ### Explicit assumptions/defaults
 
-- Track Options implementation defaults: use “Save to playlist” as shown in reference 030 for the add/remove action; toast wording may follow the examples above. If a marked occurrence is removed, skipped as unplayable, or its queue is replaced, clear its stale stop marker rather than attaching it to a different occurrence. Playback resumption after a consumed stop and additional queue-management edge cases should be finalized with the deferred queue feature.
+- Track Options implementation defaults: use “Save to playlist” as shown in reference 030 for the add/remove action; toast wording may follow the examples above. If a marked occurrence is removed, skipped as unplayable, or its queue is replaced, clear its stale stop marker rather than attaching it to a different occurrence. The Queue screen specification above defines explicit Play after a consumed stop and exact-occurrence queue management.
 
 - Albums implementation defaults to validate with real metadata: missing/invalid disc number is disc 1; missing track number displays `--`; unknown duration displays `--:--`; ties use title then stable track ID. For conflicting album years, display the most frequent known year (earliest on a tie). These are defaults, not separately confirmed interview decisions.
 - Artist-list album counts retain the prior distinct-title rule; artist album rows use the new title + Album Artist identity to avoid merging unrelated albums. Revisit the count rule if same-title albums with different Album Artists make this distinction confusing.

@@ -12,6 +12,24 @@ import org.junit.Test
 class BrowsingReturnInactivityTest {
     private fun TestScope.advance(ms: Long) { advanceTimeBy(ms); runCurrent() }
 
+    @Test fun queueEntryArmsWithoutSelectionAndPopupReturnRearmsWithFreshInterval() = runTest {
+        var returns = 0
+        val timer = BrowsingReturnInactivity(backgroundScope) { returns++ }
+        timer.setActive(true)
+        timer.trackSelected() // Queue uses the shared arm operation on entry.
+        advance(14_999)
+        timer.cancel()
+        timer.setActive(false)
+        advance(60_000)
+        assertEquals(0, returns)
+        timer.setActive(true)
+        timer.trackSelected() // Only Queue rearms on popup return.
+        advance(14_999)
+        assertEquals(0, returns)
+        advance(1)
+        assertEquals(1, returns)
+    }
+
     @Test fun browsingAndInteractionsAloneNeverStartAReturn() = runTest {
         var returns = 0
         val timer = BrowsingReturnInactivity(backgroundScope) { returns++ }

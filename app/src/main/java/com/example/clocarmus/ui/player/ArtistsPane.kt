@@ -51,17 +51,27 @@ internal val demoArtistTracks = demoTrackTitles.flatMapIndexed { artistIndex, ar
 internal val demoArtists = groupArtists(demoArtistTracks)
 
 @Composable
-internal fun BrowserHeading(grid: PlayerGrid, heading: String, icon: Int, subtitle: String? = null) {
+internal fun BrowserHeading(grid: PlayerGrid, heading: String, icon: Int, subtitle: String? = null, centerUnderVolume: Boolean = false) {
     val artists = heading == "ARTISTS" || heading == "ALBUMS"
     val albumTracks = heading == "ALBUM TRACKS"
     val headingOffset = with(LocalDensity.current) {
         (if (albumTracks || (heading == "ALBUMS" && subtitle == null)) -8 else -15).toDp()
     }
-    Image(painterResource(icon), null,
-        grid.place(if (artists) 389f else if (albumTracks) 315f else 342f, if (artists) 197f else 192f, if (artists || albumTracks) 42f else 52f, if (artists || albumTracks) 42f else 52f)
-            .offset(y = headingOffset))
-    PlayerLabel(heading, grid.place(if (artists) 447f else if (albumTracks) 384f else 418f, 191f, if (albumTracks) 520f else 340f, 54f).offset(y = headingOffset),
-        40f * grid.scale, alignment = Alignment.CenterStart, bold = true)
+    if (centerUnderVolume) {
+        // Match the shared volume bar's horizontal bounds; center the visible icon/text group.
+        Row(grid.place(283f, 191f, 434f, 54f).offset(y = headingOffset),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(icon), null, Modifier.size((52f * grid.scale).dp))
+            Spacer(Modifier.width((24f * grid.scale).dp))
+            PlayerLabel(heading, Modifier.fillMaxHeight(), 40f * grid.scale, bold = true)
+        }
+    } else {
+        Image(painterResource(icon), null,
+            grid.place(if (artists) 389f else if (albumTracks) 315f else 342f, if (artists) 197f else 192f, if (artists || albumTracks) 42f else 52f, if (artists || albumTracks) 42f else 52f)
+                .offset(y = headingOffset))
+        PlayerLabel(heading, grid.place(if (artists) 447f else if (albumTracks) 384f else 418f, 191f, if (albumTracks) 520f else 340f, 54f).offset(y = headingOffset),
+            40f * grid.scale, alignment = Alignment.CenterStart, bold = true)
+    }
     subtitle?.let {
         PlayerLabel(it, grid.place(60f, 250f, 880f, 54f).offset(y = headingOffset), 40f * grid.scale, bold = true, marquee = true)
     }

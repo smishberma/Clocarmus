@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
                         foldersPreview = if (referencePreview) intent.getStringExtra("folders_preview")?.takeIf { it in setOf("folders", "folder-directory") } else null,
                         collectionsPreview = if (referencePreview) intent.getStringExtra("collections_preview")?.takeIf { it in setOf("collections-favorites", "collections-empty", "collections-custom", "collections-member") } else null,
                         playlistsPreview = if (referencePreview) intent.getStringExtra("playlists_preview")?.takeIf { it in setOf("playlists-empty", "playlists", "playlist-favorites", "playlist-added", "playlist-played", "playlist-custom", "playlist-custom-empty", "playlist-favorites-empty", "playlist-added-empty", "playlist-played-empty") } else null,
+                        queuePreview = referencePreview && intent.getBooleanExtra("queue_preview", false),
                         initialPlaylists = ready?.value,
                         onPlaylistsChanged = startup::update,
                         freshStartup = freshStartup)

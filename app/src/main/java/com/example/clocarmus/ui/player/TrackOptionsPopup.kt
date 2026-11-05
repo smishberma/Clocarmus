@@ -25,7 +25,8 @@ internal val LocalTrackOptions = staticCompositionLocalOf { TrackOptionsEntry({}
 
 @Composable
 internal fun TrackOptionsPopup(grid: PlayerGrid, track: TrackMenuEntry?, onClose: () -> Unit,
-    onCollections: () -> Unit, onInfo: () -> Unit, onSchedule: (Boolean) -> Unit) {
+    onCollections: () -> Unit, onInfo: () -> Unit, onSchedule: (Boolean) -> Unit,
+    fromQueue: Boolean = false, currentOccurrence: Boolean = false, onAdd: () -> Unit = {}, onRemove: () -> Unit = {}) {
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onClose)
     Image(painterResource(R.drawable.track_search), null, grid.place(858.5f, 59.5f, 87f, 87f))
@@ -44,10 +45,10 @@ internal fun TrackOptionsPopup(grid: PlayerGrid, track: TrackMenuEntry?, onClose
     PlayerLabel(track?.let { "${it.artist} - ${it.album}" } ?: "This track is no longer in the library",
         grid.place(125f, 474f, 750f, 42f), 34f * grid.scale, alignment = Alignment.CenterStart, color = Color.Black, marquee = true)
     OptionButton(grid, "Save to playlist", 83f, 546f, track != null, onCollections)
-    OptionButton(grid, "Play next", 512f, 546f, track?.available == true) { onSchedule(false) }
-    OptionButton(grid, "Add to queue", 83f, 644f, false) {}
+    OptionButton(grid, "Play next", 512f, 546f, track?.available == true && !currentOccurrence) { onSchedule(false) }
+    OptionButton(grid, "Add to queue", 83f, 644f, !fromQueue && track?.available == true, onAdd)
     OptionButton(grid, "Stop after this song", 512f, 644f, track?.available == true) { onSchedule(true) }
-    OptionButton(grid, "Remove from queue", 83f, 742f, false) {}
+    OptionButton(grid, "Remove from queue", 83f, 742f, fromQueue, onRemove)
     OptionButton(grid, "Track info", 512f, 742f, true, onInfo)
 }
 

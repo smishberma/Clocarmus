@@ -10,10 +10,53 @@ internal data class TrackQueue(
     val entries: List<QueueOccurrence> = emptyList(),
     val currentId: String? = null,
     val stopAfterId: String? = null,
-    val scheduledIds: List<String> = emptyList()
+    val scheduledIds: List<String> = emptyList(),
+    val resumeAfterStop: Boolean = false
 ) : Serializable {
     val currentIndex: Int get() = entries.indexOfFirst { it.id == currentId }
     val current: QueueOccurrence? get() = entries.getOrNull(currentIndex)
+
+    fun append(trackId: String): TrackQueue {
+        val entry = QueueOccurrence(trackId)
+        return copy(entries = entries + entry, currentId = currentId ?: if (entries.isEmpty()) entry.id else null)
+    }
+
+    fun select(id: String): TrackQueue = if (entries.any { it.id == id })
+        copy(currentId = id, resumeAfterStop = false,
+            scheduledIds = scheduledIds.filter { scheduled -> entries.indexOfFirst { it.id == scheduled } > entries.indexOfFirst { it.id == id } }) else this
+
+    fun reorder(originalIds: List<String>, id: String, index: Int): TrackQueue {
+        if (entries.map { it.id } != originalIds || entries.none { it.id == id }) return this
+        val reordered = entries.filterNot { it.id == id }.toMutableList()
+        reordered.add(index.coerceIn(0, reordered.size), entries.first { it.id == id })
+        return copy(entries = reordered, scheduledIds = emptyList())
+    }
+
+    fun remove(id: String, available: (String) -> Boolean): TrackQueue {
+        val index = entries.indexOfFirst { it.id == id }
+        if (index < 0) return this
+        val next = if (id == currentId) entries.drop(index + 1).firstOrNull { available(it.trackId) }?.id else currentId
+        return copy(entries = entries.filterNot { it.id == id }, currentId = next,
+            stopAfterId = stopAfterId?.takeIf { marker -> marker != id && entries.any { it.id == marker && available(it.trackId) } }, scheduledIds = scheduledIds - id,
+            resumeAfterStop = if (id == currentId) false else resumeAfterStop)
+    }
+
+    fun scheduleOccurrence(id: String, stopAfter: Boolean): TrackQueue {
+        val occurrence = entries.firstOrNull { it.id == id } ?: return this
+        if (id == currentId) return if (stopAfter) copy(stopAfterId = id) else this
+        val reordered = entries.filterNot { it.id == id }.toMutableList()
+        val index = reordered.indexOfFirst { it.id == currentId } + 1
+        reordered.add(index, occurrence)
+        return copy(entries = reordered, currentId = currentId ?: id,
+            stopAfterId = if (stopAfter) id else stopAfterId,
+            scheduledIds = if (currentId == null) emptyList() else listOf(id) + (scheduledIds - id))
+    }
+
+    fun resume(available: (String) -> Boolean): QueueCompletion {
+        if (!resumeAfterStop) return QueueCompletion(this, current?.let { available(it.trackId) } == true)
+        val next = step(1, available)
+        return QueueCompletion(next, next.currentId != currentId)
+    }
 
     fun schedule(trackId: String, stopAfter: Boolean = false): TrackQueue {
         val index = currentIndex
@@ -32,12 +75,12 @@ internal data class TrackQueue(
         // A marker on an unavailable occurrence must not migrate to another occurrence.
         val marker = stopAfterId?.takeIf { id -> entries.any { it.id == id && available(it.trackId) } }
         if (next == null) return copy(stopAfterId = marker)
-        return copy(currentId = entries[next].id, stopAfterId = marker,
+        return copy(currentId = entries[next].id, stopAfterId = marker, resumeAfterStop = false,
             scheduledIds = scheduledIds.filter { id -> entries.indexOfFirst { it.id == id } > next })
     }
 
     fun complete(repeat: Int, available: (String) -> Boolean): QueueCompletion {
-        if (currentId != null && currentId == stopAfterId) return QueueCompletion(copy(stopAfterId = null), false)
+        if (currentId != null && currentId == stopAfterId) return QueueCompletion(copy(stopAfterId = null, resumeAfterStop = true), false)
         // Explicit next requests take precedence over repeat-one until consumed.
         if (repeat == 1 && scheduledIds.isEmpty()) return QueueCompletion(this, true)
         val next = step(1, available)
