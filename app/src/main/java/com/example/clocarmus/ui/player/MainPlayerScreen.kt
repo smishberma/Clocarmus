@@ -397,7 +397,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
                                 grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
                             AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
-                                grid, 105f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
+                                grid, 141f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
                                 shuffle = !shuffle
                                 val head = queue.entries.take(queue.currentIndex + 1)
                                 val tail = queue.entries.drop(queue.currentIndex + 1)
@@ -410,9 +410,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 2 -> R.drawable.player_repeat_active
                                 else -> R.drawable.player_repeat_inactive
                             }, grid, 846f, 230f, 78.3f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
-                            AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 105f, 409f, 90f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
+                            AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 409f, 90f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
                             AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 846f, 409f, 90f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
-                            AssetButton("Queues", R.drawable.player_queue_button, grid, 105f, 624f, 67.5f,
+                            AssetButton("Queues", R.drawable.player_queue_button, grid, 141f, 624f, 67.5f,
                                 opacity = controlOpacity, enabled = false) {}
                             AssetButton("Track info", R.drawable.player_info_icon, grid, 846f, 612f, 67.5f,
                                 opacity = controlOpacity, enabled = selectedTrackId != null) {
@@ -460,7 +460,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         }, onClose = closeCollections)
                     AssetButton("Previous track", R.drawable.player_skip_back, grid, 108f, 1136f, 74f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                     AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
-                        grid, 508f, 1137f, if (menuOpen) 123f else 110f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing; if (playing) selectedTrack?.let(recordDemoStart) }
+                        grid, 508f, 1137f, 123f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); playing = !playing; if (playing) selectedTrack?.let(recordDemoStart) }
                     AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
                 ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
