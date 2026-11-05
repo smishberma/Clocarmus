@@ -208,7 +208,7 @@ The visual/demo flow is implemented against the updated playlist mockups, retain
 - Favorites is populated through the main-player Manage playlists popup specified below and sorts newest favorited first.
 - Recently added contains the 50 most recently imported tracks, newest first, whether imported individually or as part of an album. Unchanged rescans/reconnections and identity-preserving moves do not reset import time.
 - Recently played contains the 50 most recently played distinct track identities, newest first. Record when playback actually starts; replay moves that track to the top without duplicating it. Failed/unavailable playback and paused restoration do not count. This replaces both the previous 100-track requirement and the interim 20-track proposal.
-- Long-press a Favorites track to offer Remove from Favorites. Long-press a custom-playlist track to offer Remove from playlist and Reorder. Do not offer manual removal or manual reordering for recent lists. Favorites retains its timestamp ordering rather than manual ordering.
+- Long-press a Favorites track to offer Track options above Remove from Favorites. Long-press a custom-playlist track to offer Track options above Remove from playlist, retaining Reorder. Track options opens the shared nested popup specified below. Do not offer manual removal or manual reordering for recent lists. Favorites retains its timestamp ordering rather than manual ordering.
 - New custom-playlist tracks append at the bottom; duplicate membership remains disallowed. Reorder enters an editing mode with drag handles and a Done button. Creating, renaming, removing, and reordering cancel any pending automatic return so editing cannot be interrupted.
 - Empty detail messages: “No Favorites yet” for Favorites, “Empty” for Recently added and Recently played, and “Empty playlist” for custom playlists. All use centered bold gray text, with the actual playlist name above. Favorites follows `design/017-playlists-user-favorites-empty.png`, including the gray heart above its message (the mockup’s placeholder name is replaced by Favorites). For empty custom playlists, follow `design/016-playlists-user-custom-playlist-empty.png`: center the bold gray message in the left pane beneath the playlist heading, with no search, plus button, or scrollbar. Keep clock and transport controls available.
 
@@ -346,6 +346,48 @@ This uses an explicit in-memory selected-source tree, shared demo playback, and 
 - Tapping an audio search result queues all matching audio results in displayed order, including matches from multiple descendant directories. Folder results never become queue entries. This search-only exception is distinct from direct-directory playback.
 - Search typing retains the existing cancellation of a pending inactivity return. These rules remain provisional until the dedicated app-wide search interview.
 
+### Track Options from long-press
+
+This feature remains planned. Use `design/030-long-press-main.png` for the normal popup and `design/031-long-press-main-button-pressed.png` for pressed styling. Hide the underlying track list and its heading while the popup is foregrounded; prevent interaction with hidden rows. Retain the clock, volume, and bottom transport controls. Show the target track title and Artist - Album subtitle in the popup, independent of the currently playing track.
+
+#### Entry points and popup navigation
+
+- Support long-press on track rows in All Tracks, artist/album/genre track browsers, search results, Favorites, recent lists, custom playlists, and audio-file rows in Folders. Do not add this action to artist, album, genre, directory, or playlist-name rows. Existing playlist-name Rename/Remove behavior remains unchanged.
+- In Favorites and custom playlists, retain the existing track action popup and all previous entries. Add Track options above Remove from Favorites or Remove from playlist; retain Reorder for custom playlists. Selecting Track options opens the new popup as a nested level.
+- Other eligible track lists open Track Options directly. Recognizing a long-press must not also fire the row's normal play action or replace the active queue.
+- Capture a stable target track ID. Playback advancement does not retarget or dismiss this track-specific flow; the header continues to identify the long-pressed track.
+- Close, on-screen Back, and Android Back dismiss one popup level. Blank-space taps leave the popup open. Restore the originating list's query, scroll, and selection when leaving the popup flow.
+- Cancel pending browsing-return timing on entry, including nested dialogs; no popup can time out. Merely closing a popup does not re-arm the timer; a later normal track selection follows existing behavior.
+- A successful scheduling action shows its confirmation toast and closes the popup stack back to the originating list. Scheduling changes do not navigate to the main player or disturb the current track's playback position.
+
+#### Add/remove playlist membership
+
+- The mockup's Save to playlist action opens the existing track-collections UI for the long-pressed track, supporting immediate add/remove to Favorites and custom playlists. Preserve the mockup label while documenting its bidirectional membership behavior.
+- Opening this child popup must not start the target track or change the currently selected/playing track. Close/Back returns to Track Options rather than the main player.
+- Reuse existing checkboxes, colors, sorting, scrolling, creation/name validation, and immediate persistence. Creating a playlist here automatically includes the fixed target track and returns with that playlist checked.
+- This is an explicit exception to the main-player collections popup's close-on-playing-track-change rule: the long-press flow and its creation prompt retain their captured target when playback advances. The main-player entry retains its existing behavior.
+- Playlist edits never rewrite the active queue. If the captured library track no longer exists, cancel actions requiring it and show an unavailable-target message rather than editing a different track.
+
+#### Play next
+
+- Schedule the target directly after the current queue occurrence, overriding the next choice under shuffle without turning shuffle off. After the requested occurrence, resume the remaining queue's established order.
+- If that track already has an upcoming occurrence, move its earliest occurrence in effective playback order into the next slot. Otherwise insert a new occurrence. Do not move the currently playing occurrence or restart it when the target is the current track; use an upcoming occurrence or insert one.
+- Latest request is next: choosing A and then B before advancement yields current > B > A > the remaining queue. Preserve relative ordering of untouched occurrences.
+- While paused, schedule without starting playback. With no current track, make the requested song first in the queue and remain paused.
+- Show a confirmation toast only after successful scheduling, such as “Will play next”.
+
+#### Stop after this song
+
+- Apply the same next-track scheduling operation, then mark that specific scheduled occurrence to stop playback after it completes. The target is the long-pressed song, not implicitly the currently playing song.
+- Maintain one stop marker at a time; a new Stop after this song request replaces the previous marker. Ordinary Play next requests leave the marker attached to its existing occurrence, even if that occurrence moves later.
+- At marked completion, stop automatic playback without clearing the remaining queue. The stop overrides repeat at that completion; retain the user's shuffle/repeat settings for later use. Treat the stop marker as one-shot and consume it after it takes effect.
+- Show a confirmation toast only after scheduling and marking succeeds, such as “Will stop after this song”.
+
+#### Deferred actions
+
+- Display Add to queue, Remove from queue, and Track info as disabled until their respective features are implemented. Do not show success toasts for disabled actions or simulate changes.
+- Future Add to queue/Remove from queue operations will show confirmation toasts after actual success. Their detailed queue semantics and the Track info tag popup remain deferred to later interviews.
+
 ### Sorting and metadata
 
 - All Tracks and song search results: alphabetical by title.
@@ -384,7 +426,7 @@ Keep all data on the device:
 - Track genre memberships: original display values and normalized matching keys, supporting multiple explicit values per track without duplicate membership.
 - Playlist and ordered playlist membership, with unique track membership per playlist.
 - Favorites with membership timestamps, and distinct-track recent playback-start timestamps.
-- Playback snapshot: queue, selected track/index, position, shuffle order, repeat mode.
+- Playback snapshot: queue with stable occurrence IDs (distinct from track IDs), selected occurrence/index, position, shuffle order, repeat mode; extend with explicit next-track scheduling order and the optional stop-after occurrence marker when Track Options scheduling is implemented. Restore paused as before.
 - Preferences: onboarding state, appearance, clock/date formats, source configuration.
 - Bounded local diagnostic events.
 
@@ -456,6 +498,8 @@ Before committing to implementations, verify current official documentation for 
 
 - Add the Folders browser with selected-source virtual root, directory listing, supplied row icons, scrolling parent navigation, natural name ordering, relative-path recursive search, restored directory state, and disconnected-source recovery. Keep source boundaries explicit.
 
+- Add shared Track Options entry to eligible track lists, preserving Favorites/custom-playlist context menus. Reuse track collections with an explicit fixed target and return destination; keep deferred actions disabled and cancel automatic return throughout the popup stack.
+
 ### Phase 4 — Playback integration and lifecycle
 
 - Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
@@ -474,6 +518,8 @@ Before committing to implementations, verify current official documentation for 
 - Connect Folders file selection to direct-directory queue snapshots and recursive-search selection to matching-result snapshots, preserving shuffle and the existing inactivity return.
 
 - Replace shared slider tap/absolute-coordinate gestures with start-target validation and relative horizontal dragging. Separate seek preview/commit/cancel from continuous volume updates, retaining accessibility actions, hardware controls, and inactivity observation.
+
+- Implement occurrence-aware Play next and Stop after this song scheduling, preserving the remaining shuffle order, paused state, and single stop marker. Move existing upcoming occurrences instead of duplicating them; add success toasts and return to the source list.
 
 ### Phase 5 — Diagnostics and delivery
 
@@ -586,6 +632,17 @@ Before committing to implementations, verify current official documentation for 
 - Additional fingers cannot retarget the gesture. Losing the initiating pointer cancels safely; touch activity still participates in normal inactivity handling.
 - Accessibility progress adjustments, hardware volume keys, and +/-10-second controls remain available. Existing popup coverage still prevents touches reaching a hidden seek bar.
 
+### Track Options acceptance
+
+- Verify eligible track rows across browsers and search, including Folders audio rows. Long-press never starts playback; non-track rows keep their previous actions. Favorites/custom playlists retain their existing menus with Track options before removal.
+- Match normal/pressed references 030–031, hide the underlying track list, and block hidden-row input while retaining the clock/volume/transport controls. Target metadata remains fixed as playback advances.
+- Verify popup nesting, one-level Close/Back, ignored blank taps, restored source-list state, and cancellation of automatic return. Scheduling success returns directly to the source list with a confirmation toast.
+- Membership edits and creation affect only the fixed target and persist without altering playback. Closing collections returns to Track Options. Playback advancement leaves this nested flow intact while the main-player collections entry still closes on track change.
+- Play next moves the earliest upcoming occurrence or inserts when absent; repeated A then B requests yield B then A. Verify shuffle stays enabled and untouched queue order is preserved, including repeated track identities and targeting the current track.
+- Paused scheduling stays paused; no-current-track scheduling creates a paused first occurrence. Neither operation restarts the current song or changes its position.
+- Stop after this song attaches one marker to the scheduled occurrence, replaces only the previous marker, survives other Play next requests, stops at marked completion despite repeat, and retains remaining queue content. Verify paused restoration of scheduling state.
+- Deferred Add to queue, Remove from queue, and Track info are disabled and never emit false success notifications.
+
 ### AVD acceptance
 
 - Install APK and operate without network or Google Play Services on API 23 and a modern Android image.
@@ -602,6 +659,8 @@ Actual USB/SD detach/reinsert, real sleep/ignition cycles, steering-wheel/media/
 ## 8. Assumptions, exclusions, and open risks
 
 ### Explicit assumptions/defaults
+
+- Track Options implementation defaults: use “Save to playlist” as shown in reference 030 for the add/remove action; toast wording may follow the examples above. If a marked occurrence is removed, skipped as unplayable, or its queue is replaced, clear its stale stop marker rather than attaching it to a different occurrence. Playback resumption after a consumed stop and additional queue-management edge cases should be finalized with the deferred queue feature.
 
 - Albums implementation defaults to validate with real metadata: missing/invalid disc number is disc 1; missing track number displays `--`; unknown duration displays `--:--`; ties use title then stable track ID. For conflicting album years, display the most frequent known year (earliest on a tie). These are defaults, not separately confirmed interview decisions.
 - Artist-list album counts retain the prior distinct-title rule; artist album rows use the new title + Album Artist identity to avoid merging unrelated albums. Revisit the count rule if same-title albums with different Album Artists make this distinction confusing.
