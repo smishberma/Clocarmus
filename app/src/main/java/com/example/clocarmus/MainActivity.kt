@@ -26,6 +26,7 @@ import com.example.clocarmus.ui.player.MainPlayerScreen
 import com.example.clocarmus.ui.theme.ClocarmusTheme
 
 class MainActivity : ComponentActivity() {
+    private var statusBarVisible = false
     private var platformLaunchReleased by mutableStateOf(Build.VERSION.SDK_INT < 31)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
         val startup = (application as ClocarmusApplication).startup
         val freshStartup = startup.claimBranding()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        statusBarVisible = getSharedPreferences("player-settings", MODE_PRIVATE).getBoolean("statusBar", false)
         hideSystemBars()
         // A stable visual fixture for AVD comparisons; unavailable in release builds.
         val referencePreview = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
                         foldersPreview = if (referencePreview) intent.getStringExtra("folders_preview")?.takeIf { it in setOf("folders", "folder-directory") } else null,
                         collectionsPreview = if (referencePreview) intent.getStringExtra("collections_preview")?.takeIf { it in setOf("collections-favorites", "collections-empty", "collections-custom", "collections-member") } else null,
                         playlistsPreview = if (referencePreview) intent.getStringExtra("playlists_preview")?.takeIf { it in setOf("playlists-empty", "playlists", "playlist-favorites", "playlist-added", "playlist-played", "playlist-custom", "playlist-custom-empty", "playlist-favorites-empty", "playlist-added-empty", "playlist-played-empty") } else null,
+                        settingsPreview = if (referencePreview) intent.getStringExtra("settings_preview")?.takeIf { it in setOf("settings", "settings-scrolled", "settings-folders", "settings-background", "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix", "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam") } else null,
                         queuePreview = referencePreview && intent.getBooleanExtra("queue_preview", false),
                         initialPlaylists = ready?.value,
                         onPlaylistsChanged = startup::update,
@@ -109,9 +112,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun setStatusBarVisible(visible: Boolean) {
+        if (statusBarVisible != visible) { statusBarVisible = visible; hideSystemBars() }
+    }
+
     @Suppress("DEPRECATION")
     private fun hideSystemBars() {
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or
+        window.decorView.systemUiVisibility = (if (statusBarVisible) 0 else View.SYSTEM_UI_FLAG_FULLSCREEN) or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
             View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE

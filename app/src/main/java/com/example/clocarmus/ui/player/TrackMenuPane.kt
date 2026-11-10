@@ -220,7 +220,7 @@ internal fun BrowserPane(
 private val ColorScrollRail = Color(0xff494949)
 
 @Composable
-internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String, proportional: Boolean = false, top: Float = 312f) {
+internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String, proportional: Boolean = false, top: Float = 312f, showAlphabetIndicator: Boolean = true) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val railHeight = 708f * grid.scale
@@ -243,7 +243,7 @@ internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<
     Box(grid.place(908f, top, 48f, 708f)
         .semantics {
             contentDescription = "$searchName scrollbar"
-            stateDescription = fastScrollLetter(titles, fraction)
+            if (showAlphabetIndicator) stateDescription = fastScrollLetter(titles, fraction)
             progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
             setProgress { if (scrollable) { jump(it); true } else false }
         }
@@ -277,7 +277,7 @@ internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<
             Modifier.align(Alignment.TopCenter).offset(y = ((railHeight - pillHeight) * fraction).dp)
                 .size(pillWidth.dp, pillHeight.dp), contentScale = if (proportional) ContentScale.FillBounds else ContentScale.Fit)
     }
-    if (scrollable && (dragging || scroll.isScrollInProgress)) {
+    if (showAlphabetIndicator && scrollable && (dragging || scroll.isScrollInProgress)) {
         PlayerLabel(fastScrollLetter(titles, fraction),
             grid.place(806f, top + (708f - 88f) * fraction, 88f, 88f)
                 .clip(RoundedCornerShape(percent = 50)).background(ColorScrollRail),

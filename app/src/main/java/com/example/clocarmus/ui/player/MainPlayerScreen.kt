@@ -79,8 +79,29 @@ internal class PlayerGrid(width: Float, height: Float) {
 
 /** Visual player shell; transport state is a demo until the playback service is connected. */
 @Composable
-internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, queuePreview: Boolean = false, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
+internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, queuePreview: Boolean = false, settingsPreview: String? = null, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
     val context = LocalContext.current
+    val settingsPreferences = remember { context.getSharedPreferences("player-settings", Context.MODE_PRIVATE) }
+    var settings by remember {
+        val initial = if (referencePreview) PlayerSettings(sources = if (settingsPreview == "settings-folders") setOf("music") else setOf("music", "oriental", "mix")) else loadPlayerSettings(settingsPreferences)
+        mutableStateOf(initial.copy(clock = when (settingsPreview) {
+            "settings-clock-vertical" -> ClockStyle.VERTICAL
+            "settings-clock-lcd" -> ClockStyle.SEGMENTED
+            "settings-clock-dotmatrix" -> ClockStyle.DOT_MATRIX
+            else -> initial.clock
+        }, divider = when (settingsPreview) {
+            "settings-divider-dotted" -> DividerStyle.DOTTED
+            "settings-divider-squiggly" -> DividerStyle.SQUIGGLY
+            "settings-divider-beam" -> DividerStyle.BEAM
+            else -> initial.divider
+        }))
+    }
+    val updateSettings: (PlayerSettings) -> Unit = {
+        settings = it
+        if (!referencePreview) savePlayerSettings(settingsPreferences, it)
+    }
+    SideEffect { (context as? com.example.clocarmus.MainActivity)?.setStatusBarVisible(settings.statusBar) }
+    val settingsFolderTree = remember(settings.sources, settings.exclusions) { settings.folderTree(demoFolderTree) }
     val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
     var playlistLibrary by remember { mutableStateOf(if (collectionsPreview != null) collectionsFixture(collectionsPreview) else if (playlistsPreview != null) playlistFixture(playlistsPreview) else initialPlaylists ?: loadPlaylists(playlistPreferences)) }
     val updatePlaylists: (PlaylistLibrary) -> Unit = {
@@ -125,19 +146,15 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val fixture = referencePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || collectionsPreview != null || foldersPreview != null
     val savedSession = remember { if (fixture) null else loadDemoSession(sessionPreferences) }
     var playing by rememberSaveable { mutableStateOf(referencePreview) }
-    LaunchedEffect(Unit) {
-        // Even an Android-restored Activity bundle must not autoplay in a new process.
-        // Same-session recreation keeps its saved playing state.
-        if (freshStartup && !referencePreview) playing = false
-    }
     var position by rememberSaveable { mutableFloatStateOf(savedSession?.position ?: 113f) }
     var shuffle by rememberSaveable { mutableStateOf(savedSession?.shuffle ?: true) }
     var repeat by rememberSaveable { mutableIntStateOf(savedSession?.repeat ?: 0) }
-    var menuOpen by rememberSaveable { mutableStateOf(queuePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
+    var menuOpen by rememberSaveable { mutableStateOf(settingsPreview != null || queuePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
     var queueOpen by rememberSaveable { mutableStateOf(queuePreview) }
     val queueScroll = rememberScrollState()
     var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
     var browserStack by rememberSaveable { mutableStateOf(arrayListOf<BrowserDestination>().apply {
+        if (settingsPreview != null) add(BrowserDestination("settings"))
         if (foldersPreview != null) add(BrowserDestination("folders", directory = if (foldersPreview == "folder-directory") "music" else null))
         if (artistsPreview != null) {
             add(BrowserDestination("artists", artist = "Ripple"))
@@ -186,6 +203,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val visibleTracks = remember(trackQuery) { demoTracks.filter { it.title.contains(trackQuery, ignoreCase = true) } }
     LaunchedEffect(trackQuery) { trackScroll.scrollTo(0) }
     val available: (String) -> Boolean = { id -> playlistTracks.any { it.id == id && it.available } }
+    LaunchedEffect(Unit) {
+        // A fresh process follows autoplay (off by default); recreation retains transport state.
+        if (freshStartup && !referencePreview) playing = settings.autoplay && selectedTrack?.available == true
+    }
     val stepTrack: (Int) -> Unit = { direction ->
         queue = queue.step(direction, available)
         if (playing) queue.current?.trackId?.let { id -> playlistTracks.firstOrNull { it.id == id }?.let(recordDemoStart) }
@@ -271,7 +292,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }
 
     val sliderPointers = remember { SliderPointers() }
-    val inactivity = rememberMainPlayerInactivity(enabled = !menuOpen && dialog == null && !collectionsOpen && infoRequest == null && !referencePreview, pointers = sliderPointers)
+    val inactivity = rememberMainPlayerInactivity(enabled = !settings.disableFade && !menuOpen && dialog == null && !collectionsOpen && infoRequest == null && !referencePreview, pointers = sliderPointers)
     val controlOpacity = if (dialog == null && !collectionsOpen && infoRequest == null && !referencePreview) inactivity.opacity else 1f
 
     val closeOptions: () -> Unit = {
@@ -309,7 +330,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }
     val homeNavigation = remember { PlayerHomeNavigation { returnHome() } }
     CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation) {
-        Box(Modifier.fillMaxSize().background(Color.Black).observePlayerTouches(inactivity, sliderPointers)
+        Box(Modifier.fillMaxSize().background(settings.background.color).observePlayerTouches(inactivity, sliderPointers)
             .observeBrowsingTouches(browsingReturn).onPreviewKeyEvent { browsingReturn.interaction(); false }) {
             Row(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
@@ -345,11 +366,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                         menuOpen = false
                                     }
                                 }
-                                if (destination.page == "folders") {
+                                if (destination.page == "settings") {
+                                    SettingsPane(grid, settings, updateSettings, goBack, settingsPreview)
+                                } else if (destination.page == "folders") {
                                     FoldersPane(grid, destination.directory, foldersPreview, selectedTrackId, playing, browsingReturn,
                                         { searchOpen = it }, goBack,
                                         { directory -> browserStack = ArrayList(browserStack.dropLast(1) + BrowserDestination("folders", directory = directory)) },
-                                        selectTrack, onSourceLost = { sourceId ->
+                                        selectTrack, tree = settingsFolderTree, onSourceLost = { sourceId ->
                                             if (sourceId != null && selectedTrackId?.let { demoFolderTree.source(it)?.id } == sourceId) playing = false
                                         })
                                 } else if (destination.page.startsWith("genre-")) {
@@ -382,14 +405,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
                                 browsingReturn.interaction()
                                 if (it == "All tracks") tracksOpen = true
+                                else if (it == "Settings") { browsingReturn.cancel(); navigate(BrowserDestination("settings")) }
                                 else if (it == "Folders") navigate(BrowserDestination("folders"))
                                 else if (it == "Artists") navigate(BrowserDestination("artists"))
                                 else if (it == "Genres") navigate(BrowserDestination("genre-list"))
                                 else if (it == "Albums") navigate(BrowserDestination("album-list"))
                                 else if (it == "Playlists") navigate(BrowserDestination("playlist-list"))
                                 else {
-                                    // Settings and playlist editing must never inherit a pending return.
-                                    if (it == "Settings" || it == "Playlists") browsingReturn.cancel()
                                     dialog = it
                                 }
                             })
@@ -517,9 +539,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         } }
                     AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
-                ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight())
+                ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight(), settings)
             }
-            Box(Modifier.align(Alignment.Center).width(1.dp).fillMaxHeight().background(Color(0xffdddddd)))
+            PlayerDivider(settings.divider, Modifier.align(Alignment.Center))
         }
         BackHandler(enabled = optionsTarget != null || infoRequest != null, onBack = closeOptions)
     }
@@ -538,7 +560,6 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     dialog?.let { title ->
         AlertDialog(onDismissRequest = { dialog = null }, title = { Text(title) },
             text = { Text(when (title) {
-                "Settings" -> "Settings are not available yet."
                 else -> "Your music library is empty. $title browsing is not available yet."
             }) },
             confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } })
@@ -616,24 +637,28 @@ internal fun PlayerLabel(text: String, modifier: Modifier, size: Float, alignmen
 }
 
 @Composable
-private fun ClockPane(referencePreview: Boolean, modifier: Modifier) {
+private fun ClockPane(referencePreview: Boolean, modifier: Modifier, settings: PlayerSettings) {
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(referencePreview) {
         if (!referencePreview) while (true) { now = Date(); delay(1000) }
     }
     val day = if (referencePreview) "Friday" else SimpleDateFormat("EEEE", Locale.ENGLISH).format(now)
-    val time = if (referencePreview) "10:30" else SimpleDateFormat("h:mm", Locale.ENGLISH).format(now)
-    val period = if (referencePreview) "AM" else SimpleDateFormat("a", Locale.ENGLISH).format(now)
+    val time = if (referencePreview) "10:30" else SimpleDateFormat(if (settings.twentyFourHour) "HH:mm" else "h:mm", Locale.ENGLISH).format(now)
+    val period = if (settings.twentyFourHour) "" else if (referencePreview) "AM" else SimpleDateFormat("a", Locale.ENGLISH).format(now)
     val date = if (referencePreview) "30-01-2026" else SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH).format(now)
     BoxWithConstraints(modifier) {
         val grid = PlayerGrid(maxWidth.value, maxHeight.value)
+        if (settings.clock != ClockStyle.DEFAULT) {
+            StyledClock(day, time, period, date, settings.clock, grid)
+            return@BoxWithConstraints
+        }
         PlayerLabel(day, grid.place(15f, 311f, 900f, 120f), 100f * grid.scale)
         BoxWithConstraints(grid.place(90f, 495f, 850f, 248f), contentAlignment = Alignment.Center) {
             val measurer = rememberTextMeasurer()
             val density = LocalDensity.current
             val mainStyle = playerTextStyle(230f * grid.scale)
             val periodStyle = playerTextStyle(62f * grid.scale, bold = true)
-            val gap = (24f * grid.scale).dp
+            val gap = ((if (period.isEmpty()) 0f else 24f) * grid.scale).dp
             val naturalWidth = measurer.measure(time, mainStyle).size.width +
                 measurer.measure(period, periodStyle).size.width + with(density) { gap.toPx() }
             val availableWidth = with(density) { maxWidth.toPx() }

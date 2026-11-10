@@ -6,7 +6,7 @@ The app is intended to run on **Android 6.0 (API 23) and above**, install throug
 
 ## Current status
 
-**Main player, menu, All Tracks, Artists, Albums, Playlists, Genres, Folders, Splash, and Track Options demo flows are implemented.** The app uses bundled Inter fonts, supplied vectors, a persistent live clock, full-screen landscape layout, media-volume controls, and local transport/shuffle/repeat state. Browsers support selection and retained navigation state, with search in the track, artist, album, genre, and folder browsers. Playlists supports built-in lists, custom playlist management, membership editing, and drag reordering. Track Options adds fixed-target membership editing and occurrence-aware next/stop scheduling. Normal launch restores the demo queue paused. Real library discovery, audio playback, onboarding, and Settings remain pending.
+**Main player, menu, All Tracks, Artists, Albums, Playlists, Genres, Folders, Splash, Settings, and Track Options demo flows are implemented.** The app uses bundled Inter fonts, supplied vectors, a persistent live clock, full-screen landscape layout, media-volume controls, and local transport/shuffle/repeat state. Browsers support selection and retained navigation state, with search in the track, artist, album, genre, and folder browsers. Playlists supports built-in lists, custom playlist management, membership editing, and drag reordering. Track Options adds fixed-target membership editing and occurrence-aware next/stop scheduling. Normal launch restores the demo queue paused unless autoplay is enabled in Settings. Real library discovery, audio playback, and onboarding remain pending.
 
 The first release will be a personal-use APK validated on an Android Virtual Device (AVD) with 100 tracks. Physical head-unit testing will follow. There will be no artificial library import limit, but larger-library performance is not yet validated.
 
@@ -22,7 +22,7 @@ See [PLAN.md](PLAN.md) for agreed requirements, implementation phases, acceptanc
 - Browsing and settings replace the left-side content while the clock and playback controls remain available.
 - After selecting a song, return to the main player after 15 seconds of inactivity. Editing playlists, typing in search, or entering settings cancels that return.
 - Keep the screen awake while the app is visible.
-- Black, dark gray, dark blue, and dark burgundy background presets, with Inter typography and high-contrast controls.
+- Default (black), Indigo, Coffee, and Grey background presets, with Inter typography and high-contrast controls.
 
 ### Local music library
 
@@ -156,7 +156,7 @@ python3 scripts/compare-main-player.py --screen menu --install
 
 This uses `design/02-menu-screen.png`, the same proportional fitting and fixed clock fixture as the player comparison, and the supplied vectors in `design/assets/menu-page/`. Artifacts are saved under `build/visual-comparison/menu/`. Normal launch still opens the player; the menu fixture requires a debug build and `reference_preview=true` with `menu_preview=true`.
 
-The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, Albums opens the album browser, Playlists opens the playlist overview, and Genres opens its five-screen browsing flow; Folders and Settings remain placeholders.
+The menu shares media volume, transport state, and the persistent clock with the player. Player fading resets when the menu opens and restarts on returning. All Tracks opens the demo track menu, Artists opens the artist browser, Albums opens the album browser, Playlists opens the playlist overview, and Genres opens its five-screen browsing flow; Folders opens its demo browser and Settings opens the settings flow.
 
 Regenerate only the menu vectors with `python3 scripts/import-player-assets.py --group menu-page`. The importer also accepts `--group main-player` and `--group shared`; complex SVG filters are rejected by Android's vector converter and require separate asset preparation.
 
@@ -436,3 +436,24 @@ python3 scripts/import-player-assets.py --group queue-screen --asset handle
 Comparison artifacts and local interaction checks are under `build/visual-comparison/queue/`. This remains simulated demo playback; real audio/service and physical-head-unit validation are pending.
 
 Validation: `assembleDebug`, all 104 unit tests, and `lintDebug` pass (0 errors, 39 warnings). API 23 (`headunit_a6`, 1280×720) checks cover exact duplicate selection, current-entry scheduling restrictions, handle reordering with preserved modes/position/marker, paused restart, exact removal while playing/paused, unavailable-entry skipping, end removal without wrapping, empty-queue addition and contextual disabled actions, entry timeout, popup suspension/rearming, marked completion with Repeat all and explicit Play continuation, playback advancement during a drag, and navigation cancellation without committing. The build → install → capture/compare → adjust loop corrected immersive-layout entry scrolling; final comparison artifacts and interaction scripts are under `build/visual-comparison/queue/`. The scrollbar reflects the full demo queue rather than the shorter reference fixture; shared chrome remains unchanged. Original emulator preferences were restored after tests. Real audio/service and physical-head-unit validation remain pending.
+
+
+### Settings
+
+Menu > Settings implements references 035–039 using the supplied settings SVGs. The existing Back button (including hold to return home), media volume, transport controls, and persistent clock remain shared with other screens. The list scrolls through Library, Playback, Display, and Appearance; returning from a detail preserves its scroll position. Entering Settings cancels the pending browsing return.
+
+Preferences save immediately across launches: autoplay (off by default), status bar visibility, disabled main-player fading, Default/Indigo/Coffee/Grey background, Default/Vertical/LCD/Dot matrix clock, 24-hour time, and Default/Hidden/Dotted/Squiggly/Beam divider styles. Clock references 043–045 define the stacked Vertical face and the supplied alarm clock (LCD) and Register (Dot matrix) fonts for all clock text. Autoplay currently advances demo transport state; real audio playback remains pending.
+
+Manage folders adds/removes the existing demo sources, confirms removal/reset, and supports recursive subfolder exclusions in the Folders browser. This does not change other demo metadata collections or delete files. Add folder identifies the demo scope explicitly; Manual rescan explains that real storage discovery is not connected. Android storage grants and scanning remain part of the planned library implementation.
+
+Debug visual fixtures are available through `--es settings_preview settings`, `settings-scrolled`, `settings-folders`, `settings-background`, or `settings-clock`, alongside `--ez reference_preview true`. They use isolated default preferences and never save settings. Capture comparisons with `python3 scripts/compare-main-player.py --screen settings --install` (substitute any of those fixture names). Regenerate settings vectors with `python3 scripts/import-player-assets.py --group settings-screen`.
+
+Validation: `assembleDebug`, all 107 unit tests, and `lintDebug` pass (0 errors, 40 warnings). API 23 interaction checks cover menu entry, nested Back, held Back, preserved transport controls, folder removal cancellation/reset/re-add, exclusions, all clock faces, 24-hour time, backgrounds/divider, persisted toggles, and opt-in demo autoplay after a process restart. Original emulator preferences were restored. This emulator intermittently clears unchanged content during redraws; the same behavior was reproduced with an independently built, unchanged HEAD APK, so visual comparisons for affected captures are incomplete.
+
+Divider references 040–042 add Dotted, Squiggly, and Beam using the supplied SVGs. The saved style applies to the shared player/browser/settings split, with the original Default and Hidden behavior retained. Divider strokes are outlined during vector import so the dotted dash pattern survives Android conversion. Debug comparison fixtures: `settings-divider-dotted`, `settings-divider-squiggly`, and `settings-divider-beam`.
+
+Divider validation: `assembleDebug`, all 107 unit tests, and `lintDebug` pass (0 errors, 42 warnings). API 23 captures verify the supplied dotted, squiggly, and beam divider shapes. Interaction checks verify saving each of the five choices and a checked Beam radio after process restart. Original emulator preferences were restored byte for byte.
+
+Clock settings now follow references 043–045: the 24-hour switch appears above four larger style choices, and Segmented is labeled LCD. The existing `SEGMENTED` preference key remains compatible. LCD uses the bundled `alarm clock.ttf` and an abbreviated uppercase weekday; Dot matrix uses `REGISTER.TTF` with the full weekday. Both typefaces apply to the time, AM/PM, weekday, and date. Vertical aligns stacked hours/minutes and moves the weekday/date around them. Shared transport, Back, volume, and divider controls remain unchanged. New debug fixtures: `settings-clock-vertical`, `settings-clock-lcd`, and `settings-clock-dotmatrix`.
+
+Clock redesign validation: `assembleDebug`, all 107 unit tests, and `lintDebug` pass (0 errors, 42 warnings). API 23 checks cover selection/saving and 12/24-hour mode for every face, restoration of the existing `SEGMENTED` key as LCD after process restart, retained settings scroll on Back, and held Back to return home. Updated comparison captures are under `build/visual-comparison/settings-clock-{vertical,lcd,dotmatrix}/`; the previously documented emulator redraw limitation still affects some shared content. Original emulator preferences were restored byte for byte.

@@ -1,6 +1,6 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, the main-player Queues/Track info button redesign, and playback Queue management are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, other browsing screens, and settings remain planned.
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, the main-player Queues/Track info button redesign, playback Queue management, and the Settings demo flow (035–045) are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Real library data, audio playback, onboarding, and remaining platform/library integrations remain planned.
 
 ## 1. Product and constraints
 
@@ -23,7 +23,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Right side: persistent day, digital clock, and date during normal app use, including browsing/settings. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
-- Preset backgrounds only: black, dark gray, dark blue, dark burgundy. Preserve readable white controls/text. No image backgrounds.
+- Preset backgrounds only: Default (black), Indigo, Coffee, Grey (reference 038). Preserve readable white controls/text. No image backgrounds.
 - Configurable time and date formats. Default assumption: mockup-style 12-hour time and DD-MM-YYYY date.
 - English-only interface; preserve music metadata in its original language.
 
