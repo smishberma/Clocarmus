@@ -236,8 +236,8 @@ The visual/demo flow is implemented against the updated playlist mockups, retain
 - Follow the updated detail mockups: no plus button in any detail view. Show track title and Artist - Album subtitle with the existing selected/playing indicator.
 - Favorites is populated through the main-player Manage playlists popup specified below and sorts newest favorited first.
 - Recently added contains the 50 most recently imported tracks, newest first, whether imported individually or as part of an album. Unchanged rescans/reconnections and identity-preserving moves do not reset import time.
-- Recently played contains the 50 most recently played distinct track identities, newest first. Record when playback actually starts; replay moves that track to the top without duplicating it. Failed/unavailable playback and paused restoration do not count. This replaces both the previous 100-track requirement and the interim 20-track proposal.
-- Long-press a Favorites track to offer Track options above Remove from Favorites. Long-press a custom-playlist track to offer Track options above Remove from playlist, retaining Reorder. Track options opens the shared nested popup specified below. Do not offer manual removal or manual reordering for recent lists. Favorites retains its timestamp ordering rather than manual ordering.
+- Recently played contains the 50 most recently played distinct track identities, newest first. Record actual new playback starts, including explicit replays and each Repeat One iteration; move that track to the top without duplication. Ordinary pause/resume, seeking within a track, failed/unavailable playback, and paused restoration do not count. This replaces both the previous 100-track requirement and the interim 20-track proposal.
+- Long-press a Favorites track to offer Track options above Remove from Favorites. Long-press a custom-playlist track to offer Track options above Remove from playlist, retaining Reorder. Track options opens the shared nested popup specified below. Do not offer clearing, manual removal, or manual reordering for either recent list. Favorites retains its timestamp ordering rather than manual ordering.
 - New custom-playlist tracks append at the bottom; duplicate membership remains disallowed. Reorder enters an editing mode with drag handles and a Done button. Creating, renaming, removing, and reordering cancel any pending automatic return so editing cannot be interrupted.
 - Empty detail messages: “No Favorites yet” for Favorites, “Empty” for Recently added and Recently played, and “Empty playlist” for custom playlists. All use centered bold gray text, with the actual playlist name above. Favorites follows `design/017-playlists-user-favorites-empty.png`, including the gray heart above its message (the mockup’s placeholder name is replaced by Favorites). For empty custom playlists, follow `design/016-playlists-user-custom-playlist-empty.png`: center the bold gray message in the left pane beneath the playlist heading, with no search, plus button, or scrollbar. Keep clock and transport controls available.
 
@@ -455,7 +455,7 @@ Reference: `design/034-queues-screen.png`. Accessible from the main-player Queue
 - For the current occurrence, disable Play next. Stop after this song marks its completion without moving or duplicating it.
 - Retain the existing track-based scheduling behavior when entered from other browsers (move earliest upcoming matching occurrence, otherwise insert).
 - Keep one stop marker attached to its occurrence through reordering. Removing the marked occurrence clears it. Marked completion stops automatic playback despite repeat and consumes the marker while preserving the remaining queue.
-- After that stop, explicit Play continues with the next remaining entry. If none remains, there is no next entry to start; do not invent or duplicate a track.
+- After that stop, explicit Play continues with the next playable entry. The 2026-11-09 lifecycle interview extends boundary behavior: wrap only with Repeat All, generating a fresh session when Shuffle is enabled; otherwise remain stopped. Do not invent or duplicate an entry. This boundary extension is not yet implemented/validated in the demo.
 
 Implementation: `QueuePane` uses the shared chrome and supplied `queue-screen/handle.svg`. Stable occurrence IDs own selection, drag previews, exact scheduling, and removal. Preview drops validate against the live occurrence sequence, retain playback advances, and cancel after queue replacement/membership changes. The entry scroll recalculates when immersive layout changes the actual row size. The existing snapshot now also retains continuation after a consumed stop; no dependency or minimum-SDK changes were introduced.
 
@@ -492,30 +492,70 @@ Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint err
 
 ## 3. Library, playlists, and persistence
 
-### Sources and discovery
+### Sources and discovery — functionality interview complete, implementation pending
 
-Support music from internal storage and accessible USB/SD storage. Users select folders once; scan recursively, refresh when reconnection is detected, and provide manual rescan. Keep scanning off the UI thread and show progress without preventing playback.
+Agreed on 2026-11-07. The following rules govern the planned real library; existing demo browsers and persistence do not implement them yet.
 
-Preserve disconnected entries as unavailable, including favorites and playlist membership. Reconnection never starts playback. Explicit source removal requires confirmation and removes affected library and playlist entries without deleting files. Tracks still covered by another selected source must remain available; overlapping folder selection must not import the same location twice.
+#### Source scope and exclusions
 
-Recognize renamed/moved files using background content inspection, preserving their app identity and references. Identical copies at distinct locations remain distinct entries. Never merge or arbitrarily reassign ambiguous duplicate copies: unique matching rules and ambiguous-case handling need validation in the discovery phase. Cache identity work rather than rereading every unchanged file on every launch. An incomplete/failed scan must not be interpreted as successful deletion of all missing files.
+- Index only folders explicitly selected by the user on internal storage or accessible USB/SD storage. Include subfolders recursively; do not automatically import unrelated device audio.
+- Support excluded subfolders within each selected source. Exclusions apply to that source only: a location excluded from one source remains eligible if another selected source includes it without exclusion.
+- Overlapping selected folders must index the same physical location only once. Identical copies at different locations remain separate library entries.
+- Include supported audio regardless of duration, filename, or Android music classification. Source selection and exclusions determine membership; do not apply a short-track filter.
 
-### Playlists and recent lists
+#### Scanning and refresh
 
-- Create, rename, delete playlists; add/remove tracks and manually reorder entries.
-- Disallow duplicate track membership within one playlist.
-- Manage playlists checkboxes immediately update membership; no Save button or removal confirmation. The top-right toggle closes the popup and reveals the full main player.
-- Favorites are a built-in collection ordered newest favorited first, with a membership timestamp.
-- Recently added: 50 most recently imported tracks, newest first; reconnecting unchanged files does not reset import time.
-- Recently played: 50 most recently played distinct tracks, newest first, updated when playback actually starts. Replays move existing entries to the top; failed starts and paused restoration do not count.
-- No local playlist/favorites export/import in v1.
+- Run incremental background refresh on app startup and selected-drive reconnection. When supported, detected changes within selected folders also trigger refresh; combine bursts into one incremental refresh. Do not promise reliable live detection on every provider/device; manual rescan remains available.
+- Offer both Rescan this source and Rescan all sources. Both update existing records incrementally, preserving identity and memberships; neither is a destructive rebuild.
+- Keep all traversal, metadata reads, artwork work, and content inspection off the UI thread. Existing indexed music remains browsable and playback remains usable during refresh; startup must not wait for a complete scan.
+- During the first scan, publish completed imports progressively so tracks can be browsed and explicitly played before the scan finishes. Scanning never starts playback automatically.
+- Use one coordinated scan at a time. Combine repeated requests for a source already being scanned; queue newly requested sources. Implementation detail: do not lose a change reported after its directory was already visited—retain dirty state for a follow-up pass where needed.
+- Allow cancellation. Preserve completed imports/updates, mark the scan incomplete, and never mark unvisited files missing because of cancellation, failure, permission loss, or disconnection. Confirm absence only from successful traversal of the relevant accessible scope.
+- Report added, updated, confirmed-missing, and failed-file counts in an in-app summary, with failure details and an explicit incomplete/cancelled state. No scan-completion notification is requested.
+- Cache identity and metadata work instead of rereading every unchanged file on every refresh. Keep scan/reconciliation results versioned for stable queue snapshots and Genuine Shuffle's cached membership access.
+
+#### Availability, cleanup, and source removal
+
+- Disconnected-source tracks remain visible as unavailable, retaining favorites and playlist memberships. Playback skips unavailable queued entries under the existing finite-skip rule; disconnecting the drive containing the playing track pauses instead of advancing. Reconnection refreshes availability without starting playback.
+- If a completed scan confirms a file missing from an accessible source, retain its record as unavailable until explicitly removed. Preserve references for a confidently matched return. A failed/incomplete scan is never evidence that all missing files were deleted.
+- Lost folder permission preserves the source and records, marks it inaccessible, and offers Grant access again. Restored access triggers refresh, never playback.
+- Provide Remove unavailable tracks with a preview and confirmation. Despite its broad label, only files confirmed missing by completed scans qualify; exclude disconnected/permission-blocked sources and read failures without confirmed absence. Remove eligible library records and playlist/favorite references, never physical files. Revalidate eligibility before committing cleanup.
+- Explicit source removal and adding an exclusion require confirmation explaining the affected library and playlist/favorite entries. Remove entries no longer covered by any selected, non-excluding source; do not delete physical files. Tracks still covered elsewhere retain identity and references, with availability reflecting actual access.
+- If confirmed source removal or exclusion removes the currently playing track from the library, stop playback and clear that selection without automatically starting another song. This is distinct from temporary drive disconnection, which preserves restoration state. Tracks retained through another source are unaffected by the removal.
+- Undoing an exclusion or re-adding a removed source imports eligible files again. Deleted playlist/favorite memberships do not automatically return. Reconnecting an existing source instead restores its preserved records and memberships.
+
+#### Identity, metadata, and scan errors
+
+- Confidently identified moves/renames within selected sources preserve stable track identity, favorites, playlist memberships, and history. Use background content inspection and cached evidence; do not infer identity from matching titles alone.
+- If multiple identical copies make a relocation ambiguous, retain the old entry as unavailable and import the new location separately. Never guess which copy should inherit references. Matching details still require implementation validation.
+- Refresh externally edited tags at the same location while preserving identity and memberships. Moving and editing a file simultaneously may prevent confident identification; that limitation is accepted. This does not establish a rule for an unrelated file replacing the original at the same location.
+- Import otherwise supported tracks without tags or artwork. Use filename for missing title, Unknown artist/Unknown album, and local placeholder artwork; preserve the existing Unknown year rule. Store raw tags separately so Track info does not misrepresent display fallbacks as file metadata.
+- Continue scanning after individual unreadable/corrupt-file errors and record them in the summary. Keep already-known unreadable tracks as unavailable with cached metadata. Newly found files that cannot be identified as supported audio appear in failure details rather than as playable entries; ordinary unrelated non-audio files are simply outside the import scope.
+- Refresh displayed tags/artwork without restarting playback. Keep active queue membership and order stable; discoveries become eligible when the next queue/session snapshot is created. Removed/unavailable queued tracks follow the existing skip rules, and explicit source removal of the current track follows the stop rule above.
+
+### Playlists, favorites and recent lists — functionality interview complete, implementation pending
+
+Agreed on 2026-11-09. Existing demo interfaces remain applicable; transactional real-library storage and actual playback-start integration remain pending.
+
+- Custom playlists have unique track membership and user-controlled order. New additions append; playback queues may independently contain duplicate occurrences. Create, rename, delete, membership changes, and reorder preserve stable playlist identity except on deletion.
+- Trim surrounding whitespace from names; reject blank names, case-insensitive duplicates, and reserved names Favorites, Recently added, and Recently played. Rename preserves membership and order. Built-in collections cannot be renamed or deleted.
+- Removing an individual playlist entry or favorite is immediate and needs no confirmation. Deleting a custom playlist requires confirmation and removes its membership records, never files or the active playback queue.
+- Playlist edits/deletion leave an existing queue snapshot unchanged. A future shuffled Repeat All session uses updated membership when the source playlist exists. If that playlist was deleted, use the retained collection snapshot until another collection is selected; do not silently substitute the entire library or recreate the deleted playlist. Preserve that snapshot independently of temporary queue edits and exclude unavailable/removed library tracks under the existing library/playback rules. Recreating a playlist with the same name does not restore its former identity.
+- Keep one shared Favorites collection, ordered newest-favorited first. Removing and re-adding a favorite gives it a new timestamp and moves it to the top. Membership changes never affect playback.
+- Retained unavailable tracks can be added to or removed from custom playlists and Favorites. Availability restrictions on playback must not disable metadata-only membership management. These actions do not restore audio access.
+- Manage playlists checkboxes apply changes immediately without Save or membership-removal confirmation. Persist playlist/Favorites edits transactionally. If saving fails, retain the last successfully saved state and show an error rather than reporting success for a change that disappears on restart. Keep the UI responsive while saving; any pending presentation must resolve to committed state, not false success.
+- Recently added holds 50 distinct tracks, newest initial-import time first. Unchanged rescans, reconnections, and identity-preserving moves do not reset import time. Explicit deletion/re-import follows the library identity rules.
+- Recently played holds 50 distinct tracks, newest playback start first. Count actual new playback starts, including explicit replays and every Repeat One iteration, moving the track to the top without duplicates. Ordinary pause/resume, seeks within a track, failed starts, unavailable selections, and paused restoration do not count. Detect actual playback iterations rather than equating every playing-state callback with a new start.
+- Both recent lists are read-only: no Clear action, per-entry manual removal, or reordering. They update through import/playback events, the 50-track limit, or explicit removal of underlying library records. Disconnection alone preserves retained entries.
+- No local playlist/favorites export/import in v1. Keep existing overview-versus-player-popup creation behavior and membership UI/navigation rules.
 
 ### Logical data model
 
 Keep all data on the device:
 
-- Selected source: stable ID, granted folder reference, display name, access/scan status.
-- Track: stable app ID, source/location reference, availability, metadata, duration, artwork reference, file attributes/content identity, first-import timestamp.
+- Selected source: stable ID, granted folder reference, display name, access/scan status, and source-specific excluded subtree references. Track source coverage separately so overlapping sources share one location record.
+- Track: stable app ID, source/location reference, availability with reason (including source disconnected, access lost, confirmed missing, or unreadable), metadata, duration, artwork reference, file attributes/content identity, first-import timestamp, and scan evidence needed to distinguish confirmed absence from incomplete traversal.
+- Scan state: source/scope and membership version, progress, pending refresh/dirty state, successful traversal evidence, completion/cancellation status, and summary/failure details. Prevent stale scans from undoing source/exclusion changes.
 - Track genre memberships: original display values and normalized matching keys, supporting multiple explicit values per track without duplicate membership.
 - Playlist and ordered playlist membership, with unique track membership per playlist.
 - Favorites with membership timestamps, and distinct-track recent playback-start timestamps.
@@ -539,6 +579,133 @@ Validate MP3, M4A containing AAC, OPUS, FLAC, OGG Vorbis, and WAV using represen
 - Skip unavailable/unplayable queued entries with a brief message; stop when no playable entries remain. Avoid infinite skipping under repeat.
 - Removing the drive containing the actively playing track pauses instead of automatically advancing. Preserve its restoration state.
 - Boot UI launch is best-effort and never starts playback. Manual launch is acceptable on unsupported devices.
+
+### Playback and queue lifecycle — functionality interview complete, implementation pending
+
+Agreed on 2026-11-09. These rules specify real playback and supersede conflicting demo behavior or older queue wording. Existing UI/demo tests do not establish real-engine compliance. Persistence, restoration, and interruption details are specified in the completed interview section below.
+
+#### Starting playback and collection snapshots
+
+- Selecting an available track from a browser replaces the queue with a snapshot of that browser's displayed tracks and active search/filter scope, and immediately plays the chosen song. Replace existing playback without confirmation. Preserve the existing explicit Play all/Play album shuffle-off rules and collection-scope exceptions.
+- With Shuffle off, retain the full collection in displayed order, start at the selected track, and continue toward the end. Earlier entries remain accessible through Previous or Queue; they play automatically only after wrapping with Repeat All.
+- Selecting the currently playing song from a browser is a new playback request: rebuild the scoped queue and restart that song. With Shuffle on, apply the agreed user-selected-opening exception and shuffle the remainder.
+- Selecting a different Queue occurrence starts that exact occurrence from the beginning without rebuilding the queue. Tapping the current occurrence resumes if paused and otherwise leaves playback uninterrupted; completion/consumed-stop continuation follows the dedicated rules below rather than treating every stopped state as an ordinary pause.
+- Play with an empty queue leaves playback stopped and shows “Select a track to start playback.” Do not automatically select library music or reconstruct an old queue.
+
+#### Transport and boundary behavior
+
+- Previous restarts the current track when its position is more than three seconds; at three seconds or less, select the previous playable queue entry. Preserve playing/paused state.
+- Next immediately selects the next playable entry, overriding Repeat One, and preserves playing/paused state. Manual advancement consumes the skipped track under the Genuine Shuffle rules.
+- At the last entry, Next wraps only with Repeat All; otherwise stop at the end. At the first entry, Previous wraps only with Repeat All (when the three-second rule calls for a previous entry); otherwise restart that first track.
+- With Shuffle and Repeat All enabled, forward wrapping starts a fresh shuffle session. Backward wrapping uses the existing queue order and is an explicit navigation exception to automatic shuffle consumption. A paused boundary action must not start playback when background queue preparation finishes.
+- Natural completion with Repeat Off retains the queue and final track selection. Explicit Play restarts that final track from the beginning; choosing another Queue entry starts there instead. Distinguish this completed state from scheduled-stop continuation and ordinary pause.
+
+#### Queue edits and scheduling
+
+- Reordering, including moving the current occurrence, preserves current playback and position. Subsequent playback follows the current occurrence's new position in the edited order, including while Shuffle is enabled. Existing rules preventing stale shuffle/scheduling from undoing a manual reorder still apply.
+- Removing the current entry selects the next playable entry after it from the beginning, preserving playing/paused state. If none remains after it, stop and clear selection without wrapping, even with Repeat All. Other entries remain in the queue.
+- Add to queue appends a new occurrence, allows duplicates, and never starts playback. Adding to an empty queue selects the added track but remains paused. Queue changes do not modify the underlying collection.
+- Track-based Play next moves the earliest upcoming occurrence of that track directly after the current entry, or inserts one if none is ahead. Requests are newest-first: A then B gives current → B → A. Preserve paused state, Shuffle, and the relative order of untouched entries. Exact-occurrence Queue actions retain their existing targeting and current-entry restrictions.
+- Repeat All with Shuffle off repeats the edited queue, including manually added duplicates and excluding removed entries. Repeat All with Shuffle on builds the next session from the active collection's latest membership and generates a fresh order. Temporary queue additions, removals, and reordering affect only the current shuffle session; actual playlist/library edits affect the next collection snapshot. If the source playlist was deleted, use its retained collection snapshot until another collection is selected, as specified in the Playlists interview; do not substitute library-wide membership or carry temporary queue edits into that fallback.
+
+#### Repeat and scheduled stopping
+
+- Cycle the repeat control Off → Repeat All → Repeat One → Off. Default to Off on first use and remember subsequent choices.
+- Pending explicit Play next requests override Repeat One. Once those requests are consumed, Repeat One repeats the track reached last. Manual Next also overrides Repeat One.
+- Keep one Stop after marker attached to a specific occurrence. A new stop request replaces the marker; ordinary scheduling/reordering preserves it. At marked completion, stop even with repeat enabled, consume the marker, and retain the remaining queue and repeat/shuffle settings.
+- Remove the marker when its occurrence is removed or skipped as unplayable. Manually pressing Next before the marked current song finishes clears its marker and advances normally. Explicitly selecting a different Queue entry cancels the pending stop. Pausing or seeking within the marked song preserves it. Queue replacement clears stale scheduling/markers under the existing rules.
+- After a scheduled stop, explicit Play continues to the next playable entry rather than replaying the stopped song. At the boundary, wrap only with Repeat All and generate a fresh session if Shuffle is enabled. With no next entry and Repeat All off (including Repeat One), remain stopped. Never fabricate a duplicate to provide continuation.
+
+#### Playback failures and seeking
+
+- If automatic playback cannot open a track or decoding fails, show a brief message and advance to the next playable entry. Attempt each remaining entry at most once during recovery; stop when none can play even with repeat enabled. Do not generate repeated shuffle sessions or loop Repeat One to retry an exhausted failing set. Drive disconnection retains its separate pause/preserve-state rule.
+- Explicit selection of a known-unavailable track leaves playback and the queue unchanged and shows “Track unavailable.” If the selected track appeared available but fails when opened, use the bounded recovery behavior above.
+- Retain drag-preview/release-to-seek, preserve playing/paused state, and clamp ±10-second actions to track bounds. Seeking backward never resets shuffle consumption or changes the queue. Existing cancellation and non-seekable-track rules remain applicable.
+- Seeking to the exact end while playing invokes normal completion, including repeat, explicit next requests, and Stop after. Seeking there while paused remains paused at the end; pressing Play then applies completion rules. This is distinct from Play after already-processed natural queue completion, which restarts the retained final track.
+
+### Persistence, restoration and interruptions — functionality interview complete, implementation pending
+
+Agreed on 2026-11-09. These rules govern the real playback service and supersede generic restoration wording where more specific. Existing demo SharedPreferences snapshots are not validation of production durability or audio-interruption behavior.
+
+#### Restoration and playback intent
+
+- On a fresh app start, restore the selected track, saved position, exact edited queue/occurrence identities, shuffle order and consumption progress, repeat mode, explicit Play next requests, and Stop after state, always paused. Opening the app, completing startup, or restoring data never starts music.
+- Returning to a still-running background service reconnects to that same session without pausing, restarting, or rebuilding its queue. Playback may continue while another app is visible or the display is off. Activity recreation must not apply fresh-process paused restoration to a live session.
+- If the restored selected track's drive is absent or access permission is lost, retain selection and saved position and show it as unavailable. Reconnection/access recovery does not resume playback. Explicit Play while it remains unavailable shows a message and preserves the session rather than automatically choosing another song; Next can move to another entry under normal transport rules.
+- Preserve continuation state explicitly: an unconsumed Stop after marker stays attached to its occurrence; an already-triggered stop stays consumed. Play after restoration advances after a scheduled stop, including the agreed Repeat All boundary behavior, whereas Play after natural Repeat Off completion restarts the retained final track. Also preserve paused seek-to-end state so Play applies completion rules exactly once rather than conflating it with an already-processed completion.
+- Swiping Clocarmus out of recent apps does not act as Stop; allow active service playback to continue. Force-stop or process termination can end playback; a later fresh launch restores paused. Do not promise service survival against Android/OEM process management.
+- Retain best-effort boot opening without autoplay. When Android prevents automatic opening, manual launch restores the same saved session paused. Exact boot-setting presentation/defaults remain part of settings/platform integration.
+
+#### Checkpoints, consistency, and recovery
+
+- Target a position checkpoint every five seconds while playing, plus promptly on pause, completed seeks, track changes, and queue/mode changes. “Immediately” means schedule persistence at the transition, without waiting for the next periodic checkpoint or blocking the UI/audio thread on storage.
+- Save large queue/order data only on structural changes. Save small cursor/position/mode/continuation updates independently while linking them to the correct queue version; a checkpoint must never combine a new cursor with an incompatible old queue. Include session completion, marker consumption, and consumption progress in consistent transition persistence.
+- Preserve the actual generated shuffle order and per-collection freshness history under the Genuine Shuffle specification; do not reconstruct the queue from a small seed on restart. Background preparation alone is not a committed active session.
+- Use atomic/versioned persistence and retain a valid recovery point. For a damaged or incomplete playback snapshot, restore the newest valid, internally consistent saved session, paused. If none is valid, show an empty paused player with an in-app explanation; preserve library, playlists, and settings. Never guess a replacement queue or start playback as recovery.
+- On write failure (including full storage), keep playback usable and preserve the last valid saved session. Show an in-app warning that recent progress may not survive restart, and retry in the background without repeated disruptive warnings. Implementation default: serialize/coalesce writes with bounded retry backoff so an older pending save cannot overwrite newer committed state.
+- Five seconds is a checkpoint target, not a guaranteed maximum loss window. Abrupt power loss, scheduling delays, failed writes, or fallback to an older valid snapshot can lose more recent state. Validate actual persistence behavior; do not claim sudden-power-loss durability from emulator-only tests.
+
+#### Audio interruptions and output changes
+
+- Navigation announcements temporarily duck music while playback continues underneath, then restore normal playback volume. If the user pauses during ducking, remain paused after the announcement; restoring volume must not resume playback.
+- Calls and another audio app taking focus pause playback and require explicit Play afterward, including after transient focus loss. Focus restoration is not permission to auto-resume. Navigation ducking is the specified exception to pausing for an interruption.
+- Explicit Play during a call or while audio focus cannot be obtained leaves playback paused and gives a brief explanation. Do not retain a delayed automatic-resume request; the user must press Play again after the interruption.
+- When Android reports active-output disconnection, pause to prevent unexpected switching to speakers. Reconnecting the output does not resume playback.
+- On a reliable head-unit sleep signal, checkpoint and pause; waking remains paused even if previously playing. Display-off and ordinary backgrounding alone are not evidence of head-unit sleep. Unsupported/OEM-specific signals require documented device validation.
+- Notification and supported hardware/media controls use the same authoritative queue and playback rules as the UI. Explicit Play through those controls can resume, subject to focus and track availability. Restoration itself never synthesizes a Play command.
+- Implementation requirement: handle overlapping interruptions and delayed callbacks centrally. Clearing ducking or one interruption must not undo a user pause, sleep, output loss, or denied-focus result. Apply ducking as temporary attenuation without overwriting the user's media-volume setting; user volume changes during an announcement must not be reverted by a stale saved volume value.
+
+### Genuine Shuffle — functionality interview complete, implementation pending
+
+Agreed on 2026-11-06. Randomness and performance are co-priorities. This section supersedes generic shuffle behavior elsewhere in this plan; the implemented demo does not yet meet these requirements.
+
+#### Randomness contract and scope
+
+- Shuffle the active collection: All Tracks, artist, album, playlist, genre, folder, or search results. Never silently expand a scoped queue to the entire library. Preserve existing explicit Play all/Play album actions that disable shuffle.
+- A first unconstrained session is uniform over all permutations of its eligible track snapshot. Later sessions are uniform over permutations satisfying the freshness rules below. The user explicitly chose conditional uniformity, accepting dependence between sessions: forbidden similar orders are not reachable immediately after a particular previous order.
+- Every permitted ordering must be reachable even for 100k+ tracks. No artist balancing, popularity weighting, random-key sorting, modulo-biased index selection, or fixed small seed that limits the reachable permutation space. Do not describe a finite-state generator as proving unrestricted permutation reachability merely because it is cryptographically secure.
+- Generate each eligible track once per automatic pass. Distinct physical copies retain their distinct library IDs under the existing identity policy.
+- Selecting a song from a browser starts a new session/queue with that song first. Its chosen position overrides opening freshness rules; sample the remaining order uniformly subject to applicable freshness checks. Selecting an occurrence inside Queue preserves the session and actual queue order.
+
+#### Session lifecycle and deliberate overrides
+
+- Enabling Shuffle during playback preserves the current track, position, and playing/paused state, and shuffles only the unconsumed remainder. Previously consumed tracks stay excluded. Explicit Play next requests retain priority.
+- A track skipped with Next is consumed, even after only brief playback. Implementation default: forward jumps past entries consume those entries for the automatic pass; navigating backward never clears consumption. Track consumption separately from the cursor so backward navigation cannot accidentally restore exhausted tracks to automatic eligibility.
+- Previous, explicit selection of an already-played occurrence, Repeat One, manual duplicate additions, Play next, and manual queue ordering remain intentional exceptions to the automatic no-repeat/uniform-order guarantee. Respect actual edited order; do not silently undo user changes to restore randomness. Repeat One does not start a new shuffle session.
+- Disabling Shuffle restores upcoming unconsumed tracks to the collection snapshot's original order, keeps current playback uninterrupted, and preserves explicit Play next requests. Implementation default: explicitly appended occurrences retain append order after the collection entries. Re-enabling Shuffle reshuffles only the unconsumed remainder and does not reset the session or overwrite its original generated-order history.
+- At completion, Repeat All starts a fresh shuffled session only when Shuffle is enabled. With Shuffle disabled, Repeat All repeats the edited queue order, including explicit duplicates and removals. With Shuffle enabled, the fresh session uses the active collection's latest membership; temporary queue edits do not carry into it. Repeat Off stops; the existing one-shot Stop after rule still takes precedence.
+- New library additions wait until the next session. Removed/unavailable tracks are skipped in the active snapshot, with finite traversal when none can play. Removing the drive containing the playing track still pauses under the existing rule. Implementation default: skipped unavailable entries are consumed for that pass; reconnection does not insert them back into its remainder.
+- Restore the exact queue, generated order, consumption, cursor, position, shuffle/repeat state, scheduling, and stop marker paused after process restart/boot/sleep. Resume the same session on Play. Returning to an existing running service preserves its playback.
+
+#### Freshness checks and small collections
+
+- Compare with the most recent committed shuffle session for the same collection, using its originally generated order rather than subsequent manual edits. Switching collections does not erase this history. Preparation alone does not commit a session/history update.
+- Collection identity follows its semantic scope (stable playlist/artist/album/genre identity, folder plus recursive/direct scope, or search scope plus normalized query). Membership changes do not alone create a different collection identity. Keep history on disk and load only the relevant record; do not retain every collection's full history in RAM.
+- Require a different first track from the previous generated first track, and prevent an immediate repeat of the final actually played track from the preceding session. Both apply when feasible; a user-selected opening overrides them. Implementation default for conflicts in tiny collections: avoiding an immediate audible repeat takes priority over changing the previous opening. One track necessarily repeats; zero tracks yields an empty stopped queue.
+- Count same-position matches and shared directed adjacent pairs separately. A → B matches A → B, not B → A. Implementation default for changed membership: project both orders onto shared eligible track IDs before measuring positions and pairs; no shared IDs means no overlap checks. Exclude user-fixed positions/entries from similarity scoring and compare the freely permutable portion. These projected-pair semantics are deliberate and must be tested.
+- Delegated threshold choice: for more than eight freely permutable tracks, allow at most three same-position matches and three shared directed adjacent pairs. Fixed counts keep permitted resemblance small even at 100k tracks. If the comparable overlap has eight or fewer tracks, treat that overlap with the small-collection rule below rather than imposing an infeasible cutoff.
+- For at most eight comparable freely permutable tracks, enumerate their possible relative orders off the UI thread (at most 40,320). First retain feasible opening constraints, relaxing only as described above; choose the smallest achievable total of position matches plus directed-pair matches. Accept all orders attaining that total, without an arbitrary tie-break favoring a particular ordering. This defines achievable size-aware limits, including singleton/two-track cases. When other nonshared tracks exist, evaluate openings in the full candidate context and verify feasibility rather than excluding feasible full permutations based on projected openings.
+- Sample uniformly from the resulting admissible set: use exact uniform selection for a wholly tiny queue, or unbiased full-permutation rejection sampling for larger queues. Never choose the best of a fixed number of random candidates, repair candidates with swaps, or return an unchecked fallback, since these change the agreed distribution. Prove feasibility for supported constraint combinations before starting rejection; fixed/user-controlled slots and changing membership need explicit coverage.
+- Bound each background work batch and check cancellation between batches; there is no hard bound on total rejection attempts. Prepare the next session ahead of completion. Current playback continues uninterrupted while preparing. If preparation is unfinished at the boundary, allow a brief wait instead of weakening constraints. UI controls remain responsive; pause, queue replacement, or scope/version changes invalidate stale work. Do not autoplay a prepared result after an intervening pause or stop.
+
+#### Codebase findings and implementation direction
+
+Inspection on 2026-11-06:
+
+- Kotlin/Jetpack Compose, minimum API 23. `app/build.gradle.kts` and `gradle/libs.versions.toml` contain no Media3/ExoPlayer, Room, or other real playback/database dependency. The manifest declares no playback service. No engine or database has yet been selected or integrated.
+- `MainPlayerScreen.kt` owns demo playback state and a one-second simulated completion clock. `TrackMenuPane.kt` and related browser fixtures supply hardcoded in-memory metadata. `PlaylistStorage.kt` and `DemoSessionStorage.kt` store JSON in SharedPreferences; these are demo persistence, not a music database.
+- `TrackScheduling.kt` uses string track IDs, UUID occurrence objects, linear lookup/list copies, and `.shuffled()` with a pinned current track. Shuffle toggling occurs in the UI callback. The position-driven session effect serializes the entire queue repeatedly; `SharedPreferences.apply()` does not move preceding JSON construction off the calling thread. These paths are unsuitable as the production 100k-track design.
+
+Planned approach, subject to compatibility verification and measured integration:
+
+- A service-owned queue/session coordinator is authoritative; UI sends commands and observes lightweight state. Assess AndroidX Media3/ExoPlayer and a transactional local database such as Room/SQLite, while retaining minimum API 23 and verifying exact compatible versions before adoption. These are candidates, not installed components.
+- Use a versioned collection snapshot of compact stable numeric track IDs, an original-order mapping, and primitive index arrays for generated/effective order. Preserve stable occurrence identity for duplicates and existing Queue actions. Avoid a metadata object, UUID string, or player MediaItem allocation for every track just to shuffle.
+- Use Fisher–Yates with unbiased bounded random draws on a worker. Audit the entropy source against the all-permitted-orders requirement: consume fresh OS-backed random input throughout generation, buffered off-main, rather than deriving the entire permutation from one fixed-width seed. `SecureRandom` is an API candidate, not by itself a proof of the required entropy/reachability; validate the Android provider strategy before implementation. Persist the actual order, not a small replay seed.
+- Each candidate costs O(n) work and O(n) compact storage. Build the previous-position and successor lookup once per snapshot/comparison, then check candidate overlap in a linear pass with early rejection. Reuse buffers between attempts; use compact consumption flags and indexed track/occurrence access for routine advancement instead of repeated full-list searches.
+- Reuse the library repository's cached/versioned membership snapshot; obtain IDs in one bulk read when needed. No filesystem scan, metadata reload, database random sort, per-track query, or repeated membership query per random attempt. Refresh membership at session boundaries only when the repository version requires it; scanner work remains independent.
+- Keep generation, similarity checks, database reads, and queue serialization off the UI/main thread. Publish a prepared result atomically after verifying session and library versions. Save order/membership on structural changes and checkpoint small cursor/position state separately; never rewrite 100k entries every progress tick or place the full production queue in a saved-instance-state bundle.
+- A 100k-element IntArray occupies about 0.4 MB of payload and LongArray about 0.8 MB; these are sizing examples, not a total-memory promise. Account for simultaneous current/candidate/history buffers and lookup tables. Virtualize Queue rows and fetch only needed metadata. Avoid submitting/materializing 100k player items on the UI thread; benchmark a bounded player window or suitable timeline integration while preserving exact queue navigation and media controls.
+- Player operations must obey the selected engine's owning-thread contract. Off-main shuffle work does not authorize arbitrary cross-thread player calls. Media3 documents single-application-thread access: [ExoPlayer setup/threading](https://developer.android.com/media/media3/exoplayer/hello-world). Random-source reference: [Android SecureRandom](https://developer.android.com/reference/java/security/SecureRandom).
 
 ## 5. Proposed on-device architecture
 
@@ -578,7 +745,7 @@ Before committing to implementations, verify current official documentation for 
 
 ### Phase 3 — Local library
 
-- Implement database/preferences, selected sources, recursive discovery, metadata/artwork caching, incremental refresh, and unavailable states.
+- Implement database/preferences and the completed Library and source management specification: selected sources and per-source exclusions, progressive recursive discovery, metadata/artwork caching, coordinated cancellable incremental refresh, availability reasons, permission recovery, confirmed-missing cleanup, and in-app scan summaries.
 - Implement renamed/moved-file reconciliation and overlapping-source handling.
 - Add browsing, search, sorting, playlists, favorites, recent lists, and immediate membership updates.
 - Add the four-screen Artists flow with Artist-tag grouping, distinct album counts, artist-scoped tracks/albums and search, retained list state, hierarchical Back, and navigation to shared album options. Reuse the existing browser components with stable track identity rather than title-only selection when connecting real library data.
@@ -600,9 +767,10 @@ Before committing to implementations, verify current official documentation for 
 
 - Implemented the demo Queue screen from reference 034 with shared controls, occurrence-aware selection and handle-only preview/drop reordering, context-dependent Add/Remove actions, exact-occurrence scheduling, and its entry-armed inactivity timer. Manual playback order, stop marker, and continuation after a consumed stop use the existing paused-restoration snapshot. Real playback-service integration remains pending.
 
-- Connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI.
+- Implement Genuine Shuffle as specified above, replacing demo queue generation/persistence with the service-owned coordinator, compact cached snapshots, cancellable background sampling, and per-collection freshness history.
+- Implement the completed Playback and queue lifecycle specification through the service-owned coordinator, then connect queue construction, service/session controls, seeking, repeat/shuffle, volume, and progress to the UI. Distinguish ordinary pause, natural queue completion, paused seek-to-end, consumed scheduled stop, and cleared selection; do not infer all continuation behavior from one playing boolean.
 - Connect artist Play all to queue replacement, alphabetical track ordering, shuffle disablement, and immediate player return; preserve the existing delayed return for individual artist-track selection.
-- Add snapshots and paused restoration, source-loss/error handling, audio interruption behavior, and supported media buttons.
+- Implement the completed Persistence, restoration and interruptions specification: consistent versioned snapshots, five-second position checkpoints plus transition saves, paused recovery/fallback, unavailable restored selections, service/UI lifecycle separation, audio ducking/focus/output handling, and shared media controls. Keep all persistence work off the UI/audio-critical path.
 - Inactivity-return timer implemented for the browsing shell: arm after selection, reset on interaction, cancel on search typing or Settings/playlist editing entry. Complete service integration, screen-awake policy, best-effort boot entry, and distinguish sleep from ordinary background playback where platform signals allow.
 
 - Connect Play album to whole-album queue replacement, shuffle disablement, disc/track ordering, and immediate player return; integrate filtered individual selection with the existing delayed return.
@@ -651,6 +819,50 @@ Before committing to implementations, verify current official documentation for 
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
 - Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
 
+### Library and source management acceptance
+
+- Import only selected recursive scopes. Verify per-source exclusions, separately selected excluded subfolders, overlapping coverage, one entry per location, and separate entries for identical copies at distinct locations. Short audio and absent Android music classification do not exclude supported files.
+- Exercise startup, reconnect, detected-change bursts, per-source and all-source manual refresh, repeated requests, queued sources, and cancellation. Imports become usable progressively, existing playback stays responsive, and refresh never autoplays. Changes during an active pass are not lost.
+- Test disconnection, revoked permission, read errors, confirmed missing files, and incomplete traversal as distinct states. None silently deletes records or memberships. Cleanup preview includes only confirmed-missing eligible files and rechecks eligibility after reconnect/return or permission changes.
+- Confirm source removal/exclusion and missing-record cleanup never delete files. Preserve records covered by another source. Removing the playing track through confirmed source removal/exclusion stops and clears selection without advancing; temporary drive loss instead pauses and preserves restoration state.
+- Verify confident moves/renames and tag edits preserve references/history; ambiguous identical-copy moves do not transfer memberships by guesswork. A moved-and-edited file may be treated as a new import. Reconnection restores retained memberships; re-import after explicit removal does not resurrect deleted memberships.
+- Test tag/artwork fallbacks, raw-tag separation, unreadable existing files, corrupt new files, and mixed successful/failed imports. A bad file does not stop the scan; failure details and cancelled/incomplete summaries remain accurate and in-app.
+- Metadata refresh must not restart playback or reorder the active queue. New imports wait for a new queue/session snapshot. Versioned scan commits must not reintroduce records after source removal/exclusion or overwrite newer scope decisions.
+- Measure large-library scan/query/caching behavior alongside Genuine Shuffle benchmarks; verify responsive browsing/playback and no main-thread traversal, hashing, metadata reads, or bulk persistence. Validate provider-dependent change detection, permission recovery, and USB/SD behavior on physical hardware; emulator checks alone do not establish those guarantees.
+
+### Playback and queue lifecycle acceptance
+
+- Verify browser selection replaces the exact displayed collection/search scope without confirmation, including restarting the same song; Queue selection retains the queue and targets exact duplicates. Known-unavailable selection changes neither playback nor queue. Play on an empty queue prompts rather than inventing a queue.
+- With Shuffle off, verify selection partway through a collection preserves the full ordered snapshot and only wraps automatically with Repeat All. Check Previous at positions below, exactly at, and above three seconds; Next overrides Repeat One. Both preserve paused state, including asynchronous shuffle preparation at a boundary.
+- Exercise first/last-entry boundaries with every shuffle/repeat combination. Forward shuffle wrapping generates a fresh session; backward wrapping retains existing order. Natural Repeat Off completion retains the final entry and Play restarts it.
+- Verify current-entry drag preserves audio/position and subsequent playback follows the new position. Current removal advances only to a later playable entry without wrap, preserving paused state; no successor clears selection. Empty-queue addition selects paused; duplicate additions append distinct occurrences.
+- Test latest-first Play next, exact Queue targeting, and pending-request priority over Repeat One, followed by repetition of the last requested track. Repeat All without shuffle retains queue edits; with shuffle it snapshots latest collection membership and discards temporary queue edits for the new session.
+- Verify one-shot stop priority over repeat, marker replacement, preservation on pause/seek/reorder/scheduling, and clearing on removal, unplayable skip, manual Next away from the marked current track, explicit different-entry selection, or queue replacement. After a consumed stop, Play advances/wraps only as specified and never replays solely because Repeat One is active.
+- Inject open/decode failures across multiple entries and all repeat modes; recovery terminates after at most one attempt per remaining entry and cannot keep regenerating shuffle sessions. Separately verify active-drive removal pauses and explicit source removal stops/clears under the library rules.
+- Verify seek previews, cancellation, bounds, ±10 seconds, and unchanged shuffle consumption. Seek-to-end while playing processes completion once; paused seek-to-end defers it until Play. Distinguish natural-completion replay from scheduled-stop continuation and avoid double advancement from simultaneous engine completion and seek callbacks.
+- Run meaningful coordinator tests and real-engine/device checks; demo timer tests alone cannot validate audio continuity, decoding errors, seeking, or owning-thread behavior. Also apply the Persistence, restoration and interruptions acceptance checks below.
+
+### Persistence, restoration and interruptions acceptance
+
+- Restore queue edits, exact occurrence IDs, current position, shuffle consumption/order/history, repeat, scheduling, and stop/continuation state after a fresh process start; always remain paused. Cover boot/manual launch, natural completion, consumed scheduled stop, and paused seek-to-end separately. Restoration must not record a new Recently played event.
+- Distinguish fresh process creation from UI recreation/return to an existing service. Backgrounding, display-off, and recent-task dismissal must not deliberately stop live playback. Force-stop/process loss followed by launch restores paused without claiming service survival.
+- Restore with absent storage or lost permission: retain selection/position and show unavailable state; Play reports the problem without skipping, Next works normally, and access restoration never starts music.
+- Verify five-second playing checkpoints and transition-triggered saves, with no full queue rewrite on position ticks. Inject interrupted writes, stale write completion, mismatched versions, corrupt snapshots, and absent valid recovery points. Recover only internally consistent data, preserving unrelated library/settings data; never invent a queue.
+- Simulate full storage and write failures: playback remains usable, the last valid session survives, one actionable in-app warning is presented without repeated disruption, and bounded background retries eventually save current state when storage recovers. Measure 100k-track snapshot/checkpoint behavior off-main; disclose limits of power-loss testing.
+- Test navigation ducking and volume restoration, pause during ducking, user volume changes during ducking, calls, competing audio focus, denied Play, overlapping interruptions, and late callbacks. No event clearing an interruption may auto-resume paused playback or revive a denied delayed Play request.
+- Disconnect/reconnect the active audio output and exercise supported sleep/wake signals: pause and remain paused afterward. Display-off alone preserves playback. Test explicit UI/notification/hardware Play against the same availability/focus checks and queue transitions.
+- Validate real audio, background service, notification/media controls, USB/SD loss, audio routes, and sleep/boot behavior on minimum/modern Android and representative head units. Treat provider/OEM-dependent behavior as unvalidated until physically exercised; demo snapshots do not establish production compliance.
+
+### Genuine Shuffle acceptance
+
+- Exhaustively validate tiny-library admissible sets, feasibility, opening relaxation, pinned selections, and directed-pair scoring; test membership changes, projected comparisons, and empty/singleton/two-track cases. Establish uniformity by algorithm reasoning and exhaustive bounded-choice checks where feasible; frequency tests are supplementary, not proof.
+- Audit unbiased bounded draws and entropy reachability for large permutations. Verify no truncating seed, modulo bias, random-key collisions, repair bias, or fixed-attempt fallback. Verify each generated queue contains precisely its eligible snapshot once before intentional overrides.
+- Exercise normal completion, Next and forward jumps, Previous, Repeat One/All/Off, stop markers, Play next, manual duplicates/reordering/removal, shuffle off/on, browser replacement versus Queue selection, and paused restoration. Automatic consumed tracks never re-enter merely because the cursor moved backward or shuffle was toggled.
+- Verify freshness against the previous original generated order for the same collection across collection switches and process restarts. Manual changes and uncommitted prefetch do not overwrite history. Confirm next-session opening uses the actual last played track at activation; invalidate/regenerate a candidate if that constraint changed.
+- Test changes during generation: cancellation, source loss, membership version changes, queue replacement, pause/stop, and restart. Never publish stale results or start audio after the user's pause. Force repeated candidate rejection and confirm responsiveness and permitted boundary waiting without weakening checks.
+- Benchmark 100k+ tracks for generation/check latency, rejection counts, peak heap/allocation/GC, queue rendering, cursor advancement, persistence, restore, and player queue publication. Instrument main-thread stalls/frame timing and ANRs; confirm no O(n) shuffle/serialization or blocking database/filesystem work on the UI thread. Verify query counts remain independent of sampling retries and routine track changes do not scan the whole collection.
+- Validate on API 23 AVD and representative low/medium-powered physical head units; report measured results and limitations. The original 100-track fixture cannot establish 100k-track performance, and no numerical latency/heap guarantee has yet been agreed.
+
 ### Long-title acceptance
 
 - Use the documented long artist, album, and track fixture across all nine screens; confirm overflowing titles, row metadata, and context headings scroll automatically, including selected rows with playback indicators.
@@ -688,6 +900,14 @@ Before committing to implementations, verify current official documentation for 
 - Import/play 51 distinct tracks to verify each recent list holds 50. Replay an older track to verify it moves to the top without duplication. Failed starts and paused restoration do not update Recently played; unchanged reconnects do not update Recently added.
 - Selecting a song snapshots displayed order, preserves shuffle, and arms the 15-second return. Subsequent recent-list updates, playlist edits, or deletion do not mutate that queue; editing cancels pending return.
 - Verify distinct empty messages, track subtitles/indicators, Back hierarchy and restored scroll positions, and unchanged clock/transport availability. Recently played uses the shared built-in layout; populated custom playlists use `015` and empty custom playlists use `016`.
+
+### Playlists, favorites and recent lists functionality acceptance
+
+- Verify unavailable retained tracks support membership edits without enabling playback. Duplicate adds remain unique, custom additions append, and Favorites remove/re-add moves the track to the top without changing the active queue.
+- Inject transaction/write failure for creation, rename, membership, reorder, and deletion: retain committed state, show an error, and never display false success. Verify stable identities and atomic creation-plus-membership from the player popup.
+- During playback, edit and delete the source playlist: current queue remains unchanged. With Shuffle + Repeat All, use current membership for existing playlists and the retained collection snapshot for a deleted playlist. Verify this fallback survives session restoration, respects library removals/availability, excludes temporary queue edits, and does not attach to a newly created same-name playlist.
+- Verify actual starts, explicit replay, Repeat One iteration, ordinary resume, seek, failed start, and paused restoration independently against Recently played updates. Deduplicate repeated engine callbacks for one start; keep 50 distinct entries. Confirm initial-import timestamps survive rescans, reconnects, and identity-preserving moves.
+- Confirm both recent lists offer no clearing, per-entry removal, or reorder actions. Library-record deletion removes associated entries; temporary disconnection does not. Apply existing built-in rename/delete restrictions and playlist naming validation.
 
 ### Genres-flow acceptance
 
@@ -806,7 +1026,7 @@ Actual USB/SD detach/reinsert, real sleep/ignition cycles, steering-wheel/media/
 - Exact dark preset color values and missing-order tie-breakers will be fixed during design implementation.
 - Crossfade, equalizer, and guaranteed gapless playback are deferred.
 - No deadline and no numeric startup/scan-time guarantee have been agreed.
-- Initial test library is 100 tracks; there is no artificial import limit or larger-library performance commitment.
+- Initial test library is 100 tracks; there is no artificial import limit. Genuine Shuffle now explicitly targets 100k+ tracks with responsive UI and low overhead; this is a requirement awaiting benchmarks, not an achieved performance claim.
 
 ### Excluded from v1
 
@@ -818,6 +1038,6 @@ Streaming, cloud sync, accounts, monetization, online metadata/artwork, portrait
 - USB providers, persisted access, boot UI launch, steering-wheel controls, and sleep signals vary by device; some require device-specific configuration.
 - Byte-identical copies and simultaneous moves can make original file identity impossible to infer unambiguously. Never silently transfer the wrong playlist/favorite references.
 - Content reads can be expensive; tag edits change byte hashes and are not yet promised to preserve identity across simultaneous moves.
-- Sudden power loss can lose the most recent unsaved position; select and document a checkpoint interval during implementation.
+- Sudden power loss can lose recent unsaved state. The agreed position checkpoint target is five seconds plus transition saves, not a guaranteed recovery bound; storage failures or fallback snapshots can increase loss. Validate persistence on representative hardware.
 - Physical screen readability, fonts/assets, codec variants, and performance need empirical validation.
 - AVD-only delivery must clearly disclose the remaining physical-device validation gap.
