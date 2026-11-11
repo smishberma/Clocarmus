@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.clocarmus.ui.startup.SplashScreen
+import com.example.clocarmus.ui.startup.WelcomeFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.clocarmus.ui.player.MainPlayerScreen
 import com.example.clocarmus.ui.theme.ClocarmusTheme
 
@@ -50,6 +52,12 @@ class MainActivity : ComponentActivity() {
             ClocarmusTheme {
                 val staticSplash = referencePreview && intent.getBooleanExtra("splash_preview", false)
                 val ready by startup.ready.collectAsState()
+                val welcomePreview = if (referencePreview) intent.getStringExtra("welcome_preview")?.takeIf {
+                    it in setOf("welcome", "warning", "permission", "folders", "loading")
+                } else null
+                var setupComplete by rememberSaveable { mutableStateOf(false) }
+                val onboarding = (application as ClocarmusApplication).onboarding
+                val showWelcome = !setupComplete && (welcomePreview != null || (!referencePreview && !onboarding.completed))
                 var branding by remember { mutableStateOf(freshStartup && !referencePreview) }
                 val opacity = remember { Animatable(1f) }
                 var brandingDrawn by remember { mutableStateOf(false) }
@@ -62,7 +70,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
-                    if (!staticSplash && (ready != null || referencePreview)) MainPlayerScreen(referencePreview,
+                    if (!staticSplash && !showWelcome && (ready != null || referencePreview)) MainPlayerScreen(referencePreview,
                         menuPreview = referencePreview && intent.getBooleanExtra("menu_preview", false),
                         tracksPreview = referencePreview && intent.getBooleanExtra("tracks_preview", false),
                         artistsPreview = if (referencePreview) intent.getStringExtra("artists_preview")?.takeIf { it in setOf("artists", "artist-detail", "artist-tracks", "artist-albums") } else null,
@@ -76,6 +84,13 @@ class MainActivity : ComponentActivity() {
                         initialPlaylists = ready?.value,
                         onPlaylistsChanged = startup::update,
                         freshStartup = freshStartup)
+                    SideEffect { if (showWelcome) setStatusBarVisible(false) }
+                    if (!staticSplash && showWelcome && (ready != null || referencePreview)) {
+                        WelcomeFlow(onboarding, welcomePreview) {
+                            if (welcomePreview == null) (application as ClocarmusApplication).completeOnboarding()
+                            setupComplete = true
+                        }
+                    }
                     var showReadError by remember { mutableStateOf(true) }
                     if (!branding && ready?.failed == true && showReadError && !referencePreview) {
                         TextButton(onClick = { showReadError = false }, modifier = Modifier.align(Alignment.BottomCenter).background(Color.Black)) {
