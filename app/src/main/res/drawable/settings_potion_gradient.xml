@@ -1,0 +1,25 @@
+<!-- Loaded with Compose painterResource; gradient/fillType verified on API 23. -->
+<vector xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedAttribute" xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="821.65dp"
+    android:height="507.81dp"
+    android:viewportWidth="217.39"
+    android:viewportHeight="134.36">
+  <path
+      android:pathData="m0.39,0c-0.22,0 -0.39,0.18 -0.39,0.39v133.57c0,0.22 0.18,0.39 0.39,0.39h108.3,108.3c0.22,0 0.39,-0.18 0.39,-0.39v-133.57c0,-0.22 -0.18,-0.39 -0.39,-0.39h-108.3z"
+      android:strokeWidth="1.32292"
+      android:strokeColor="#00000000"
+      android:strokeLineCap="square">
+    <aapt:attr name="android:fillColor">
+      <gradient
+          android:startX="106.1"
+          android:startY="2.92"
+          android:endX="106.1"
+          android:endY="113.18"
+          android:type="linear">
+        <item android:offset="0" android:color="#FF005F9B"/>
+        <item android:offset="1" android:color="#FF580099"/>
+      </gradient>
+    </aapt:attr>
+  </path>
+</vector>

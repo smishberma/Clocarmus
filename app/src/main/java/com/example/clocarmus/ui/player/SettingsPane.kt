@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -40,6 +41,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
         "settings-folders" -> "Manage folders"; "settings-background" -> "Background"; "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix" -> "Clock";
         "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam" -> "Divider"; else -> "Settings"
     }) }
+    var gradientTab by rememberSaveable { mutableStateOf(settings.background.gradientAsset != null) }
     var prompt by rememberSaveable { mutableStateOf<String?>(null) }
     val home = LocalPlayerHome.current
     DisposableEffect(home) {
@@ -81,13 +83,17 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                 Modifier.size((78f * s).dp, (50f * s).dp))
         }
     }
-    @Composable fun choice(text: String, selected: Boolean, color: Color = Color.Transparent, height: Float = 94f, onClick: () -> Unit) {
-        Row(Modifier.fillMaxWidth().height((height * s).dp).clip(RoundedCornerShape(percent = 50))
+    @Composable fun choice(text: String, selected: Boolean, color: Color = Color.Transparent, height: Float = 94f,
+                           gradientAsset: Int? = null, onClick: () -> Unit) {
+        Box(Modifier.fillMaxWidth().height((height * s).dp).clip(RoundedCornerShape(percent = 50))
             .background(color).then(if (color == Color.Transparent || selected) Modifier.border((2.5f * s).dp, Color.White, RoundedCornerShape(percent = 50)) else Modifier)
-            .selectable(selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = (55f * s).dp), verticalAlignment = Alignment.CenterVertically) {
-            PlayerLabel(text, Modifier.weight(1f).fillMaxHeight(), 40f * s, Alignment.CenterStart)
-            Image(painterResource(if (selected) R.drawable.settings_radio_button_active else R.drawable.settings_radio_button_inactive), null,
-                Modifier.size((40f * s).dp))
+            .selectable(selected, role = Role.RadioButton, onClick = onClick)) {
+            gradientAsset?.let { Image(painterResource(it), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds) }
+            Row(Modifier.fillMaxSize().padding(horizontal = (55f * s).dp), verticalAlignment = Alignment.CenterVertically) {
+                PlayerLabel(text, Modifier.weight(1f).fillMaxHeight(), 40f * s, Alignment.CenterStart)
+                Image(painterResource(if (selected) R.drawable.settings_radio_button_active else R.drawable.settings_radio_button_inactive), null,
+                    Modifier.size((40f * s).dp))
+            }
         }
     }
     if (page == "Settings") {
@@ -110,16 +116,30 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
         }
         TrackScrollbar(grid, scroll, emptyList(), "Settings", proportional = true, top = 272f, showAlphabetIndicator = false)
     } else if (page in setOf("Background", "Clock", "Divider")) {
-        Column(grid.place(95f, 264f, 800f, if (page == "Clock") 800f else 732f)) {
-            heading(page, inset = 0f); gap(18f)
+        Column(grid.place(95f, 264f, 800f, if (page == "Clock" || page == "Background") 800f else 732f)) {
+            heading(page, inset = 0f); gap(if (page == "Background") 4f else 18f)
+            if (page == "Background") {
+                Row(Modifier.fillMaxWidth().padding(horizontal = (4f * s).dp).height((85f * s).dp).selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy((18f * s).dp)) {
+                    listOf("Normal", "Gradients").forEachIndexed { index, label ->
+                        val selected = gradientTab == (index == 1)
+                        PlayerLabel(label, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(percent = 50))
+                            .background(if (selected) Color.White else Color.Transparent)
+                            .border((2.5f * s).dp, Color.White, RoundedCornerShape(percent = 50))
+                            .selectable(selected, role = Role.Tab) { gradientTab = index == 1 },
+                            40f * s, bold = selected, color = if (selected) Color.Black else Color.White)
+                    }
+                }
+                gap(31f)
+            }
             if (page == "Clock") {
                 toggle("24-hour clock", settings.twentyFourHour, inset = 12f) { onChange(settings.copy(twentyFourHour = it)) }
                 gap(29f)
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = (15f * s).dp).selectableGroup()) {
                 when (page) {
-                    "Background" -> PlayerBackground.entries.forEach {
-                        choice(it.label, settings.background == it, it.color, 122f) { onChange(settings.copy(background = it)) }; gap(34f)
+                    "Background" -> PlayerBackground.entries.filter { (it.gradientAsset != null) == gradientTab }.forEach {
+                        choice(it.label, settings.background == it, it.color, 122f, it.gradientAsset) { onChange(settings.copy(background = it)) }; gap(34f)
                     }
                     "Clock" -> ClockStyle.entries.forEach {
                         choice(it.label, settings.clock == it, height = 122f) { onChange(settings.copy(clock = it)) }; gap(35f)

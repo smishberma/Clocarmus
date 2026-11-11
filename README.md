@@ -22,7 +22,7 @@ See [PLAN.md](PLAN.md) for agreed requirements, implementation phases, acceptanc
 - Browsing and settings replace the left-side content while the clock and playback controls remain available.
 - After selecting a song, return to the main player after 15 seconds of inactivity. Editing playlists, typing in search, or entering settings cancels that return.
 - Keep the screen awake while the app is visible.
-- Default (black), Indigo, Coffee, and Grey background presets, with Inter typography and high-contrast controls.
+- Default (black), Indigo, Coffee, and Grey solid backgrounds plus Default, Modern, Potion, and Lava gradients, with Inter typography and high-contrast controls.
 
 ### Local music library
 
@@ -442,7 +442,7 @@ Validation: `assembleDebug`, all 104 unit tests, and `lintDebug` pass (0 errors,
 
 Menu > Settings implements references 035–039 using the supplied settings SVGs. The existing Back button (including hold to return home), media volume, transport controls, and persistent clock remain shared with other screens. The list scrolls through Library, Playback, Display, and Appearance; returning from a detail preserves its scroll position. Entering Settings cancels the pending browsing return.
 
-Preferences save immediately across launches: autoplay (off by default), status bar visibility, disabled main-player fading, Default/Indigo/Coffee/Grey background, Default/Vertical/LCD/Dot matrix clock, 24-hour time, and Default/Hidden/Dotted/Squiggly/Beam divider styles. Clock references 043–045 define the stacked Vertical face and the supplied alarm clock (LCD) and Register (Dot matrix) fonts for all clock text. Autoplay currently advances demo transport state; real audio playback remains pending.
+Preferences save immediately across launches: autoplay (off by default), status bar visibility, disabled main-player fading, Default/Indigo/Coffee/Grey solid backgrounds or Default/Modern/Potion/Lava gradients, Default/Vertical/LCD/Dot matrix clock, 24-hour time, and Default/Hidden/Dotted/Squiggly/Beam divider styles. Clock references 043–045 define the stacked Vertical face and the supplied alarm clock (LCD) and Register (Dot matrix) fonts for all clock text. Autoplay currently advances demo transport state; real audio playback remains pending.
 
 Manage folders adds/removes the existing demo sources, confirms removal/reset, and supports recursive subfolder exclusions in the Folders browser. This does not change other demo metadata collections or delete files. Add folder identifies the demo scope explicitly; Manual rescan explains that real storage discovery is not connected. Android storage grants and scanning remain part of the planned library implementation.
 
@@ -471,3 +471,8 @@ Validated with `assembleDebug`, all 109 unit tests, and `lintDebug`. API 23 scre
 The empty-folder loading regression was verified on API 23: the loading indicator remains visible at one second, the player appears after the three-second interval, and completion is saved with an empty folder list. The loading preview also exits without changing onboarding preferences. Captures are in `build/visual-comparison/welcome/three-second-loading/`.
 
 The Lottie replacement was verified on API 23 using two distinct frames: only the centered animation appears against black, and the player opens after the agreed three-second interval. Captures are in `build/visual-comparison/welcome/lottie-loading/`.
+
+
+The updated Background screen (`design/038-settings-screen-background.png`) separates Normal and Gradients tabs. Gradients are offered in Default, Modern, Potion, Lava order, using the supplied SVGs for row previews and the full shared player background. Changing tabs does not alter the applied background; choosing a row saves immediately. The active background determines the initial tab after a fresh launch. Existing solid-color preference keys remain compatible. Import these vectors with `python3 scripts/import-player-assets.py --group settings-screen --asset <name>-gradient`.
+
+Background tab validation: `assembleDebug`, all 109 unit tests, and `lintDebug` pass (0 errors, 32 warnings). API 23 checks verify all eight choices, gradient ordering/previews, saved selections and initial tab after process restart, unchanged applied background while browsing tabs, and retained Settings position on Back. Captures are under `build/visual-comparison/settings-background/` and `build/visual-comparison/settings-background-gradients/`. Original emulator preferences were restored byte for byte.

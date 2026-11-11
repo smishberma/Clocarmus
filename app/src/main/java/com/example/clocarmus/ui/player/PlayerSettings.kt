@@ -1,11 +1,17 @@
 package com.example.clocarmus.ui.player
 
 import android.content.SharedPreferences
+import androidx.annotation.DrawableRes
+import com.example.clocarmus.R
 import androidx.compose.ui.graphics.Color
 
-internal enum class PlayerBackground(val label: String, val color: Color) {
+internal enum class PlayerBackground(val label: String, val color: Color, @DrawableRes val gradientAsset: Int? = null) {
     DEFAULT("Default", Color.Black), INDIGO("Indigo", Color(0xff330055)),
-    COFFEE("Coffee", Color(0xff502c14)), GREY("Grey", Color(0xff4d4d4d))
+    COFFEE("Coffee", Color(0xff502c14)), GREY("Grey", Color(0xff4d4d4d)),
+    GRADIENT_DEFAULT("Default", Color.Black, R.drawable.settings_default_gradient),
+    GRADIENT_MODERN("Modern", Color.Black, R.drawable.settings_modern_gradient),
+    GRADIENT_POTION("Potion", Color.Black, R.drawable.settings_potion_gradient),
+    GRADIENT_LAVA("Lava", Color.Black, R.drawable.settings_lava_gradient)
 }
 // Keep SEGMENTED as the stored key so existing LCD selections survive the font redesign.
 internal enum class ClockStyle(val label: String) { DEFAULT("Default"), VERTICAL("Vertical"), SEGMENTED("LCD"), DOT_MATRIX("Dot matrix") }

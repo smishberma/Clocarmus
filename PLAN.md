@@ -23,7 +23,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Right side: persistent day, digital clock, and date during normal app use, including browsing/settings. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
-- Preset backgrounds only: Default (black), Indigo, Coffee, Grey (reference 038). Preserve readable white controls/text. No image backgrounds.
+- Preset backgrounds only: Normal colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. No image backgrounds.
 - Configurable time and date formats. Default assumption: mockup-style 12-hour time and DD-MM-YYYY date.
 - English-only interface; preserve music metadata in its original language.
 

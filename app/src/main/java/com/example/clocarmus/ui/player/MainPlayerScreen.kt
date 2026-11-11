@@ -332,6 +332,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation) {
         Box(Modifier.fillMaxSize().background(settings.background.color).observePlayerTouches(inactivity, sliderPointers)
             .observeBrowsingTouches(browsingReturn).onPreviewKeyEvent { browsingReturn.interaction(); false }) {
+            settings.background.gradientAsset?.let { asset ->
+                Image(painterResource(asset), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
+            }
             Row(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
