@@ -20,7 +20,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 
 - Full-screen, landscape-only, fixed 50/50 left/right division across supported landscape sizes.
 - Left side: album artwork, title, artist, album, year directly below album, playback controls, progress, volume, shuffle, repeat, and +/-10-second controls. Browsing/settings replace left-side content.
-- Right side: persistent day, digital clock, and date during normal app use, including browsing/settings. Splash and onboarding follow their separate full-screen mockups.
+- Right side by default: persistent day, digital clock, and date during normal app use, including browsing/settings. Settings > Display > Change to right-hand drive (RHD) swaps the clock to the left and the player/browsers/settings/panels to the right, preserving the split and centered divider styles. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
 - Preset backgrounds only: Normal colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. No image backgrounds.

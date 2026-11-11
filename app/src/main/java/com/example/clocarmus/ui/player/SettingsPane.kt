@@ -107,6 +107,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             gap(36f); heading("Display"); gap(12f)
             toggle("Show status bar", settings.statusBar) { onChange(settings.copy(statusBar = it)) }
             toggle("Disable buttons fade out in main player", settings.disableFade) { onChange(settings.copy(disableFade = it)) }
+            toggle("Change to right-hand drive (RHD)", settings.rightHandDrive) { onChange(settings.copy(rightHandDrive = it)) }
             gap(42f); heading("Appearance"); gap(8f)
             action("Background") { page = "Background" }; gap(16f)
             action("Clock") { page = "Clock" }; gap(16f)

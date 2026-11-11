@@ -19,7 +19,8 @@ See [PLAN.md](PLAN.md) for agreed requirements, implementation phases, acceptanc
 - Full-screen, landscape-only interface with a fixed 50/50 split.
 - Left side: album artwork, track title, artist, album, year, and playback controls.
 - Right side: persistent digital clock, day, and date with configurable formats.
-- Browsing and settings replace the left-side content while the clock and playback controls remain available.
+- Browsing and settings replace the player-side content while the clock and playback controls remain available.
+- Enable “Change to right-hand drive (RHD)” in Settings > Display to place the clock on the left and the player, browsers, Settings, and player panels on the right. The 50/50 split and centered divider styles remain the same.
 - After selecting a song, return to the main player after 15 seconds of inactivity. Editing playlists, typing in search, or entering settings cancels that return.
 - Keep the screen awake while the app is visible.
 - Default (black), Indigo, Coffee, and Grey solid backgrounds plus Default, Modern, Potion, and Lava gradients, with Inter typography and high-contrast controls.
@@ -476,3 +477,8 @@ The Lottie replacement was verified on API 23 using two distinct frames: only th
 The updated Background screen (`design/038-settings-screen-background.png`) separates Normal and Gradients tabs. Gradients are offered in Default, Modern, Potion, Lava order, using the supplied SVGs for row previews and the full shared player background. Changing tabs does not alter the applied background; choosing a row saves immediately. The active background determines the initial tab after a fresh launch. Existing solid-color preference keys remain compatible. Import these vectors with `python3 scripts/import-player-assets.py --group settings-screen --asset <name>-gradient`.
 
 Background tab validation: `assembleDebug`, all 109 unit tests, and `lintDebug` pass (0 errors, 32 warnings). API 23 checks verify all eight choices, gradient ordering/previews, saved selections and initial tab after process restart, unchanged applied background while browsing tabs, and retained Settings position on Back. Captures are under `build/visual-comparison/settings-background/` and `build/visual-comparison/settings-background-gradients/`. Original emulator preferences were restored byte for byte.
+
+
+The RHD toggle sits directly below “Disable buttons fade out in main player” and saves immediately (off by default). Pane order changes by placement, preserving the active screen, scroll position, playback state, and control orientation. Backgrounds and all five divider choices remain independent of this setting. Existing preferences without the new key retain the original player-left layout.
+
+RHD validation: `assembleDebug`, all 109 unit tests, and `lintDebug` pass (0 errors, 32 warnings). API 23 checks verify the toggle's position and retained Settings scroll/paused transport, clock/player bounds and unchanged control orientation, all six browser roots, Background/Clock/Divider details, queue, Track info, collections popup, all five divider styles, and persistence after enabling/disabling across process restarts. Captures are under `build/visual-comparison/rhd/`. Original emulator preferences were restored byte for byte.

@@ -23,7 +23,8 @@ internal data class PlayerSettings(
     val background: PlayerBackground = PlayerBackground.DEFAULT,
     val clock: ClockStyle = ClockStyle.DEFAULT, val twentyFourHour: Boolean = false,
     val divider: DividerStyle = DividerStyle.DEFAULT,
-    val sources: Set<String> = setOf("music", "oriental", "mix"), val exclusions: Set<String> = emptySet()
+    val sources: Set<String> = setOf("music", "oriental", "mix"), val exclusions: Set<String> = emptySet(),
+    val rightHandDrive: Boolean = false
 ) {
     fun folderTree(tree: FolderTree): FolderTree = FolderTree(tree.entries.filter { entry ->
         tree.source(entry.id)?.id in sources && generateSequence(entry) { tree.get(it.parent) }.none { it.id in exclusions }
@@ -36,12 +37,13 @@ internal fun loadPlayerSettings(prefs: SharedPreferences): PlayerSettings {
         prefs.getBoolean("disableFade", false), choice("background", PlayerBackground.entries.toTypedArray(), PlayerBackground.DEFAULT),
         choice("clock", ClockStyle.entries.toTypedArray(), ClockStyle.DEFAULT), prefs.getBoolean("twentyFourHour", false),
         choice("divider", DividerStyle.entries.toTypedArray(), DividerStyle.DEFAULT),
-        prefs.getStringSet("sources", setOf("music", "oriental", "mix"))!!.toSet(), prefs.getStringSet("exclusions", emptySet())!!.toSet())
+        prefs.getStringSet("sources", setOf("music", "oriental", "mix"))!!.toSet(), prefs.getStringSet("exclusions", emptySet())!!.toSet(),
+        prefs.getBoolean("rightHandDrive", false))
 }
 internal fun savePlayerSettings(prefs: SharedPreferences, settings: PlayerSettings) {
     prefs.edit().putBoolean("autoplay", settings.autoplay).putBoolean("statusBar", settings.statusBar)
         .putBoolean("disableFade", settings.disableFade).putString("background", settings.background.name)
         .putString("clock", settings.clock.name).putBoolean("twentyFourHour", settings.twentyFourHour)
         .putString("divider", settings.divider.name).putStringSet("sources", settings.sources)
-        .putStringSet("exclusions", settings.exclusions).apply()
+        .putStringSet("exclusions", settings.exclusions).putBoolean("rightHandDrive", settings.rightHandDrive).apply()
 }

@@ -335,8 +335,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             settings.background.gradientAsset?.let { asset ->
                 Image(painterResource(asset), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
             }
-            Row(Modifier.fillMaxSize()) {
-                BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+            PlayerPaneLayout(settings.rightHandDrive) {
+                BoxWithConstraints(Modifier.fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
                     Box(if (optionsTarget != null || infoRequest != null) Modifier.fillMaxSize().alpha(0f).clearAndSetSemantics {} else Modifier.fillMaxSize()) {
                         if (queueOpen) {
@@ -542,7 +542,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         } }
                     AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
-                ClockPane(referencePreview, Modifier.weight(1f).fillMaxHeight(), settings)
+                ClockPane(referencePreview, Modifier.fillMaxHeight(), settings)
             }
             PlayerDivider(settings.divider, Modifier.align(Alignment.Center))
         }
