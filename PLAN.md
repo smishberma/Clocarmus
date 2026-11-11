@@ -71,10 +71,10 @@ Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint err
 
 ### Main-player inactivity fading
 
-- Only Menu, Manage playlists, Shuffle, Repeat, Skip forward 10 seconds, Skip backward 10 seconds, Queues, and Track info fade. All other elements retain their normal appearance.
+- Menu, Manage playlists, Shuffle, Repeat, Skip forward 10 seconds, Skip backward 10 seconds, Queues, and Track info fade. The optional Launcher-mode drawer button joins this group when visible (nine controls with Launcher mode enabled, otherwise eight). All other elements retain their normal appearance.
 - While the main player is active, 10 seconds without touch starts a 500 ms animation from 100% to 20% opacity, regardless of whether music is playing or paused.
 - Apply opacity to each control's existing appearance, including inactive Shuffle/Repeat styling; preserve active/inactive distinctions, hit areas, and accessibility semantics.
-- Touch anywhere on the player, including the clock pane, immediately restores all eight controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
+- Touch anywhere on the player, including the clock pane, immediately restores all visible fading-group controls to full opacity. The same touch still performs its normal button or slider action; do not consume it merely to restore visibility.
 - Keep controls fully visible while any finger remains down. Start a fresh 10-second countdown when the last finger lifts, including after holds, drags, or multi-touch gestures.
 - Hardware/media buttons, physical volume keys, clock updates, playback progress, and track changes do not reset the countdown.
 - Suspend and reset fading while another screen or dialog is active or the app is backgrounded. Returning to the active player, including dismissing a dialog, restores full opacity and starts a fresh interval.
@@ -523,8 +523,48 @@ Agreed on 2026-11-11 against implemented references 035–050, including gradien
 - Calls, audio-focus loss, output disconnection, and drive removal clear autoplay eligibility and require explicit Play. A later restart/wake cannot bypass those interruption pauses. Navigation ducking alone is not such a pause; a user pause during ducking is.
 - Make one autoplay attempt for a qualifying startup/wake. If the selected track is unavailable or focus cannot be obtained, remain paused without skipping to another track or retaining a delayed retry. Later mounting, permission recovery, focus gain, and output reconnection must not trigger another attempt. Implementation requirement: deduplicate boot/launch/wake callbacks and clear failed eligibility; do not let a subsequent restart revive a denied resume request without new explicit playback.
 - Enabling autoplay applies to subsequent qualifying events, never the toggle action or onboarding completion. Reconnecting an Activity to a live playback service preserves its current state and does not trigger a startup attempt.
-- Open app after boot is a separate setting, off by default. It requests best-effort UI opening where Android allows; it does not enable autoplay. If boot opening is blocked or disabled, manual launch remains available and follows the separate autoplay policy. No guarantee of forced foreground opening on every Android/head-unit build.
+- Open app after boot is a separate setting, off by default. It requests best-effort UI opening where Android allows; it does not enable autoplay. If boot opening is blocked or disabled, manual launch remains available and follows the separate autoplay policy. No guarantee of forced foreground opening on every Android/head-unit build. When Clocarmus is the selected Home app, Android Home startup is independent of this setting; the Launcher section specifies the disabled control and explanatory state.
 - Persist autoplay eligibility, interruption/stop reason, and sleep-resume intent consistently with the selected occurrence and session version. Default new/missing preference keys to off. Startup recovery initializes a coherent paused state before any explicitly eligible policy action; corrupted-snapshot fallback itself remains paused and never starts audio as recovery.
+
+### Optional Launcher mode and app drawer — interview complete, implementation pending
+
+Agreed on 2026-11-11. References: `design/051-app-drawer.png` (closed) and `design/052-app-drawer-opened.png` (open), with supplied assets under `design/assets/app-drawer/`. Launcher mode is optional and off by default; ordinary music-player operation remains available.
+
+#### Settings, Home eligibility, and default selection
+
+- Add an Advanced section below Appearance in Settings. Add the Launcher mode toggle with this exact description beneath it: “Make Clocarmus behave as a launcher for persistent app boot.”
+- Enabling the toggle makes Clocarmus eligible in Android's Home-app chooser and opens the conventional Android default-Home selection workflow. The app must not silently assign itself as default. When off, its optional Home entry is disabled; retain ordinary app launching independently.
+- If the user cancels or chooses another launcher, leave Launcher mode enabled and keep Clocarmus eligible. Display actual default status, including “Not the default Home app”, and provide Choose Home app to revisit Android's selection workflow.
+- If another launcher becomes default through system Settings, retain the enabled preference and update the displayed status on return. Never reopen the chooser repeatedly or try to reclaim the default automatically.
+- If disabling while Clocarmus is default, guide the user to choose another Home app first. Disable Home capability only after verifying the switch succeeded. Cancellation leaves Launcher mode enabled. If no other usable Home app exists, retain the enabled state and explain that another launcher must be enabled or installed first. If Clocarmus is not default, disable immediately.
+- Treat enabled capability, requested disable, and actual default-Home status as separate states. Reconcile on return from system UI rather than assuming a successful chooser launch means a changed default. Keep ordinary access to Clocarmus and Android Settings throughout the workflow.
+
+#### Home, boot, and playback
+
+- Once selected as Home, pressing Android Home returns directly to the main player and clock, closing the drawer, browsing, Settings, and popup stack. Preserve playback, position, queue, modes, and already committed edits; discard unfinished UI input under the existing return-home rules.
+- A Home-button activation never triggers autoplay, including when Android must recreate the process. Qualifying boot/reliably detected wake events still use the agreed opt-in previously-playing policy. Merely entering/re-entering Home is not evidence of boot/wake; implementation must distinguish qualifying events without turning ordinary Home navigation into a resume request.
+- Android may open its selected Home app regardless of Open app after boot. While Clocarmus is the actual default Home app, disable that setting's control, retain its saved value, and explain that Android opens the selected Home app independently. Restore the control with its retained value when Clocarmus ceases to be default. Launcher mode enabled but not default does not disable the boot control.
+- Keep autoplay independent of launcher selection. Launcher status grants no entitlement to bypass focus, availability, interruption, or restoration rules. Returning from another app preserves the existing service state.
+- Launcher mode does not promise an immortal process, forced foreground takeover, kiosk restrictions, or reliable ignition/wake behavior on every OEM. Follow Android's conventional Home workflow and validate it on the actual head unit. No device-owner provisioning or kiosk mode is part of this feature.
+
+#### App drawer access, contents, and paging
+
+- When Launcher mode is enabled, show the drawer button beneath the clock wherever the clock pane normally appears, including music browsers and Settings, regardless of whether Clocarmus is the current default Home app. Hide it when Launcher mode is off and during splash/onboarding.
+- The drawer button joins the main-player inactivity fading group. Apply the same 10-second delay, 500 ms fade to 20%, touch restoration, and Disable buttons fade out override. Existing screen-specific fade suspension still applies; do not introduce fading across browsing/Settings. Opening the drawer suspends main-player fading as another active panel; closing it restores controls and starts their normal fresh interval.
+- Opening the drawer replaces only the clock pane with the reference grid. Keep player/content-pane controls usable and preserve its screen/state. With RHD enabled, the drawer follows the clock pane to the left without mirroring its controls.
+- Show launchable apps alphabetically by displayed name with actual icons. Exclude Clocarmus itself; provide Android Settings via the dedicated top shortcut. No custom ordering, app favorites, or additional app-management actions are included initially.
+- Show nine apps per page, arranged as the reference three-by-three grid. Use vertical swipes and tappable vertical page indicators to navigate. Remember the last page during the current app session, including external-app round trips; start at page one after a fresh process start. If the list shrinks, clamp to the nearest remaining page.
+- Refresh after app install/removal/disable changes and when returning to Clocarmus. Discover only entries that can actually be launched through supported Android mechanisms; validate package visibility and launch behavior for supported API levels during implementation. Avoid blocking the UI while loading icons/list data.
+- Launching an app or Android Settings successfully closes the drawer. Music continues unless the external app causes an audio interruption under existing focus rules. Returning shows the clock. If launch fails, keep the drawer open, show a brief explanation, and leave playback unchanged.
+- The drawer Back arrow and Android Back close the drawer and restore the clock without navigating the content pane. Android Home follows the main-player-and-clock rule above when delivered to Clocarmus as Home.
+
+#### Drawer inactivity and background lifecycle
+
+- Use the same configured duration as browsing's automatic main-player return: currently 15 seconds. Start on drawer opening. User activity anywhere in Clocarmus, including the drawer, player, browsing, and Settings, resets this drawer timer.
+- Holds/drags anywhere in Clocarmus defer timeout while a finger remains down; begin a fresh full interval after release. Clock ticks, progress updates, and automatic track changes are not activity.
+- Drawer timeout closes only the drawer and restores the clock, leaving the content pane unchanged. Preserve each screen's independent browsing-return rules; opening the drawer must not arm a main-player return from Settings or override its cancellation policy.
+- Backgrounding without a successful drawer app launch suspends the timer and retains the open drawer. Ordinary return preserves it with a fresh full interval. Home activation instead closes it and returns to the main player. Successful drawer launches already close it and therefore do not reopen on return.
+- Keep drawer timeout, browsing return, and main-player fading as distinct state machines sharing activity observations where appropriate. Cancel stale drawer callbacks on close, mode disable, Home, or screen lifecycle changes; never let an old timer close a newly opened drawer.
 
 ## 3. Library, playlists, and persistence
 
@@ -694,7 +734,7 @@ Agreed on 2026-11-09. These rules govern the real playback service and supersede
 
 ### Genuine Shuffle — functionality interview complete, implementation pending
 
-Initially agreed on 2026-11-06; cross-feature conflict review completed on 2026-11-11 against Library, Playback/queue, Persistence, Playlists, and Settings interviews. Randomness and performance are co-priorities. The reconciled rules below govern shuffle interactions; the implemented demo does not yet meet these requirements. Optional launcher mode remains a proposal, not an agreed feature or shuffle prerequisite.
+Initially agreed on 2026-11-06; cross-feature conflict review completed on 2026-11-11 against Library, Playback/queue, Persistence, Playlists, and Settings interviews. Randomness and performance are co-priorities. The reconciled rules below govern shuffle interactions; the implemented demo does not yet meet these requirements. Optional Launcher mode is now specified separately and does not change shuffle scope/order or make Home navigation a new shuffle session.
 
 #### Randomness contract and scope
 
@@ -776,11 +816,13 @@ Before committing to implementations, verify current official documentation for 
 
 ### Phase 2 — Visual shell and onboarding
 
+- Implement optional Launcher mode and references 051–052: Advanced setting and system Home workflow, actual default-status tracking/safe disable, app discovery and drawer, RHD, fading/inactivity integration, and Home-versus-boot launch handling. Keep normal app entry available and validate compatibility without making launcher mode the default.
+
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Integrate the completed Settings/onboarding specification with real sources and playback: persist unfinished setup steps, share folder/exclusion state, apply failure-aware settings writes, implement confirmed Remove all libraries, and add the independent off-by-default boot-opening preference. Retain the implemented welcome and settings screens.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues now opens the implemented Queue screen described above.
-- Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the eight designated controls; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
+- Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the designated controls, including the optional drawer button; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.
 - Implemented shared overflow-only marquees for music titles, row metadata, and artist/album context headings across the nine existing player/browser screens; retain this behavior when connecting real library data. See Long music titles above.
 - Add the shared top-left Back long-press shortcut across screens and popups, preserving ordinary Back behavior, playback, existing restoration rules, and immediately applied edits.
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
@@ -857,7 +899,7 @@ Before committing to implementations, verify current official documentation for 
 - Browsing-return timer starts only after selection, resets on interaction, cancels in editing/search/settings, and cannot navigate away after cancellation.
 - Main-player fading: full opacity before 10 seconds, animation begins at 10 seconds, and 20% opacity is reached after another 500 ms in both playing and paused states.
 - Touch on either pane immediately restores opacity without suppressing the same touch's action; holds, drags, and multiple fingers prevent fading until the final release.
-- Verify all eight controls fade, including inactive Shuffle/Repeat appearance, while all unlisted elements retain normal opacity.
+- Verify all fading-group controls, including the optional drawer button and inactive Shuffle/Repeat appearance, fade while all unlisted elements retain normal opacity.
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
 - Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
 
@@ -871,6 +913,18 @@ Before committing to implementations, verify current official documentation for 
 - Verify toggle changes and setup completion never start playback; live-service reconnection does not restart it. Simulate overlapping boot/launch/wake events, focus denial, and delayed storage/focus recovery: no duplicate attempt, skipped selection, or latent retry. Calls, focus/output/drive loss clear eligibility across later restarts/wakes; sleep's own pause preserves only legitimate pre-sleep intent.
 - Test Open app after boot independently from autoplay with all four switch combinations. Defaults are both off. Validate unsupported boot opening and manual-launch fallback without claiming Android/OEM restrictions are bypassed.
 - Verify screen-awake request while visible, including paused and Settings, and its release in background. Display-off is not a head-unit sleep signal. Test sleep/boot/output behavior on representative head units; emulator results alone do not establish platform guarantees.
+
+### Launcher mode and app drawer acceptance
+
+- Fresh installation and missing settings default Launcher mode off; no enabled optional Home entry. Verify Advanced placement, exact description, opt-in capability enablement, conventional chooser, cancellation, selecting another launcher, and accurate default-status/Choose Home app presentation.
+- Disable while non-default immediately; while default require a verified alternative selection. Cancellation, chooser errors, or no usable alternative retain Home capability. Changing default externally updates status without prompting to reclaim it. Preserve ordinary app entry and Android Settings access.
+- Verify Home from browsing, Settings, nested popups, and an open drawer shows the main player/clock with unchanged live playback/queue/position and no autoplay. Repeat with a fresh process: ordinary Home entry still does not auto-resume. Test genuine boot/wake separately against existing autoplay eligibility without duplicate starts.
+- Verify default-Home status disables the boot-opening control but preserves its value, explains independent system behavior, and restores the control when another launcher is selected. Enabled-but-not-default mode leaves the control usable. Do not claim the boot toggle suppresses Android's chosen Home app.
+- Compare references 051–052 in ordinary and RHD layouts. Verify availability on every clock-bearing screen, absence when mode is off or in splash/onboarding, actual app icons/names, alphabetical ordering, no self-entry, dedicated Settings shortcut, nine-entry pages, vertical swipes/indicator taps, and current-session page retention/clamping.
+- Test package installation/removal/disable and foreground refresh, launch failure preserving drawer/playback, successful launches closing it, and external audio-focus behavior. Ordinary app return shows the clock after a successful launch; unrelated backgrounding preserves an open drawer with a fresh timer.
+- Verify the drawer button follows the player fading group and its disable-fading setting, including touch restoration without consuming the opening tap. Browsing/Settings retain existing fade suspension. An open drawer suspends main-player fading; closing starts a fresh interval.
+- Verify 15-second drawer timeout, activity in either pane/any screen resetting it, held fingers and drags deferring it, and no reset from automatic playback/clock updates. Timeout/Back restore only the clock; Home closes all navigation to the player. Test independent browsing-return rules, background suspension, close/reopen races, and disabling mode with pending timer state.
+- Validate supported API-level chooser/role behavior, package visibility, process recreation and Home intent delivery, plus actual head-unit boot, hardware Home, and wake/OEM behavior. Android restrictions are not bypassed and launcher eligibility is not evidence of persistent process survival.
 
 ### Library and source management acceptance
 
@@ -924,7 +978,7 @@ Before committing to implementations, verify current official documentation for 
 - Build a queue solely with Add to queue, including A/A/B and all-A cases. Shuffled Repeat All retains requested occurrence counts and never expands to the library. Track-level freshness must not count exchanging identical-track occurrence IDs as improvement. Verify occurrence-uniform sampling, pair multiplicities, deterministic feasibility-based relaxation, and termination on empty eligible membership.
 - Edit search text without selecting a result: playing collection remains tied to the original query/scope. The next shuffled session refreshes that scope. Emptying an existing collection stops at the boundary; deleted-playlist fallback remains separate and does not resurrect removed library tracks.
 - Change collection membership/availability/order during preparation and verify regeneration before activation, with responsive cancellation and permitted boundary waiting. Metadata-only updates with unchanged effective inputs must not restart preparation. Do not repeat library scans/queries for random retries.
-- Restore manual-source provenance, duplicate counts, explicit replay intent, consumption, and generated history consistently. Qualifying opt-in autoplay resumes that same session, and preparation/restoration alone never commits a new session. Optional launcher mode is outside this agreed implementation scope.
+- Restore manual-source provenance, duplicate counts, explicit replay intent, consumption, and generated history consistently. Qualifying opt-in autoplay resumes that same session, and preparation/restoration alone never commits a new session. Optional Launcher mode must preserve this session state; pressing Home cannot reshuffle or trigger autoplay.
 
 ### Long-title acceptance
 
@@ -1038,7 +1092,7 @@ Before committing to implementations, verify current official documentation for 
 - Compare reference 033 for the two new buttons, endpoint-aligned Previous/Next, centered Play/Pause, and time labels above the seek bar. Verify consistent transport positions across screens and overlays without changing top controls or the clock split.
 - Verify supplied Queues/shared info icons, Queues opening its screen once implemented (disabled until then), and disabled Track info with no selected track.
 - Open Track info directly while playing and paused; preserve playback and queue, retain the captured target after Next, and return home via Close or Back. Verify the existing Track Options entry still returns to Track Options.
-- Verify panel coverage blocks underlying new-button input, all eight designated controls share fading/restoration, and disabled controls remain disabled after touch restores opacity.
+- Verify panel coverage blocks underlying new-button input, all designated controls, including the optional drawer button, share fading/restoration, and disabled controls remain disabled after touch restores opacity.
 - Verify seek/time labels move only where already present, and transport actions plus drag-only seek/volume behavior are unchanged.
 
 ### Track info acceptance
