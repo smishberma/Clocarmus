@@ -12,6 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 class ClocarmusApplication : Application() {
+    // Session-only drawer page: survives activity recreation and external round trips.
+    internal var drawerPage = 0
+
     internal lateinit var startup: StartupSession<PlaylistLibrary>
         private set
 

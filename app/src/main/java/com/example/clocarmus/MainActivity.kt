@@ -1,5 +1,7 @@
 package com.example.clocarmus
 
+import android.content.Intent
+import com.example.clocarmus.launcher.LauncherController
 import android.os.Bundle
 import android.os.Build
 import android.view.View
@@ -28,6 +30,15 @@ import com.example.clocarmus.ui.player.MainPlayerScreen
 import com.example.clocarmus.ui.theme.ClocarmusTheme
 
 class MainActivity : ComponentActivity() {
+    internal lateinit var launcher: LauncherController
+        private set
+    internal var homeActivation by mutableStateOf(0)
+        private set
+
+    private val homeSelection = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
+        if (::launcher.isInitialized) launcher.reconcile()
+    }
+
     private var statusBarVisible = false
     private var platformLaunchReleased by mutableStateOf(Build.VERSION.SDK_INT < 31)
 
@@ -40,6 +51,8 @@ class MainActivity : ComponentActivity() {
                 platformLaunchReleased = true
             }
         }
+        launcher = LauncherController(this) { homeSelection.launch(it) }
+        if (savedInstanceState == null && (intent.hasCategory(Intent.CATEGORY_HOME) || intent.getBooleanExtra("home_activation", false))) homeActivation++
         val startup = (application as ClocarmusApplication).startup
         val freshStartup = startup.claimBranding()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -83,7 +96,7 @@ class MainActivity : ComponentActivity() {
                         queuePreview = referencePreview && intent.getBooleanExtra("queue_preview", false),
                         initialPlaylists = ready?.value,
                         onPlaylistsChanged = startup::update,
-                        freshStartup = freshStartup)
+                        freshStartup = freshStartup && !(intent.hasCategory(Intent.CATEGORY_HOME) || intent.getBooleanExtra("home_activation", false)) && !intent.getBooleanExtra("boot_open", false))
                     SideEffect { if (showWelcome) setStatusBarVisible(false) }
                     if (!staticSplash && showWelcome && (ready != null || referencePreview)) {
                         WelcomeFlow(onboarding, welcomePreview) {
@@ -115,6 +128,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_MAIN && (intent.hasCategory(Intent.CATEGORY_HOME) || intent.getBooleanExtra("home_activation", false))) homeActivation++
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::launcher.isInitialized) launcher.reconcile()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

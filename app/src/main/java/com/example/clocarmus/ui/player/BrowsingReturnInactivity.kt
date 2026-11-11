@@ -80,6 +80,7 @@ internal class BrowsingReturnInactivity(private val scope: CoroutineScope, priva
 internal fun rememberBrowsingReturnInactivity(
     browsing: Boolean,
     suspended: Boolean,
+    pointers: SliderPointers? = null,
     onReturn: () -> Unit
 ): BrowsingReturnInactivity {
     val scope = rememberCoroutineScope()
@@ -89,7 +90,9 @@ internal fun rememberBrowsingReturnInactivity(
     DisposableEffect(lifecycle, browsing, suspended, inactivity) {
         if (!browsing) inactivity.cancel()
         fun updateActive() {
-            inactivity.setActive(browsing && !suspended && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+            val active = browsing && !suspended && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            inactivity.setActive(active)
+            if (active && (pointers?.pressedCount ?: 0) > 0) inactivity.touch(true)
         }
         val observer = LifecycleEventObserver { _, _ -> updateActive() }
         lifecycle.addObserver(observer)

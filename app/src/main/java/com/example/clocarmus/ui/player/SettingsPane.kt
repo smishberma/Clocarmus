@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -50,6 +51,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     }
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val context = LocalContext.current
+    val launcher = (context as? com.example.clocarmus.MainActivity)?.launcher
     val back = { if (page == "Settings") onExit() else page = if (page == "Exclusions") "Manage folders" else "Settings" }
     BackHandler(onBack = back)
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed, grid, 55f, 20f, 172f, 172f, back)
@@ -69,8 +71,8 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             .background(Color(0xff333333)).clickable(role = Role.Button, onClick = onClick).padding(horizontal = (27f * s).dp),
             40f * s, Alignment.CenterStart)
     }
-    @Composable fun toggle(text: String, value: Boolean, inset: Float = 27f, change: (Boolean) -> Unit) {
-        Row(Modifier.fillMaxWidth().height((83f * s).dp).toggleable(value, role = Role.Switch, onValueChange = change)
+    @Composable fun toggle(text: String, value: Boolean, inset: Float = 27f, enabled: Boolean = true, change: (Boolean) -> Unit) {
+        Row(Modifier.fillMaxWidth().height((83f * s).dp).alpha(if (enabled) 1f else 0.4f).toggleable(value, enabled = enabled, role = Role.Switch, onValueChange = change)
             .padding(horizontal = (inset * s).dp), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                 val density = LocalDensity.current
@@ -112,8 +114,25 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             action("Background") { page = "Background" }; gap(16f)
             action("Clock") { page = "Clock" }; gap(16f)
             action("Divider") { page = "Divider" }
-            // Keep Appearance at the top when the list reaches its end, as in reference 036.
-            gap(358f)
+            gap(42f); heading("Advanced"); gap(8f)
+            toggle("Launcher mode", launcher?.enabled == true) { launcher?.toggle(it) }
+            androidx.compose.material3.Text("Make Clocarmus behave as a launcher for persistent app boot.",
+                color = Color.White, fontFamily = InterFontFamily, fontSize = (28f * s).sp,
+                modifier = Modifier.padding(horizontal = (27f * s).dp))
+            if (launcher?.enabled == true) {
+                gap(16f)
+                heading(if (launcher.isDefault) "Default Home app" else "Not the default Home app", cyan = false)
+                if (launcher.pendingDisable) androidx.compose.material3.Text("Choose another Home app to finish disabling Launcher mode.", color = Color.White, fontSize = (28f * s).sp)
+                gap(12f); action("Choose Home app") { launcher.chooseHome() }
+            }
+            gap(20f)
+            toggle("Open app after boot", settings.openAfterBoot, enabled = launcher?.isDefault != true) { onChange(settings.copy(openAfterBoot = it)) }
+            androidx.compose.material3.Text(if (launcher?.isDefault == true)
+                "Android opens the selected Home app independently of this setting." else
+                "Request opening after boot where Android allows it. This does not enable autoplay.",
+                color = Color.White, fontFamily = InterFontFamily, fontSize = (28f * s).sp,
+                modifier = Modifier.padding(horizontal = (27f * s).dp))
+            gap(40f)
         }
         TrackScrollbar(grid, scroll, emptyList(), "Settings", proportional = true, top = 272f, showAlphabetIndicator = false)
     } else if (page in setOf("Background", "Clock", "Divider")) {

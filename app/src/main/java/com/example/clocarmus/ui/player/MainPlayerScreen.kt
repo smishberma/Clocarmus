@@ -81,6 +81,11 @@ internal class PlayerGrid(width: Float, height: Float) {
 @Composable
 internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, queuePreview: Boolean = false, settingsPreview: String? = null, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
     val context = LocalContext.current
+    val activity = context as? com.example.clocarmus.MainActivity
+    val launcher = activity?.launcher
+    var drawerOpen by rememberSaveable { mutableStateOf(false) }
+    val drawerApps = if (launcher?.enabled == true) rememberDrawerApps() else null
+    LaunchedEffect(launcher?.enabled) { if (launcher?.enabled != true) drawerOpen = false }
     val settingsPreferences = remember { context.getSharedPreferences("player-settings", Context.MODE_PRIVATE) }
     var settings by remember {
         val initial = if (referencePreview) PlayerSettings(sources = if (settingsPreview == "settings-folders") setOf("music") else setOf("music", "oriental", "mix")) else loadPlayerSettings(settingsPreferences)
@@ -292,7 +297,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }
 
     val sliderPointers = remember { SliderPointers() }
-    val inactivity = rememberMainPlayerInactivity(enabled = !settings.disableFade && !menuOpen && dialog == null && !collectionsOpen && infoRequest == null && !referencePreview, pointers = sliderPointers)
+    val inactivity = rememberMainPlayerInactivity(enabled = !drawerOpen && !settings.disableFade && !menuOpen && dialog == null && !collectionsOpen && infoRequest == null && !referencePreview, pointers = sliderPointers)
+    val drawerTimeout = rememberBrowsingReturnInactivity(drawerOpen, suspended = false, pointers = sliderPointers) { drawerOpen = false }
+    LaunchedEffect(drawerOpen) { if (drawerOpen) drawerTimeout.trackSelected() }
     val controlOpacity = if (dialog == null && !collectionsOpen && infoRequest == null && !referencePreview) inactivity.opacity else 1f
 
     val closeOptions: () -> Unit = {
@@ -313,6 +320,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }, optionsTarget != null, optionsCompleted)
     val returnHome by rememberUpdatedState<() -> Unit> {
         browsingReturn.cancel()
+        drawerOpen = false
         collectionNaming = false
         collectionDraft = ""
         optionsCollections = false
@@ -329,9 +337,12 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         menuOpen = false
     }
     val homeNavigation = remember { PlayerHomeNavigation { returnHome() } }
+    LaunchedEffect(activity?.homeActivation) {
+        if ((activity?.homeActivation ?: 0) > 0) homeNavigation.returnToPlayer()
+    }
     CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation) {
         Box(Modifier.fillMaxSize().background(settings.background.color).observePlayerTouches(inactivity, sliderPointers)
-            .observeBrowsingTouches(browsingReturn).onPreviewKeyEvent { browsingReturn.interaction(); false }) {
+            .observeBrowsingTouches(browsingReturn).observeBrowsingTouches(drawerTimeout).onPreviewKeyEvent { browsingReturn.interaction(); drawerTimeout.interaction(); false }) {
             settings.background.gradientAsset?.let { asset ->
                 Image(painterResource(asset), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
             }
@@ -542,7 +553,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         } }
                     AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
-                ClockPane(referencePreview, Modifier.fillMaxHeight(), settings)
+                BoxWithConstraints(Modifier.fillMaxHeight()) {
+                    if (drawerOpen) AppDrawer(drawerApps) { drawerOpen = false }
+                    else {
+                        ClockPane(referencePreview, Modifier.fillMaxSize(), settings)
+                        if (launcher?.enabled == true) DrawerButton(PlayerGrid(maxWidth.value, maxHeight.value), false, controlOpacity) { drawerOpen = true }
+                    }
+                }
             }
             PlayerDivider(settings.divider, Modifier.align(Alignment.Center))
         }
