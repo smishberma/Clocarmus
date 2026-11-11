@@ -31,7 +31,7 @@ internal fun StyledClock(day: String, time: String, period: String, date: String
         val periodWidth = if (period.isEmpty()) 0f else with(density) {
             rememberTextMeasurer().measure(period, clockTextStyle(62f * grid.scale, InterFontFamily, bold = true)).size.width.toDp().value
         } / grid.scale + 24f
-        PlayerLabel(time.substringBefore(':'), grid.place(100f - periodWidth / 2f, 350f, 800f, 270f), 270f * grid.scale)
+        PlayerLabel(time.substringBefore(':').padStart(2, '0'), grid.place(100f - periodWidth / 2f, 350f, 800f, 270f), 270f * grid.scale)
         ClockTimeRow(time.substringAfter(':'), period, grid.place(100f, 575f, 800f, 285f),
             270f * grid.scale, 62f * grid.scale, InterFontFamily, grid.scale, boldPeriod = true)
         PlayerLabel(date, grid.place(15f, 915f, 970f, 110f), 82f * grid.scale)
