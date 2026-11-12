@@ -34,6 +34,8 @@ internal class LocalLibrary(private val context: Context, private val documents:
     private val mutable = MutableStateFlow(LibrarySnapshot())
     val state = mutable.asStateFlow()
     private val observers = mutableListOf<ContentObserver>()
+    private val metadataPrefs = context.getSharedPreferences("library-metadata", 0)
+    private val metadataRefreshIds = mutableSetOf<String>()
     private val prefs = context.getSharedPreferences("onboarding", 0)
     private val preferenceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key in setOf("folders", "exclusions", "resetPending")) scope.launch {
@@ -63,6 +65,10 @@ internal class LocalLibrary(private val context: Context, private val documents:
                     configuration = loadOnboarding(prefs)
                     directoryCache = db.directories()
                     val records = db.records()
+                    if (metadataPrefs.getInt("readerVersion", 0) < 2) {
+                        metadataRefreshIds.addAll(records.map { it.id })
+                        if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", 2).commit()
+                    }
                     val playlists = db.playlists() ?: loadPlaylists(context.getSharedPreferences("demo-playlists", 0))
                         .withoutMusic() // Preserve custom names; demo IDs never become real identities.
                     publish(records, playlists, db.version(), ready = true)
@@ -289,7 +295,7 @@ internal class LocalLibrary(private val context: Context, private val documents:
                                 val known = mutable.value.records.firstOrNull { record -> record.location == location }
                                 val document = AudioDocument(uri, location, name, mime, if (it.isNull(3)) -1 else it.getLong(3), if (it.isNull(4)) 0 else it.getLong(4))
                                 try {
-                                    if (known != null && document.size >= 0 && document.modified > 0 && known.size == document.size && known.modified == document.modified && known.availability != Availability.UNREADABLE) {
+                                    if (known != null && known.id !in metadataRefreshIds && document.size >= 0 && document.modified > 0 && known.size == document.size && known.modified == document.modified && known.availability != Availability.UNREADABLE) {
                                         save(known.copy(uri = uri.toString(), filename = name, paths = listOf(path), availability = Availability.AVAILABLE))
                                     } else {
                                         val trackId = known?.id ?: "local:${UUID.randomUUID()}"
@@ -300,6 +306,7 @@ internal class LocalLibrary(private val context: Context, private val documents:
                                             val pendingIndex = pending.indexOfFirst { candidate -> candidate.location == location }
                                             if (pendingIndex >= 0) pending[pendingIndex] = pending[pendingIndex].copy(paths = (pending[pendingIndex].paths + path).distinct()) else pending.add(record)
                                         } else save(record)
+                                        metadataRefreshIds.remove(trackId)
                                     }
                                 } catch (cancelled: CancellationException) { throw cancelled }
                                 catch (exception: Exception) {
@@ -352,7 +359,11 @@ internal class LocalLibrary(private val context: Context, private val documents:
         catch (exception: Exception) { summary = summary.copy(incomplete = true, failures = summary.failures + (exception.message ?: "Scan failed")) }
         finally {
             withContext(NonCancellable) { mutex.withLock {
-                if (generation == startedGeneration) mutable.value = mutable.value.copy(summary = summary.copy(running = false))
+                if (generation == startedGeneration) {
+                    metadataRefreshIds.retainAll(mutable.value.records.map { it.id }.toSet())
+                    if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", 2).commit()
+                    mutable.value = mutable.value.copy(summary = summary.copy(running = false))
+                }
             } }
         }
     }

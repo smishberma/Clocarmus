@@ -26,8 +26,14 @@ internal suspend fun readAudio(context: Context, document: AudioDocument, id: St
         check(tag(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes") { "No supported audio stream" }
         val artist = tag(MediaMetadataRetriever.METADATA_KEY_ARTIST)
         val album = tag(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-        // DATE may be the container creation timestamp (for example an M4A conversion).
-        val date = tag(MediaMetadataRetriever.METADATA_KEY_YEAR)
+        val taggedYear = tag(MediaMetadataRetriever.METADATA_KEY_YEAR)
+        // MP4 release-date metadata is exposed through YEAR. DATE in these containers
+        // is their creation timestamp, which must not invent a missing release year.
+        val mp4 = tag(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) in setOf("audio/mp4", "video/mp4") ||
+            document.name.substringAfterLast('.').lowercase(java.util.Locale.ROOT) in setOf("m4a", "mp4", "3gp")
+        val taggedDate = if (mp4) null else tag(MediaMetadataRetriever.METADATA_KEY_DATE)
+        val year = releaseYear(taggedYear, taggedDate)
+        val date = taggedYear?.takeIf { releaseYear(it, null) != null } ?: taggedDate
         val number = tag(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
         val hash = MessageDigest.getInstance("SHA-256")
         context.contentResolver.openInputStream(document.uri)?.use { stream ->
@@ -57,7 +63,7 @@ internal suspend fun readAudio(context: Context, document: AudioDocument, id: St
         return TrackMenuEntry(
             title = tag(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: document.name,
             artist = artist ?: "Unknown artist", album = album ?: "Unknown album",
-            year = date?.let { Regex("\\d{4}").find(it)?.value }, id = id,
+            year = year, id = id,
             albumArtist = tag(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
             discNumber = tag(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)?.substringBefore('/')?.toIntOrNull(),
             trackNumber = number?.substringBefore('/')?.toIntOrNull(),

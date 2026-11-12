@@ -208,6 +208,30 @@ class LocalLibraryTest : InstrumentationTestCase() {
         file.delete()
         Unit
     }
+    fun testFullDateTagBecomesYearAndAbsentReleaseTagsStayEmpty() = runBlocking {
+        for ((asset, expected) in listOf("full-release-date.flac" to "2004", "no-release-year.m4a" to null)) {
+            val file = File(context.cacheDir, asset)
+            try {
+                instrumentation.context.assets.open(asset).use { input -> file.outputStream().use { input.copyTo(it) } }
+                val (track, _) = readAudio(context, AudioDocument(Uri.fromFile(file), asset, asset,
+                    if (asset.endsWith("flac")) "audio/flac" else "audio/mp4", file.length(), file.lastModified()), asset)
+                assertEquals(asset, expected, track.year)
+            } finally { file.delete() }
+        }
+        Unit
+    }
+    fun testMetadataReaderUpdateRefreshesCachedTracksWithoutChangingIdentity() {
+        val original = repository.state.value.records.single()
+        val reads = access.reads
+        runBlocking { repository.close() }
+        context.getSharedPreferences("library-metadata", 0).edit().putInt("readerVersion", 1).commit()
+        repository = LocalLibrary(context, access)
+        awaitIdle { it.records.singleOrNull()?.id == original.id && access.reads > reads }
+        assertEquals(original.importedAt, repository.state.value.records.single().importedAt)
+        val updatedReads = access.reads
+        refresh()
+        assertEquals(updatedReads, access.reads)
+    }
     private class FakeDocuments : DocumentAccess {
         @Volatile var file: String? = "song"
         @Volatile var fail = false
