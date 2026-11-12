@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
         if (::launcher.isInitialized) launcher.reconcile()
     }
 
+    private var startupFullscreen = true
     private var statusBarVisible = false
     private var platformLaunchReleased by mutableStateOf(Build.VERSION.SDK_INT < 31)
 
@@ -96,8 +97,11 @@ class MainActivity : ComponentActivity() {
                         queuePreview = referencePreview && intent.getBooleanExtra("queue_preview", false),
                         initialPlaylists = ready?.value,
                         onPlaylistsChanged = startup::update,
-                        freshStartup = freshStartup && !(intent.hasCategory(Intent.CATEGORY_HOME) || intent.getBooleanExtra("home_activation", false)) && !intent.getBooleanExtra("boot_open", false))
-                    SideEffect { if (showWelcome) setStatusBarVisible(false) }
+                        freshStartup = freshStartup && !setupComplete && !(intent.hasCategory(Intent.CATEGORY_HOME) || intent.getBooleanExtra("home_activation", false)) && !intent.getBooleanExtra("boot_open", false))
+                    SideEffect {
+                        startupFullscreen = staticSplash || branding || showWelcome
+                        hideSystemBars()
+                    }
                     if (!staticSplash && showWelcome && (ready != null || referencePreview)) {
                         WelcomeFlow(onboarding, welcomePreview) {
                             if (welcomePreview == null) (application as ClocarmusApplication).completeOnboarding()
@@ -157,7 +161,7 @@ class MainActivity : ComponentActivity() {
 
     @Suppress("DEPRECATION")
     private fun hideSystemBars() {
-        window.decorView.systemUiVisibility = (if (statusBarVisible) 0 else View.SYSTEM_UI_FLAG_FULLSCREEN) or
+        window.decorView.systemUiVisibility = (if (statusBarVisible && !startupFullscreen) 0 else View.SYSTEM_UI_FLAG_FULLSCREEN) or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
             View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE

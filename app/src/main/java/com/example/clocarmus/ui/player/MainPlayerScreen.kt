@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import kotlinx.coroutines.launch
+
 import android.content.Context
 import android.widget.Toast
 import android.media.AudioManager
@@ -101,10 +103,35 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             else -> initial.divider
         }))
     }
-    val updateSettings: (PlayerSettings) -> Unit = {
-        settings = it
-        if (!referencePreview) savePlayerSettings(settingsPreferences, it)
+    val settingsScope = rememberCoroutineScope()
+    var settingsBusy by remember { mutableStateOf(false) }
+    var settingsError by remember { mutableStateOf<String?>(null) }
+    val updateSettings: (PlayerSettings) -> Unit = { next ->
+        if (!settingsBusy) {
+            val previous = settings
+            settings = next
+            if (!referencePreview) {
+                settingsBusy = true
+                settingsScope.launch {
+                    try { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { savePlayerSettings(settingsPreferences, next) } }
+                    catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (exception: Exception) {
+                        settings = previous
+                        // A failed commit can still update SharedPreferences' memory cache.
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching { savePlayerSettings(settingsPreferences, previous) }
+                        }
+                        settingsError = exception.message ?: "Could not save settings. Please try again."
+                    }
+                    finally { settingsBusy = false }
+                }
+            }
+        }
     }
+    settingsError?.let { message -> androidx.compose.material3.AlertDialog(
+        onDismissRequest = { settingsError = null }, title = { androidx.compose.material3.Text("Could not save settings") },
+        text = { androidx.compose.material3.Text(message) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { settingsError = null }) { androidx.compose.material3.Text("OK") } }) }
     SideEffect { (context as? com.example.clocarmus.MainActivity)?.setStatusBarVisible(settings.statusBar) }
     val settingsFolderTree = remember(settings.sources, settings.exclusions) { settings.folderTree(demoFolderTree) }
     val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
@@ -116,9 +143,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             onPlaylistsChanged(it)
         }
     }
+    val resetPending = remember { !referencePreview && com.example.clocarmus.ui.startup.loadOnboarding(context.getSharedPreferences("onboarding", 0)).resetPending }
     val playlistTracks = remember { (demoTracks + demoLibraryTracks + genreReferenceTracks + playlistFixtureTracks + demoPlayerTrack + demoFolderTree.entries.mapNotNull { it.track }).distinctBy { it.id } }
     LaunchedEffect(Unit) {
-        if (playlistsPreview == null && collectionsPreview == null) {
+        if (playlistsPreview == null && collectionsPreview == null && !resetPending && !settingsPreferences.getBoolean("demoLibraryRemoved", false)) {
             var next = playlistLibrary
             playlistTracks.filterNot { it.id.startsWith("playlist:") }.forEachIndexed { i, track -> next = next.imported(track.id, i.toLong()) }
             updatePlaylists(next)
@@ -194,7 +222,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
     val initialSelectedId = if (foldersPreview == "folder-directory") "folder:alley" else if (genresPreview == "genre-tracks") "genre:track:2" else if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else demoPlayerTrack.id
-    var queue by rememberSaveable { mutableStateOf(savedSession?.queue ?: if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
+    var queue by rememberSaveable { mutableStateOf(if (resetPending) TrackQueue() else savedSession?.queue ?: if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
         listOf(initialSelectedId) + demoTracks.map { it.id }.filterNot { it == initialSelectedId }, initialSelectedId, shuffle)) }
     val selectedTrackId = queue.current?.trackId
     val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
@@ -381,7 +409,20 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                     }
                                 }
                                 if (destination.page == "settings") {
-                                    SettingsPane(grid, settings, updateSettings, goBack, settingsPreview)
+                                    SettingsPane(grid, settings, updateSettings, goBack, settingsPreview, onLibrariesRemoved = {
+                                        playing = false
+                                        position = 0f
+                                        queue = TrackQueue()
+                                        // Stop transient state before awaiting durable reset; startup can replay the journal.
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            com.example.clocarmus.ui.startup.finishPendingLibraryReset(context)
+                                        }
+                                        settings = settings.copy(sources = emptySet(), exclusions = emptySet())
+                                        playing = false
+                                        position = 0f
+                                        queue = TrackQueue()
+                                        updatePlaylists(playlistLibrary.withoutMusic())
+                                    })
                                 } else if (destination.page == "folders") {
                                     FoldersPane(grid, destination.directory, foldersPreview, selectedTrackId, playing, browsingReturn,
                                         { searchOpen = it }, goBack,

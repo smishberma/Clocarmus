@@ -34,10 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.example.clocarmus.R
+import com.example.clocarmus.ui.startup.*
 
 @Composable
 internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: (PlayerSettings) -> Unit,
-                          onExit: () -> Unit, preview: String? = null) {
+                          onExit: () -> Unit, preview: String? = null, onLibrariesRemoved: suspend () -> Unit = {}) {
     var page by rememberSaveable { mutableStateOf(when (preview) {
         "settings-folders" -> "Manage folders"; "settings-background" -> "Background"; "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix" -> "Clock";
         "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam" -> "Divider"; else -> "Settings"
@@ -51,6 +52,27 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     }
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val context = LocalContext.current
+    val sources = rememberSourceManagement(OnboardingState(), preview != null)
+    SourceManagementError(sources)
+    if (prompt == "real-exclusions") ExclusionsDialog(sources.state, { prompt = null }, { sources.save(it) })
+    if (prompt == "real-reset" || prompt?.startsWith("content:") == true) {
+        val target = prompt!!
+        AlertDialog(onDismissRequest = { if (!sources.busy) prompt = null },
+            title = { Text(if (target == "real-reset") "Remove all libraries?" else "Remove folder?") },
+            text = { Text(if (target == "real-reset") "Remove sources, exclusions and music memberships, and stop and clear the queue. Empty custom playlists and appearance settings are kept. Music files are kept."
+                else "Remove this source and its exclusions. Music files are kept.") },
+            confirmButton = { TextButton(enabled = !sources.busy, onClick = {
+                val next = if (target == "real-reset") sources.state.copy(folders = emptyList(), exclusions = emptySet(), resetPending = true) else sources.state.remove(target)
+                sources.save(next) {
+                    if (target == "real-reset") {
+                        onLibrariesRemoved()
+                        sources.state = sources.state.copy(resetPending = false)
+                    }
+                    prompt = null
+                }
+            }) { Text("Remove") } },
+            dismissButton = { TextButton(enabled = !sources.busy, onClick = { prompt = null }) { Text("Cancel") } })
+    }
     val launcher = (context as? com.example.clocarmus.MainActivity)?.launcher
     val back = { if (page == "Settings") onExit() else page = if (page == "Exclusions") "Manage folders" else "Settings" }
     BackHandler(onBack = back)
@@ -174,7 +196,22 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
         val folderScroll = rememberSaveable(page, saver = ScrollState.Saver) { ScrollState(0) }
         Column(grid.place(41f, 264f, 890f, 732f).verticalScroll(folderScroll)) {
             heading(page, cyan = page != "Manage folders"); gap(30f)
-            if (page == "Manage folders") {
+            if (page == "Manage folders" && preview == null) {
+                if (sources.state.folders.isEmpty()) heading("No folders added", false)
+                sources.state.folders.forEach { source ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            PlayerLabel(source.name, Modifier.fillMaxWidth().height((52f * s).dp), 40f * s, Alignment.CenterStart, bold = true)
+                            PlayerLabel(source.location, Modifier.fillMaxWidth().height((52f * s).dp), 30f * s, Alignment.CenterStart)
+                        }
+                        TextButton(enabled = !sources.busy, onClick = { prompt = source.uri }) { Text("Remove") }
+                    }
+                    gap(24f)
+                }
+                action("ADD FOLDER") { sources.add() }; gap(27f)
+                action("Exclusions") { prompt = "real-exclusions" }; gap(27f)
+                action("Reset all (remove all libraries)") { if (!sources.busy) prompt = "real-reset" }
+            } else if (page == "Manage folders") {
                 val sources = demoFolderTree.contents(null).filter { it.id in settings.sources }
                 if (sources.isEmpty()) { heading("No folders added", false); gap(30f) }
                 sources.forEach { source ->
@@ -208,7 +245,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             }
         }
     }
-    prompt?.let { target ->
+    prompt?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
         val available = demoFolderTree.contents(null).filter { it.id !in settings.sources }
         AlertDialog(onDismissRequest = { prompt = null }, title = { Text(when (target) { "add" -> "Add demo folder"; "reset" -> "Remove all libraries?"; else -> "Remove folder?" }) },
             text = {

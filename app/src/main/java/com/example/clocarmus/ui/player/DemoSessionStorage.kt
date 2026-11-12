@@ -6,14 +6,15 @@ import org.json.JSONObject
 
 internal data class DemoSession(val queue: TrackQueue, val position: Float, val shuffle: Boolean, val repeat: Int)
 
-internal fun saveDemoSession(preferences: SharedPreferences, session: DemoSession) {
+internal fun saveDemoSession(preferences: SharedPreferences, session: DemoSession, durable: Boolean = false) {
     val queue = session.queue
     val json = JSONObject().put("entries", JSONArray().apply {
         queue.entries.forEach { put(JSONObject().put("id", it.id).put("track", it.trackId)) }
     }).put("current", queue.currentId).put("stop", queue.stopAfterId)
         .put("resumeAfterStop", queue.resumeAfterStop).put("scheduled", JSONArray(queue.scheduledIds)).put("position", session.position.toDouble())
         .put("shuffle", session.shuffle).put("repeat", session.repeat)
-    preferences.edit().putString("snapshot", json.toString()).apply()
+    val edit = preferences.edit().putString("snapshot", json.toString())
+    if (durable) check(edit.commit()) { "Could not clear the queue. Please try again." } else edit.apply()
 }
 
 internal fun loadDemoSession(preferences: SharedPreferences): DemoSession? = try {

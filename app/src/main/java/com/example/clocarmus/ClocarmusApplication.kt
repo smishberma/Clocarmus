@@ -28,6 +28,8 @@ class ClocarmusApplication : Application() {
         startup = StartupSession(CoroutineScope(SupervisorJob() + Dispatchers.IO), PlaylistLibrary()) {
             // Only local readiness belongs here; discovery must not hold branding.
             onboarding = loadOnboarding(getSharedPreferences("onboarding", Context.MODE_PRIVATE))
+            com.example.clocarmus.ui.startup.finishPendingLibraryReset(this)
+            onboarding = loadOnboarding(getSharedPreferences("onboarding", Context.MODE_PRIVATE))
             loadPlaylists(getSharedPreferences("demo-playlists", Context.MODE_PRIVATE))
         }
     }

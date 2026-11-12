@@ -45,5 +45,5 @@ internal fun savePlayerSettings(prefs: SharedPreferences, settings: PlayerSettin
         .putBoolean("disableFade", settings.disableFade).putString("background", settings.background.name)
         .putString("clock", settings.clock.name).putBoolean("twentyFourHour", settings.twentyFourHour)
         .putString("divider", settings.divider.name).putStringSet("sources", settings.sources)
-        .putStringSet("exclusions", settings.exclusions).putBoolean("rightHandDrive", settings.rightHandDrive).putBoolean("openAfterBoot", settings.openAfterBoot).apply()
+        .putStringSet("exclusions", settings.exclusions).putBoolean("rightHandDrive", settings.rightHandDrive).putBoolean("openAfterBoot", settings.openAfterBoot).commit().also { check(it) { "Could not save settings. Please try again." } }
 }

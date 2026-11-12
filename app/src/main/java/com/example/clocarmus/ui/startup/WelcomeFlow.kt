@@ -1,7 +1,6 @@
 package com.example.clocarmus.ui.startup
 
 import android.Manifest
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -23,37 +22,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
 internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onComplete: () -> Unit) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("onboarding", 0) }
-    // Startup already warmed this preferences file on IO. Re-read its cached
-    // values here so Activity recreation also retains folders added during setup.
-    var state by remember { mutableStateOf(if (preview == null) loadOnboarding(prefs) else initial) }
+    val sources = rememberSourceManagement(initial, preview != null)
+    val state = sources.state
+    val busy = sources.busy
+    fun save(next: OnboardingState) = sources.save(next)
     var pageName by rememberSaveable { mutableStateOf(when (preview) {
-        "warning" -> "Warning"; "permission" -> "Permission"; "folders" -> "Folders"; "loading" -> "Loading"; else -> "Welcome"
+        "warning" -> "Warning"; "permission" -> "Permission"; "folders" -> "Folders"; "loading" -> "Loading"; else -> state.step.name
     }) }
     val page = WelcomePage.valueOf(pageName)
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
-    fun save(next: OnboardingState) {
-        if (busy) return
-        busy = true
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) { saveOnboarding(prefs, next) }
-                state = next
-            } catch (exception: Exception) { error = exception.message ?: "Could not save setup. Please try again." }
-            finally { busy = false }
-        }
+    fun navigate(page: WelcomePage) {
+        if (!busy) sources.save(state.advancingTo(page)) { pageName = page.name }
     }
-    fun finish() { if (!busy) { dialog = null; pageName = "Loading" } }
+    fun finish() { if (!busy) { dialog = null; navigate(WelcomePage.Loading) } }
     LaunchedEffect(page) {
         if (page == WelcomePage.Loading) {
             // Start the three-second animation once the loading screen has drawn.
@@ -62,62 +50,42 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
             delay(3_000)
             try {
                 if (preview == null) {
-                    withContext(Dispatchers.IO) { saveOnboarding(prefs, state.copy(completed = true)) }
+                    withContext(Dispatchers.IO) { saveOnboarding(context.getSharedPreferences("onboarding", 0), state.copy(completed = true)) }
                 }
                 onComplete()
-            } catch (exception: Exception) {
-                pageName = "Folders"
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (exception: Exception) {
+                pageName = WelcomePage.Folders.name
                 error = exception.message ?: "Could not save setup. Please try again."
             }
         }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) pageName = "Folders" else dialog = "permission-denied"
+        if (granted) navigate(WelcomePage.Folders) else dialog = "permission-denied"
     }
-    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) scope.launch {
-            busy = true
-            try {
-                val folder = withContext(Dispatchers.IO) {
-                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    val id = DocumentsContract.getTreeDocumentId(uri)
-                    val doc = DocumentsContract.buildDocumentUriUsingTree(uri, id)
-                    val name = context.contentResolver.query(doc, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use {
-                        if (it.moveToFirst()) it.getString(0) else null
-                    } ?: id.substringAfterLast('/').substringAfter(':').ifBlank { "Music" }
-                    OnboardingFolder(uri.toString(), name, "${if (id.startsWith("primary:")) "Internal storage" else "USB storage"} - $name")
-                }
-                val next = state.add(folder)
-                withContext(Dispatchers.IO) { saveOnboarding(prefs, next) }
-                state = next
-            } catch (_: Exception) { error = "Could not access this folder. Please select it again." }
-            finally { busy = false }
-        }
-    }
-    BackHandler(page != WelcomePage.Loading) {
+    BackHandler {
+        if (page == WelcomePage.Loading || busy) return@BackHandler
         if (dialog != null) dialog = null
-        else pageName = when (page) {
-            WelcomePage.Warning -> "Welcome"; WelcomePage.Permission -> "Warning"; WelcomePage.Folders -> "Permission"
-            else -> { dialog = "skip"; "Welcome" }
-        }
+        else navigate(when (page) {
+            WelcomePage.Warning -> WelcomePage.Welcome; WelcomePage.Permission -> WelcomePage.Warning; WelcomePage.Folders -> WelcomePage.Permission
+            else -> { dialog = "skip"; WelcomePage.Welcome }
+        })
     }
     val shownFolders = if (preview == "folders") listOf(OnboardingFolder("preview", "My Music", "USB storage - My Music")) else state.folders
     WelcomeScreen(page, shownFolders,
         onNext = {
             if (!busy) when (page) {
-                WelcomePage.Welcome -> pageName = "Warning"
-                WelcomePage.Warning -> pageName = "Permission"
+                WelcomePage.Welcome -> navigate(WelcomePage.Warning)
+                WelcomePage.Warning -> navigate(WelcomePage.Permission)
                 WelcomePage.Folders -> if (state.folders.isEmpty()) dialog = "empty" else finish()
                 else -> Unit
             }
         },
         onPermission = {
-            if (context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) pageName = "Folders"
+            if (context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) navigate(WelcomePage.Folders)
             else permissionLauncher.launch(permission)
         },
-        onAdd = { if (!busy) try { folderLauncher.launch(null) } catch (_: ActivityNotFoundException) {
-            error = "No system folder picker is available on this device. You can continue without adding folders."
-        } },
+        onAdd = { sources.add() },
         onRemove = { uri -> if (!busy) save(state.remove(uri)) },
         onExclusions = { if (!busy) dialog = "exclusions" })
     if (dialog == "exclusions") ExclusionsDialog(state, onDismiss = { dialog = null }, onChange = { save(it) })
@@ -126,7 +94,7 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
         text = { Text(if (dialog == "permission-denied") "Allow music access in Android settings, or continue to select individual folders using the system picker."
             else "You can use the player now. Music discovery and playback still use the demo library in this build.") },
         confirmButton = { TextButton(onClick = {
-            if (dialog == "permission-denied") { dialog = null; pageName = "Folders" } else finish()
+            if (dialog == "permission-denied") { dialog = null; navigate(WelcomePage.Folders) } else finish()
         }) { Text("Continue") } },
         dismissButton = { TextButton(onClick = {
             if (dialog == "permission-denied") {
@@ -134,13 +102,14 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
                 context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
             } else dialog = null
         }) { Text(if (dialog == "permission-denied") "Open settings" else "Cancel") } })
+    SourceManagementError(sources)
     if (error != null) AlertDialog(onDismissRequest = { error = null }, title = { Text("Setup could not finish") },
         text = { Text(error!!) }, confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } })
 }
 
 /** Browse only granted trees; all provider queries run on IO, never during composition. */
 @Composable
-private fun ExclusionsDialog(state: OnboardingState, onDismiss: () -> Unit, onChange: (OnboardingState) -> Unit) {
+internal fun ExclusionsDialog(state: OnboardingState, onDismiss: () -> Unit, onChange: (OnboardingState) -> Unit) {
     val resolver = LocalContext.current.contentResolver
     var directory by remember { mutableStateOf<Uri?>(null) }
     var parents by remember { mutableStateOf(emptyList<Uri>()) }

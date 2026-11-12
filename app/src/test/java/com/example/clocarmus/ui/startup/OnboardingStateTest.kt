@@ -18,4 +18,14 @@ class OnboardingStateTest {
         assertEquals(setOf("${other.uri}/document/other%2Fa"), removed.exclusions)
         assertFalse(removed.completed)
     }
+    @Test fun folderChangesPreserveUnfinishedStepAndCompletion() {
+        val state = OnboardingState(step = WelcomePage.Permission)
+        assertEquals(WelcomePage.Permission, state.add(music).remove(music.uri).step)
+        assertTrue(state.copy(completed = true).add(music).remove(music.uri).completed)
+    }
+    @Test fun backDoesNotUndoAcknowledgedStepsOnProcessRestart() {
+        val acknowledged = OnboardingState().advancingTo(WelcomePage.Warning).advancingTo(WelcomePage.Permission)
+        assertEquals(WelcomePage.Permission, acknowledged.advancingTo(WelcomePage.Warning).step)
+        assertEquals(WelcomePage.Folders, acknowledged.advancingTo(WelcomePage.Folders).step)
+    }
 }

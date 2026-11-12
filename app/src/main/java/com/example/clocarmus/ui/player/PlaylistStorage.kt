@@ -21,12 +21,13 @@ internal fun loadPlaylists(preferences: SharedPreferences): PlaylistLibrary {
         }, timed("favorites"), timed("imported"), timed("played"))
     } catch (_: org.json.JSONException) { PlaylistLibrary() }
 }
-internal fun savePlaylists(preferences: SharedPreferences, library: PlaylistLibrary) {
+internal fun savePlaylists(preferences: SharedPreferences, library: PlaylistLibrary, durable: Boolean = false) {
     fun timed(entries: List<TimedTrack>) = JSONArray().apply {
         entries.forEach { put(JSONObject().put("id", it.id).put("time", it.timestamp)) }
     }
     val root = JSONObject().put("custom", JSONArray().apply {
         library.custom.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("tracks", JSONArray(it.tracks))) }
     }).put("favorites", timed(library.favorites)).put("imported", timed(library.imported)).put("played", timed(library.played))
-    preferences.edit().putString("library", root.toString()).apply()
+    val edit = preferences.edit().putString("library", root.toString())
+    if (durable) check(edit.commit()) { "Could not clear music memberships. Please try again." } else edit.apply()
 }
