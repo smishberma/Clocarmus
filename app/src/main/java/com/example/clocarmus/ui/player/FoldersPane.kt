@@ -52,6 +52,7 @@ internal fun FoldersPane(
             listOf("music", "oriental", "mix").mapNotNull { id -> entries.find { it.id == id } }
         else entries
     }
+    val trackOptions = LocalTrackOptions.current
     val rows = buildList {
         if (directory != null && query.isEmpty()) add(BrowserRow("folder:parent", "Previous directory", "", R.drawable.folder_previous_folder))
         contents.forEach { entry -> add(BrowserRow(entry.id, entry.name,
@@ -59,17 +60,18 @@ internal fun FoldersPane(
             if (entry.directory) R.drawable.folder_folder_icon else R.drawable.folder_audio_file_icon,
             audio = !entry.directory)) }
     }
-    BrowserPane(grid, rows, if (contents.any { it.id == selectedTrackId }) selectedTrackId else selectedFolder,
+    BrowserPane(grid, rows, contents.firstOrNull { it.track?.id == selectedTrackId }?.id ?: selectedFolder,
         playing, scroll, query, { query = it }, onSearchVisibilityChanged, { inactivity.cancel() }, back,
         onSelect = { id ->
             if (id == "folder:parent") back() else tree.get(id)?.let { entry ->
                 when {
                     !tree.accessible(entry) -> reconnect = tree.source(id)?.name ?: entry.name
                     entry.directory -> { selectedFolder = id; query = ""; onDirectory(id) }
-                    else -> onSelectTrack(id, tree.queue(directory, query))
+                    else -> onSelectTrack(entry.track!!.id, tree.queue(directory, query))
                 }
             }
         }, heading = "FOLDERS", searchName = "folders and audio files", showHeading = false,
+        onLongClick = { id -> tree.get(id)?.track?.id?.let(trackOptions.open) },
         folderRows = true, folderTextInset = if (directory == null) 115f else 130f,
         folderRowGap = if (directory == null) 42f else 44f, scrollbarTop = 312f,
         listTop = if (directory == null) 284f else 303f,

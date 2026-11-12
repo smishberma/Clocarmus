@@ -1,6 +1,8 @@
 # Clocarmus — v1 plan
 
-Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, the main-player Queues/Track info button redesign, playback Queue management, and the Settings demo flow (035–045) are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Welcome onboarding (046–050) is implemented with Android permission requests, persisted tree grants and exclusions, completion routing, and the centered Lottie loading animation (three seconds on black). Optional Launcher mode and the app drawer (051–052) are implemented with real Android app discovery and Home selection; the existing clock and player UI are reused. Real library data, audio playback, and remaining platform/library integrations remain planned.
+**Current implementation stage (2026-11-12): Real local library — in progress.** Normal browsing is now connected to a private SQLite library with selected-folder scans, cached metadata/artwork, stable identity reconciliation, availability states, transactional playlists, scan controls and confirmed-missing cleanup. Reference previews retain demo fixtures. Audio playback and the remaining Phase 3 acceptance work are pending. See [implementation contracts and limits](docs/compatibility-and-contracts.md). Historical demo-stage validation notes below describe their original builds.
+
+Status: main player, menu, All Tracks, Artists, the three-screen Albums demo flow, Playlists browsing/management, the five-screen Genres flow, the main-player Manage playlists popup, the two-screen Folders demo flow, the fresh-start Splash screen, shared Track Options with next/stop scheduling and Track info, the main-player Queues/Track info button redesign, playback Queue management, and the Settings demo flow (035–045) are implemented on `headunit_a6`. Browsers use demo metadata with search, retained list state, selection, interactive fast scrolling, and the 15-second inactivity return after track selection. Artist Play all and Play album update the demo queue, disable shuffle, and return immediately. Shared album options support entry from Artists and an explicitly scoped Album Artist shortcut. Automatic marquees for overflowing music titles and metadata are implemented across the player and all eight track, artist, and album browsing panes. Welcome onboarding (046–050) is implemented with Android permission requests, persisted tree grants and exclusions, completion routing, and the centered Lottie loading animation (three seconds on black). Optional Launcher mode and the app drawer (051–052) are implemented with real Android app discovery and Home selection; the existing clock and player UI are reused. Real library implementation is in progress; audio playback and remaining platform integrations remain planned.
 
 ## 1. Product and constraints
 
@@ -572,7 +574,7 @@ Validation: `assembleDebug`, all 112 unit tests, and `lintDebug` pass. API 23 ch
 
 ## 3. Library, playlists, and persistence
 
-### Sources and discovery — functionality interview complete, implementation pending
+### Sources and discovery — implementation in progress
 
 Agreed on 2026-11-07. The following rules govern the planned real library; existing demo browsers and persistence do not implement them yet.
 
@@ -832,6 +834,8 @@ Before committing to implementations, verify current official documentation for 
 - Validate readability on small/wide landscape emulators without changing the 50/50 split.
 
 ### Phase 3 — Local library
+
+Implementation started 2026-11-12. The first scanner/database/browser integration is implemented; remaining acceptance work and limitations are recorded in [the implementation contracts](docs/compatibility-and-contracts.md). This phase is not yet complete.
 
 - Implement database/preferences and the completed Library and source management specification: selected sources and per-source exclusions, progressive recursive discovery, metadata/artwork caching, coordinated cancellable incremental refresh, availability reasons, permission recovery, confirmed-missing cleanup, and in-app scan summaries.
 - Implement renamed/moved-file reconciliation and overlapping-source handling.

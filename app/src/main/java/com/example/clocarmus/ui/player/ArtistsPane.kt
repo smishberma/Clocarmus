@@ -91,7 +91,7 @@ internal fun ArtistsPane(
     onAlbum: (AlbumIdentity) -> Unit
 ) {
     val states = rememberSaveableStateHolder()
-    val library = genreCollection(if (preview != null) demoArtistTracks else demoLibraryTracks, genre)
+    val library = genreCollection(if (preview != null) demoArtistTracks else LocalLibraryTracks.current, genre)
     val artists = groupArtists(library)
     val artist = artistName?.let { ArtistEntry(it, artistCollection(library, it, scope)) }
     if (page == "detail" && artist != null) {

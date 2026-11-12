@@ -92,7 +92,7 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
     else if (dialog != null) AlertDialog(onDismissRequest = { dialog = null },
         title = { Text(when (dialog) { "permission-denied" -> "Storage access denied"; "skip" -> "Skip setup?"; else -> "Continue without folders?" }) },
         text = { Text(if (dialog == "permission-denied") "Allow music access in Android settings, or continue to select individual folders using the system picker."
-            else "You can use the player now. Music discovery and playback still use the demo library in this build.") },
+            else "You can add music folders later in Settings. Audio playback is still under development.") },
         confirmButton = { TextButton(onClick = {
             if (dialog == "permission-denied") { dialog = null; navigate(WelcomePage.Folders) } else finish()
         }) { Text("Continue") } },
@@ -114,6 +114,7 @@ internal fun ExclusionsDialog(state: OnboardingState, onDismiss: () -> Unit, onC
     var directory by remember { mutableStateOf<Uri?>(null) }
     var parents by remember { mutableStateOf(emptyList<Uri>()) }
     var children by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+    var pendingExclusion by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(directory) {
@@ -149,7 +150,7 @@ internal fun ExclusionsDialog(state: OnboardingState, onDismiss: () -> Unit, onC
                 children.forEach { (uri, name) ->
                     androidx.compose.foundation.layout.Row {
                         androidx.compose.material3.Checkbox(checked = uri in state.exclusions, onCheckedChange = { excluded ->
-                            onChange(state.copy(exclusions = if (excluded) state.exclusions + uri else state.exclusions - uri))
+                            if (excluded) pendingExclusion = uri else onChange(state.copy(exclusions = state.exclusions - uri))
                         })
                         TextButton(onClick = { parents = parents + directory!!; directory = Uri.parse(uri) }) { Text(name) }
                     }
@@ -157,4 +158,8 @@ internal fun ExclusionsDialog(state: OnboardingState, onDismiss: () -> Unit, onC
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
+    pendingExclusion?.let { uri -> AlertDialog(onDismissRequest = { pendingExclusion = null },
+        title = { Text("Exclude folder?") }, text = { Text("Tracks in this folder will be removed from the library, playlists, Favorites and history unless another selected source includes them. Music files are kept.") },
+        confirmButton = { TextButton(onClick = { onChange(state.copy(exclusions = state.exclusions + uri)); pendingExclusion = null }) { Text("Exclude") } },
+        dismissButton = { TextButton(onClick = { pendingExclusion = null }) { Text("Cancel") } }) }
 }

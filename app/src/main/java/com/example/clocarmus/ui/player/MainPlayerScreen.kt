@@ -1,6 +1,7 @@
 package com.example.clocarmus.ui.player
 
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 
 import android.content.Context
 import android.widget.Toast
@@ -16,6 +17,7 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.MarqueeSpacing
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -83,6 +85,10 @@ internal class PlayerGrid(width: Float, height: Float) {
 @Composable
 internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, queuePreview: Boolean = false, settingsPreview: String? = null, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
     val context = LocalContext.current
+    val fixture = referencePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || collectionsPreview != null || foldersPreview != null || settingsPreview != null || queuePreview
+    val repository = remember { (context.applicationContext as com.example.clocarmus.ClocarmusApplication).library }
+    val librarySnapshot by repository.state.collectAsState()
+    LaunchedEffect(fixture) { if (!fixture) repository.refresh() }
     val activity = context as? com.example.clocarmus.MainActivity
     val launcher = activity?.launcher
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
@@ -133,26 +139,38 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         text = { androidx.compose.material3.Text(message) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { settingsError = null }) { androidx.compose.material3.Text("OK") } }) }
     SideEffect { (context as? com.example.clocarmus.MainActivity)?.setStatusBarVisible(settings.statusBar) }
-    val settingsFolderTree = remember(settings.sources, settings.exclusions) { settings.folderTree(demoFolderTree) }
+    val settingsFolderTree = if (fixture) remember(settings.sources, settings.exclusions) { settings.folderTree(demoFolderTree) } else librarySnapshot.folders
     val playlistPreferences = remember { context.getSharedPreferences("demo-playlists", Context.MODE_PRIVATE) }
-    var playlistLibrary by remember { mutableStateOf(if (collectionsPreview != null) collectionsFixture(collectionsPreview) else if (playlistsPreview != null) playlistFixture(playlistsPreview) else initialPlaylists ?: loadPlaylists(playlistPreferences)) }
-    val updatePlaylists: (PlaylistLibrary) -> Unit = {
-        playlistLibrary = it
-        if (playlistsPreview == null && collectionsPreview == null) {
-            savePlaylists(playlistPreferences, it)
-            onPlaylistsChanged(it)
+    var previewPlaylistLibrary by remember { mutableStateOf(if (collectionsPreview != null) collectionsFixture(collectionsPreview) else if (playlistsPreview != null) playlistFixture(playlistsPreview) else initialPlaylists ?: loadPlaylists(playlistPreferences)) }
+    var pendingPlaylistLibrary by remember { mutableStateOf<PlaylistLibrary?>(null) }
+    val playlistWriteMutex = remember { kotlinx.coroutines.sync.Mutex() }
+    val playlistLibrary = if (fixture) previewPlaylistLibrary else pendingPlaylistLibrary ?: librarySnapshot.playlists
+    val updatePlaylists: (PlaylistLibrary) -> Unit = { next ->
+        if (fixture) previewPlaylistLibrary = next
+        else {
+            pendingPlaylistLibrary = next
+            // Acquire in UI command order; finish accepted writes across activity recreation.
+            settingsScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    playlistWriteMutex.withLock {
+                        try { repository.editPlaylists { current -> next.copy(imported = current.imported) } }
+                        catch (exception: Exception) { settingsError = exception.message ?: "Could not save playlists" }
+                        finally { if (pendingPlaylistLibrary == next) pendingPlaylistLibrary = null }
+                    }
+                }
+            }
         }
     }
     val resetPending = remember { !referencePreview && com.example.clocarmus.ui.startup.loadOnboarding(context.getSharedPreferences("onboarding", 0)).resetPending }
-    val playlistTracks = remember { (demoTracks + demoLibraryTracks + genreReferenceTracks + playlistFixtureTracks + demoPlayerTrack + demoFolderTree.entries.mapNotNull { it.track }).distinctBy { it.id } }
+    val playlistTracks = if (!fixture) librarySnapshot.tracks else remember { (demoTracks + demoLibraryTracks + genreReferenceTracks + playlistFixtureTracks + demoPlayerTrack + demoFolderTree.entries.mapNotNull { it.track }).distinctBy { it.id } }
     LaunchedEffect(Unit) {
-        if (playlistsPreview == null && collectionsPreview == null && !resetPending && !settingsPreferences.getBoolean("demoLibraryRemoved", false)) {
+        if (fixture && playlistsPreview == null && collectionsPreview == null && !resetPending && !settingsPreferences.getBoolean("demoLibraryRemoved", false)) {
             var next = playlistLibrary
             playlistTracks.filterNot { it.id.startsWith("playlist:") }.forEachIndexed { i, track -> next = next.imported(track.id, i.toLong()) }
             updatePlaylists(next)
         }
     }
-    val recordDemoStart: (TrackMenuEntry) -> Unit = { updatePlaylists(playlistLibrary.playbackStarted(it, System.currentTimeMillis())) }
+    val recordDemoStart: (TrackMenuEntry) -> Unit = { if (fixture) updatePlaylists(playlistLibrary.playbackStarted(it, System.currentTimeMillis())) }
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var volume by remember { mutableFloatStateOf(if (referencePreview) .62f else audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
@@ -165,7 +183,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             override fun onChange(selfChange: Boolean) { syncVolume() }
         }
         val lifecycleObserver = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) syncVolume()
+            if (event == Lifecycle.Event.ON_RESUME) { syncVolume(); if (!fixture) repository.refresh() }
         }
         context.contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observer)
         lifecycle.addObserver(lifecycleObserver)
@@ -176,11 +194,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         }
     }
     val sessionPreferences = remember { context.getSharedPreferences("demo-session", Context.MODE_PRIVATE) }
-    val fixture = referencePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || collectionsPreview != null || foldersPreview != null
-    val savedSession = remember { if (fixture) null else loadDemoSession(sessionPreferences) }
+    val savedSession = remember { if (fixture) null else loadDemoSession(sessionPreferences)?.takeIf { session -> session.queue.entries.all { it.trackId.startsWith("local:") } } }
     var playing by rememberSaveable { mutableStateOf(referencePreview) }
-    var position by rememberSaveable { mutableFloatStateOf(savedSession?.position ?: 113f) }
-    var shuffle by rememberSaveable { mutableStateOf(savedSession?.shuffle ?: true) }
+    var position by rememberSaveable { mutableFloatStateOf(savedSession?.position ?: if (fixture) 113f else 0f) }
+    var shuffle by rememberSaveable { mutableStateOf(savedSession?.shuffle ?: fixture) }
     var repeat by rememberSaveable { mutableIntStateOf(savedSession?.repeat ?: 0) }
     var menuOpen by rememberSaveable { mutableStateOf(settingsPreview != null || queuePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
     var queueOpen by rememberSaveable { mutableStateOf(queuePreview) }
@@ -222,10 +239,16 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
     val initialSelectedId = if (foldersPreview == "folder-directory") "folder:alley" else if (genresPreview == "genre-tracks") "genre:track:2" else if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else demoPlayerTrack.id
-    var queue by rememberSaveable { mutableStateOf(if (resetPending) TrackQueue() else savedSession?.queue ?: if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
+    var queue by rememberSaveable { mutableStateOf(if (resetPending) TrackQueue() else if (!fixture) savedSession?.queue?.takeIf { it.entries.all { entry -> entry.trackId.startsWith("local:") } } ?: TrackQueue() else savedSession?.queue ?: if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
         listOf(initialSelectedId) + demoTracks.map { it.id }.filterNot { it == initialSelectedId }, initialSelectedId, shuffle)) }
     val selectedTrackId = queue.current?.trackId
     val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
+    LaunchedEffect(librarySnapshot.version, librarySnapshot.ready, selectedTrackId) {
+        if (!fixture && librarySnapshot.ready && selectedTrackId != null) {
+            if (selectedTrack == null) { playing = false; position = 0f; queue = TrackQueue() }
+            else if (!selectedTrack.available) playing = false
+        }
+    }
     val selectedTitle = selectedTrack?.title
     val duration = selectedTrack?.durationSeconds?.takeIf { it > 0 }?.toFloat()
     var seekPreview by remember(queue.currentId, duration) { mutableStateOf<Float?>(null) }
@@ -233,12 +256,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val seekable = selectedTrack?.available == true && duration != null
     var trackQuery by rememberSaveable { mutableStateOf("") }
     val trackScroll = rememberScrollState()
-    val visibleTracks = remember(trackQuery) { demoTracks.filter { it.title.contains(trackQuery, ignoreCase = true) } }
+    val allTracks = if (fixture) demoTracks else playlistTracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+    val visibleTracks = remember(trackQuery, allTracks) { allTracks.filter { it.title.contains(trackQuery, ignoreCase = true) } }
     LaunchedEffect(trackQuery) { trackScroll.scrollTo(0) }
     val available: (String) -> Boolean = { id -> playlistTracks.any { it.id == id && it.available } }
     LaunchedEffect(Unit) {
         // A fresh process follows autoplay (off by default); recreation retains transport state.
-        if (freshStartup && !referencePreview) playing = settings.autoplay && selectedTrack?.available == true
+        if (fixture && freshStartup && !referencePreview) playing = settings.autoplay && selectedTrack?.available == true
     }
     val stepTrack: (Int) -> Unit = { direction ->
         queue = queue.step(direction, available)
@@ -249,7 +273,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         if (!fixture) saveDemoSession(sessionPreferences, DemoSession(queue, position, shuffle, repeat))
     }
     LaunchedEffect(playing, queue.currentId, duration, repeat, referencePreview) {
-        if (playing && !referencePreview && duration != null) {
+        if (fixture && playing && !referencePreview && duration != null) {
             while (true) {
                 delay(1000)
                 position = (position + 1f).coerceAtMost(duration)
@@ -318,10 +342,12 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     BackHandler(enabled = menuOpen && optionsTarget == null && infoRequest == null, onBack = goBack)
     val selectTrack: (String, List<TrackMenuEntry>) -> Unit = { id, tracks ->
         val playable = playableTrack(tracks, id)
-        queue = TrackQueue.fromTracks(tracks.map { it.id }, playable?.id, shuffle)
-        position = 0f
-        playing = playable != null
-        if (playable != null) { recordDemoStart(playable); browsingReturn.trackSelected() } else browsingReturn.cancel()
+        if (playable != null) {
+            queue = TrackQueue.fromTracks(tracks.map { it.id }, playable.id, shuffle)
+            position = 0f
+            playing = true
+            recordDemoStart(playable); browsingReturn.trackSelected()
+        } else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
     }
 
     val sliderPointers = remember { SliderPointers() }
@@ -368,7 +394,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     LaunchedEffect(activity?.homeActivation) {
         if ((activity?.homeActivation ?: 0) > 0) homeNavigation.returnToPlayer()
     }
-    CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation) {
+    CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation, LocalLibraryTracks provides if (fixture) demoLibraryTracks else playlistTracks) {
         Box(Modifier.fillMaxSize().background(settings.background.color).observePlayerTouches(inactivity, sliderPointers)
             .observeBrowsingTouches(browsingReturn).observeBrowsingTouches(drawerTimeout).onPreviewKeyEvent { browsingReturn.interaction(); drawerTimeout.interaction(); false }) {
             settings.background.gradientAsset?.let { asset ->
@@ -455,7 +481,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 onQuery = { trackQuery = it },
                                 onSearchVisibilityChanged = { searchOpen = it },
                                 onSearchEdited = { browsingReturn.cancel() },
-                                onBack = goBack, onSelect = { selectTrack(it, visibleTracks) })
+                                onBack = goBack, onSelect = { selectTrack(it, visibleTracks) },
+                                emptyMessage = if (!fixture && librarySnapshot.summary.running) "Scanning music…" else if (!fixture && allTracks.isEmpty()) "Add music folders in Settings" else "No matching tracks")
                         } else if (menuOpen) {
                             MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
                                 browsingReturn.interaction()
@@ -495,7 +522,15 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             if (collectionsOpen) closeCollections() else collectionsTarget = selectedTrackId
                         }
                         if (!collectionsOpen) {
-                            Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
+                            val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, selectedTrack?.artworkPath) {
+                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    selectedTrack?.artworkPath?.let { path ->
+                                        android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+                                    }
+                                }
+                            }
+                            if (artwork != null) Image(artwork!!, "Album artwork", grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
+                            else Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
                                 grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
                             AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
                                 grid, 141f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
@@ -520,10 +555,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 browsingReturn.cancel()
                                 infoRequest = TrackInfoRequest(selectedTrackId!!, TrackInfoDestination.MAIN_PLAYER)
                             }
-                            PlayerLabel(selectedTitle ?: "Superman", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
-                            PlayerLabel(if (selectedTitle == null) "Lazlo Bane" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
-                            PlayerLabel(if (selectedTitle == null) "All the Time in the World" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
-                            PlayerLabel(if (selectedTitle == null) "2002" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
+                            PlayerLabel(selectedTitle ?: if (fixture) "Superman" else "No track selected", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
+                            PlayerLabel(if (selectedTitle == null) if (fixture) "Lazlo Bane" else "Unknown artist" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
+                            PlayerLabel(if (selectedTitle == null) if (fixture) "All the Time in the World" else "Unknown album" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
+                            PlayerLabel(if (selectedTitle == null) if (fixture) "2002" else "Unknown year" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
                             PlayerSlider(if (duration != null) position / duration else 0f,
                                 { if (duration != null) position = it * duration },
                                 grid.place(79f, 970f, 841f, 87f), "Track position", grid.scale,

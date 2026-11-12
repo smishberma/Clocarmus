@@ -55,8 +55,8 @@ internal class FolderTree(val entries: List<FolderEntry>) {
         return false
     }
     fun contents(directory: String?, query: String = ""): List<FolderEntry> = entries.filter {
-        val eligible = it.directory || (it.track != null && it.name.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT) in
-            setOf("mp3", "flac", "wav", "ogg", "opus", "m4a", "aac", "amr", "3gp", "mp4"))
+        val eligible = it.directory || (it.track != null && (it.track.id.startsWith("local:") || it.name.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT) in
+            setOf("mp3", "flac", "wav", "ogg", "opus", "m4a", "aac", "amr", "3gp", "mp4")))
         val validDirectory = directory == null || get(directory)?.let { parent -> parent.directory && accessible(parent) } == true
         eligible && validDirectory && if (query.isBlank()) it.parent == directory && (directory != null || it.directory)
         else beneath(it, directory) && accessible(it) && it.name.contains(query, true)
@@ -69,7 +69,7 @@ internal class FolderTree(val entries: List<FolderEntry>) {
         }
     }
     fun queue(directory: String?, query: String = ""): List<TrackMenuEntry> = contents(directory, query)
-        .mapNotNull { entry -> entry.track?.copy(available = entry.track.available && accessible(entry)) }
+        .mapNotNull { entry -> entry.track?.copy(available = entry.track.available && accessible(entry)) }.distinctBy { it.id }
 }
 
 internal val demoFolderTree = FolderTree(buildList {

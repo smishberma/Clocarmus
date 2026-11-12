@@ -4,7 +4,7 @@ import java.io.Serializable
 
 /** Saved file tags, kept separately from normalized browser labels and library fallbacks.
  * null on TrackMenuEntry means no metadata snapshot; an empty snapshot means known absent tags.
- * The future scanner must retain these fields even while the source is disconnected.
+ * The library retains this snapshot even while the source is disconnected.
  */
 internal data class TrackTags(
     val artists: List<String> = emptyList(),
@@ -16,7 +16,8 @@ internal data class TrackTags(
     val trackNumber: String? = null,
     val composer: String? = null,
     val copyright: String? = null,
-    val publisher: String? = null
+    val publisher: String? = null,
+    val unreadFields: Set<String> = emptySet()
 ) : Serializable {
     fun fields(): List<Pair<String, String?>> {
         val compound = trackNumber?.split('/', limit = 2).orEmpty()
@@ -37,6 +38,8 @@ internal data class TrackInfoContent(val fields: List<Pair<String, String?>>, va
 internal fun trackInfoContent(track: TrackMenuEntry?): TrackInfoContent = when {
     track == null || (!track.available && track.tags == null) ->
         TrackInfoContent(emptyList(), "File unavailable — no saved tags available")
-    else -> TrackInfoContent((track.tags ?: TrackTags()).fields(),
+    else -> TrackInfoContent((track.tags ?: TrackTags()).fields().map { (label, value) ->
+        label to if (label in track.tags?.unreadFields.orEmpty() && value == null) "Not read" else value
+    },
         if (!track.available) "File unavailable — showing saved tags" else null)
 }

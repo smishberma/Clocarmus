@@ -1,5 +1,7 @@
 # Clocarmus
 
+**Current implementation stage (2026-11-12): Real local library — in progress.** Normal browsing is now connected to a private SQLite library with selected-folder scans, cached metadata/artwork, stable identity reconciliation, availability states, transactional playlists, scan controls and confirmed-missing cleanup. Reference previews retain demo fixtures. Audio playback and the remaining Phase 3 acceptance work are pending. See [implementation contracts and limits](docs/compatibility-and-contracts.md). Historical demo-stage validation notes below describe their original builds.
+
 Clocarmus is a planned offline music player for aftermarket Android car infotainment systems, built with **Kotlin and Jetpack Compose**. It combines local music playback with a large digital clock in a landscape interface designed for car screens.
 
 The app is intended to run on **Android 6.0 (API 23) and above**, install through an APK, and operate without accounts, cloud services, an internet connection, or Google Play Services.
