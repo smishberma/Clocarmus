@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.playback.shuffle.ShuffleCollection
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
@@ -21,7 +23,7 @@ internal fun FoldersPane(
     grid: PlayerGrid, directory: String?, preview: String?, selectedTrackId: String?, playing: Boolean,
     inactivity: BrowsingReturnInactivity, onSearchVisibilityChanged: (Boolean) -> Unit,
     onExit: () -> Unit, onDirectory: (String?) -> Unit,
-    onSelectTrack: (String, List<TrackMenuEntry>) -> Unit,
+    onSelectTrack: (String, List<TrackMenuEntry>, ShuffleCollection) -> Unit,
     tree: FolderTree = demoFolderTree, onSourceLost: (String?) -> Unit = {}
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -67,7 +69,7 @@ internal fun FoldersPane(
                 when {
                     !tree.accessible(entry) -> reconnect = tree.source(id)?.name ?: entry.name
                     entry.directory -> { selectedFolder = id; query = ""; onDirectory(id) }
-                    else -> onSelectTrack(entry.track!!.id, tree.queue(directory, query))
+                    else -> onSelectTrack(entry.track!!.id, tree.queue(directory, query), ShuffleCollection(kind = "folder", directory = directory, query = query))
                 }
             }
         }, heading = "FOLDERS", searchName = "folders and audio files", showHeading = false,

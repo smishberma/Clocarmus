@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.playback.shuffle.ShuffleCollection
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -84,8 +86,8 @@ internal fun ArtistsPane(
     selectedTrackId: String?, playing: Boolean, inactivity: BrowsingReturnInactivity,
     onSearchVisibilityChanged: (Boolean) -> Unit, onBack: () -> Unit,
     onArtist: (String) -> Unit, onPage: (String) -> Unit,
-    onSelectTrack: (String, List<TrackMenuEntry>) -> Unit,
-    onPlayAll: (List<TrackMenuEntry>) -> Unit,
+    onSelectTrack: (String, List<TrackMenuEntry>, ShuffleCollection) -> Unit,
+    onPlayAll: (List<TrackMenuEntry>, ShuffleCollection) -> Unit,
     scope: ArtistScope = ArtistScope.TRACK,
     genre: String? = null,
     onAlbum: (AlbumIdentity) -> Unit
@@ -96,7 +98,7 @@ internal fun ArtistsPane(
     val artist = artistName?.let { ArtistEntry(it, artistCollection(library, it, scope)) }
     if (page == "detail" && artist != null) {
         ArtistDetailPane(grid, artist.name, onBack,
-            { onPlayAll(artist.tracks) }, { onPage("tracks") }, { onPage("albums") })
+            { onPlayAll(artist.tracks, ShuffleCollection(kind = "artist", artist = artistName, artistScope = scope, genre = genre)) }, { onPage("tracks") }, { onPage("albums") })
         return
     }
     states.SaveableStateProvider(if (page == "artists") page else "$genre:$scope:$artistName:$page") {
@@ -142,7 +144,7 @@ internal fun ArtistsPane(
                         selectedAlbum = id
                         groupAlbums(artist?.tracks.orEmpty()).firstOrNull { it.identity.key == id }?.let { onAlbum(it.identity) }
                     }
-                    else -> onSelectTrack(id, tracks)
+                    else -> onSelectTrack(id, tracks, ShuffleCollection(kind = "artist", artist = artistName, artistScope = scope, genre = genre, query = query))
                 }
             },
             heading = when (page) { "artists" -> "ARTISTS"; "albums" -> "ALL ALBUMS"; else -> "ALL TRACKS" },

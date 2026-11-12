@@ -5,6 +5,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -223,22 +224,40 @@ private val ColorScrollRail = Color(0xff494949)
 
 @Composable
 internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<String>, searchName: String, proportional: Boolean = false, top: Float = 312f, showAlphabetIndicator: Boolean = true) {
+    Scrollbar(grid, scroll.value, scroll.maxValue, scroll.isScrollInProgress, { scroll.scrollTo(it) },
+        titles, searchName, proportional, top, showAlphabetIndicator)
+}
+
+@Composable
+internal fun QueueScrollbar(grid: PlayerGrid, scroll: LazyListState, rowPx: Float, viewportPx: Float,
+    titles: List<String>) {
+    val maximum = (titles.size * rowPx - viewportPx).roundToInt().coerceAtLeast(0)
+    val pixels = (scroll.firstVisibleItemIndex * rowPx + scroll.firstVisibleItemScrollOffset).roundToInt().coerceAtMost(maximum)
+    Scrollbar(grid, pixels, maximum, scroll.isScrollInProgress, { value ->
+        scroll.scrollToItem((value / rowPx).toInt(), (value % rowPx).roundToInt())
+    }, titles, "queue", true, 294f, true)
+}
+
+@Composable
+private fun Scrollbar(grid: PlayerGrid, value: Int, maximum: Int, scrolling: Boolean,
+    scrollTo: suspend (Int) -> Unit, titles: List<String>, searchName: String,
+    proportional: Boolean, top: Float, showAlphabetIndicator: Boolean) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val railHeight = 708f * grid.scale
     // Album tracks use a proportional thumb; other browsers retain the supplied pill ratio.
     val viewportPx = with(density) { (700f * grid.scale).dp.toPx() }
-    val pillHeight = if (proportional) (railHeight * viewportPx / (scroll.maxValue + viewportPx)).coerceIn(88f * grid.scale, railHeight)
+    val pillHeight = if (proportional) (railHeight * viewportPx / (maximum + viewportPx)).coerceIn(88f * grid.scale, railHeight)
         else 88f * grid.scale
     val pillWidth = 88f * grid.scale * 2.9479708f / 9.6478851f
     val travelPx = with(density) { (railHeight - pillHeight).dp.toPx() }
-    val fraction = if (scroll.maxValue > 0) scroll.value.toFloat() / scroll.maxValue else 0f
+    val fraction = if (maximum > 0) value.toFloat() / maximum else 0f
     var dragging by remember { mutableStateOf(false) }
     val currentFraction by rememberUpdatedState(fraction)
-    val currentMax by rememberUpdatedState(scroll.maxValue)
-    val scrollable = scroll.maxValue > 0
+    val currentMax by rememberUpdatedState(maximum)
+    val scrollable = maximum > 0
     val jump: (Float) -> Unit = { value ->
-        scope.launch { scroll.scrollTo((value.coerceIn(0f, 1f) * scroll.maxValue).roundToInt()) }
+        scope.launch { scrollTo((value.coerceIn(0f, 1f) * maximum).roundToInt()) }
     }
     val latestJump by rememberUpdatedState(jump)
 
@@ -279,7 +298,7 @@ internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<
             Modifier.align(Alignment.TopCenter).offset(y = ((railHeight - pillHeight) * fraction).dp)
                 .size(pillWidth.dp, pillHeight.dp), contentScale = if (proportional) ContentScale.FillBounds else ContentScale.Fit)
     }
-    if (showAlphabetIndicator && scrollable && (dragging || scroll.isScrollInProgress)) {
+    if (showAlphabetIndicator && scrollable && (dragging || scrolling)) {
         PlayerLabel(fastScrollLetter(titles, fraction),
             grid.place(806f, top + (708f - 88f) * fraction, 88f, 88f)
                 .clip(RoundedCornerShape(percent = 50)).background(ColorScrollRail),

@@ -23,7 +23,9 @@ internal data class LibrarySnapshot(
     val folders: FolderTree = FolderTree(emptyList()), val version: Long = 0,
     val summary: ScanSummary = ScanSummary(), val ready: Boolean = false
 ) {
-    val tracks get() = records.map { it.track.copy(id = it.id, available = it.availability == Availability.AVAILABLE) }
+    val byId = records.associateBy { it.id }
+    val tracks = records.map { it.track.copy(id = it.id, available = it.availability == Availability.AVAILABLE) }
+    val tracksById = tracks.associateBy { it.id }
 }
 
 internal fun PlaylistLibrary.retaining(ids: Set<String>) = copy(

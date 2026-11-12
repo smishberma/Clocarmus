@@ -20,7 +20,8 @@ internal class ShuffleSampler(private val random: ShuffleRandom) {
         tracks: LongArray,
         previous: LongArray = longArrayOf(),
         lastAudible: Long? = null,
-        fixedFirst: Int? = null
+        fixedFirst: Int? = null,
+        openingConstraints: Boolean = true
     ): IntArray = withContext(Dispatchers.Default) {
         require(fixedFirst == null || fixedFirst in tracks.indices)
         // Own inputs across suspension/cancellation; preparation never edits an active queue.
@@ -32,13 +33,13 @@ internal class ShuffleSampler(private val random: ShuffleRandom) {
         val free = ids.indices.filter { it != fixedFirst }.toIntArray()
         val fixedTrack = fixedFirst?.let { ids[it] }
         val oldFree = old.toMutableList().apply { if (fixedFirst != null) remove(fixedTrack) }.toLongArray()
-        require(ids.size <= 8 || (ids.toSet().size == ids.size && old.toSet().size == old.size)) {
-            "Large duplicate collections require a separate feasibility policy"
-        }
-        val opening = openingRule(ids, old.firstOrNull(), lastAudible, fixedFirst)
+        val opening = if (openingConstraints) openingRule(ids, old.firstOrNull(), lastAudible, fixedFirst) else { _: Long -> true }
         fun allowed(order: IntArray): Boolean = fixedFirst != null || order.isEmpty() || opening(ids[order[0]])
-        fun score(order: IntArray): Similarity = similarity(
-            order.asSequence().filter { it != fixedFirst }.map { ids[it] }.toList().toLongArray(), oldFree
+        val comparison by lazy(LazyThreadSafetyMode.NONE) {
+            SimilarityReference(LongArray(free.size) { ids[free[it]] }, oldFree, ::check)
+        }
+        fun score(order: IntArray): Similarity = comparison.score(
+            order.asSequence().filter { it != fixedFirst }.map { ids[it] }.toList().toLongArray()
         )
         fun assemble(order: IntArray): IntArray = if (fixedFirst == null) order else intArrayOf(fixedFirst) + order
 
@@ -58,6 +59,14 @@ internal class ShuffleSampler(private val random: ShuffleRandom) {
             }
             context.ensureActive()
             return@withContext chosen
+        }
+
+        if (ids.toSet().size != ids.size || old.toSet().size != old.size) {
+            val freeIds = LongArray(free.size) { ids[free[it]] }
+            val order = duplicateShuffle(freeIds, oldFree,
+                { fixedFirst != null || opening(it) }, random, ::check)
+            context.ensureActive()
+            return@withContext assemble(IntArray(order.size) { free[order[it]] })
         }
 
         val currentSet = free.mapTo(HashSet()) { ids[it] }
@@ -122,17 +131,48 @@ internal data class Similarity(val positions: Int, val directedPairs: Int) {
 }
 
 /** Project onto shared identities before scoring; pair counts retain duplicate multiplicities. */
-internal fun similarity(current: LongArray, previous: LongArray): Similarity {
-    val shared = current.toSet().intersect(previous.toSet())
-    val a = current.filter { it in shared }
-    val b = previous.filter { it in shared }
-    val pairs = b.zipWithNext().groupingBy { it }.eachCount().toMutableMap()
-    var matches = 0
-    for (pair in a.zipWithNext()) {
-        val remaining = pairs[pair] ?: 0
-        if (remaining > 0) { matches++; pairs[pair] = remaining - 1 }
+internal fun similarity(current: LongArray, previous: LongArray, check: () -> Unit = {}): Similarity =
+    SimilarityReference(current, previous, check).score(current)
+
+/** Compile the shared projection and duplicate transition counts once, even when history shrinks. */
+internal class SimilarityReference(current: LongArray, previous: LongArray, private val check: () -> Unit = {}) {
+    private val shared: Set<Long>
+    private val old = ArrayList<Long>()
+    private val pairs = HashMap<Pair<Long, Long>, Int>()
+    init {
+        val currentIds = HashSet<Long>()
+        val previousIds = HashSet<Long>()
+        current.forEach { check(); currentIds.add(it) }
+        previous.forEach { check(); previousIds.add(it) }
+        shared = currentIds.intersect(previousIds)
+        var prior: Long? = null
+        for (id in previous) {
+            check()
+            if (id !in shared) continue
+            old.add(id)
+            prior?.let { val pair = it to id; pairs[pair] = (pairs[pair] ?: 0) + 1 }
+            prior = id
+        }
     }
-    return Similarity(a.zip(b).count { (left, right) -> left == right }, matches)
+    fun score(current: LongArray): Similarity {
+        val used = HashMap<Pair<Long, Long>, Int>()
+        var prior: Long? = null
+        var index = 0
+        var positions = 0
+        var matches = 0
+        for (id in current) {
+            check()
+            if (id !in shared) continue
+            if (old.getOrNull(index++) == id) positions++
+            prior?.let {
+                val pair = it to id
+                val count = used[pair] ?: 0
+                if (count < (pairs[pair] ?: 0)) { matches++; used[pair] = count + 1 }
+            }
+            prior = id
+        }
+        return Similarity(positions, matches)
+    }
 }
 
 private inline fun permutations(values: IntArray, check: () -> Unit, visit: (IntArray) -> Unit) {

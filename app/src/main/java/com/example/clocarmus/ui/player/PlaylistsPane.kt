@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.playback.shuffle.ShuffleCollection
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -39,7 +41,7 @@ internal fun PlaylistsPane(
     tracks: List<TrackMenuEntry>, selectedTrackId: String?, playing: Boolean,
     inactivity: BrowsingReturnInactivity, onChange: (PlaylistLibrary) -> Unit,
     onBack: () -> Unit, onOpen: (String) -> Unit,
-    onSelect: (String, List<TrackMenuEntry>) -> Unit, onEditingChanged: (Boolean) -> Unit
+    onSelect: (String, List<TrackMenuEntry>, ShuffleCollection) -> Unit, onEditingChanged: (Boolean) -> Unit
 ) {
     val trackOptions = LocalTrackOptions.current
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
@@ -107,7 +109,7 @@ internal fun PlaylistsPane(
         if (scroll.maxValue > 0) TrackScrollbar(grid, scroll, (builtInPlaylists.values + library.sortedCustom.map { it.name }).toList(), "playlists", proportional = true, top = 319f)
     } else {
         BrowserPane(grid, shownTracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") }, selectedTrackId, playing,
-            scroll, "", {}, {}, {}, { if (editing) finishEditing() else onBack() }, { onSelect(it, shownTracks.toList()) },
+            scroll, "", {}, {}, {}, { if (editing) finishEditing() else onBack() }, { onSelect(it, shownTracks.toList(), ShuffleCollection(kind = "playlist", token = playlistId!!)) },
             trackRows = true, showSearch = false, showHeading = false, emptyMessage = "", onLongClick = if (custom != null || playlistId == FAVORITES) { id ->
                 inactivity.cancel(); target = id; action = "track"
             } else null, reordering = editing,

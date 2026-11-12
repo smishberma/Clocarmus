@@ -100,11 +100,79 @@ class ShuffleSamplerTest {
         assertTrue(job.isCancelled)
     }
 
-    @Test fun unsupportedLargeDuplicatesFailBeforeSampling() = runBlocking {
+    @Test fun largeIdenticalCollectionRetainsEveryRequestedOccurrence() = runBlocking {
+        val ids = LongArray(100_000) { 1 }
+        val order = sampler().sample(ids, ids, 1)
+        assertEquals(ids.indices.toSet(), order.toSet())
+    }
+
+    @Test fun largeSingleMinorityCollectionUsesExactFeasibleOpeningAndMinimum() = runBlocking {
+        val ids = LongArray(100_000) { 1 }.apply { this[lastIndex] = 2 }
+        val order = sampler().sample(ids, ids, 1)
+        assertEquals(ids.lastIndex, order.first())
+        assertEquals(ids.indices.toSet(), order.toSet())
+    }
+
+    @Test fun mixedDuplicatesUseMultiplicityAwareLimitsAndRetainOccurrences() = runBlocking {
+        val ids = longArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 1)
+        val order = sampler().sample(ids, ids, 1)
+        val score = similarity(order.map { ids[it] }.toLongArray(), ids)
+        assertTrue(ids[order.first()] != 1L)
+        assertTrue(score.positions <= 3 && score.directedPairs <= 3)
+        assertEquals(ids.indices.toSet(), order.toSet())
+    }
+    @Test fun mixedDuplicateRelaxationMatchesExhaustiveIdentityOracle() = runBlocking {
+        val previous = longArrayOf(1, 1, 1, 1, 1, 2, 2, 2, 2, 2)
+        val candidates = (0 until (1 shl 10)).filter { Integer.bitCount(it) == 5 }.map { mask ->
+            LongArray(10) { if (mask and (1 shl it) == 0) 1 else 2 }
+        }.filter { it.first() == 2L }
+        val scores = candidates.map { similarity(it, previous) }
+        val ordinaryFeasible = scores.any { it.positions <= 3 && it.directedPairs <= 3 }
+        val minimum = scores.minOf { it.total }
+        repeat(10) { seed ->
+            val order = sampler(seed.toLong()).sample(previous, previous)
+            val score = similarity(order.map { previous[it] }.toLongArray(), previous)
+            if (ordinaryFeasible) assertTrue(score.positions <= 3 && score.directedPairs <= 3)
+            else assertEquals(minimum, score.total)
+        }
+    }
+
+    @Test fun minorityRelaxationMatchesAllFeasibleIdentityPositions() = runBlocking {
+        val previous = LongArray(10) { 1 }.apply { this[4] = 2 }
+        val costs = previous.indices.map { p -> similarity(LongArray(10) { if (it == p) 2 else 1 }, previous).total }
+        repeat(30) { seed ->
+            val order = sampler(seed.toLong()).sample(previous, previous, openingConstraints = false)
+            assertEquals(costs.minOrNull(), similarity(order.map { previous[it] }.toLongArray(), previous).total)
+        }
+    }
+
+    @Test fun changedDuplicateMultiplicityWithTinyOverlapUsesMinimumInsteadOfCutoff() = runBlocking {
+        val tracks = longArrayOf(1, 1, 1, 1, 2, 2, 2, 3, 3, 3)
+        val previous = longArrayOf(1, 2, 3)
+        val order = sampler().sample(tracks, previous, 2)
+        assertEquals(0, similarity(order.map { tracks[it] }.toLongArray(), previous).total)
+    }
+
+    @Test fun duplicateFeasibilityWorkIsCancellableBeforeRandomSampling() {
+        var checks = 0
         var draws = 0
         try {
-            ShuffleSampler(ShuffleRandom { draws++; 0 }).sample(LongArray(9) { 1 })
-            fail("Must not attempt rejection without a feasibility policy")
-        } catch (_: IllegalArgumentException) { assertEquals(0, draws) }
+            val ids = LongArray(1000) { if (it < 500) 1 else 2 }
+            duplicateShuffle(ids, ids, { true }, ShuffleRandom { draws++; 0 }) {
+                if (++checks == 128) throw CancellationException("fixture")
+            }
+            fail("Expected cancellation")
+        } catch (_: CancellationException) {
+            assertEquals(128, checks)
+            assertEquals(0, draws)
+        }
     }
+
+    @Test fun shrinkingHistoryCompilesItsProjectionOnceForTinyEnumeration() = runBlocking {
+        val ids = LongArray(8) { it.toLong() }
+        val previous = LongArray(100_000) { it.toLong() }
+        val order = sampler().sample(ids, previous)
+        assertEquals(0, similarity(order.map { ids[it] }.toLongArray(), previous).total)
+    }
+
 }

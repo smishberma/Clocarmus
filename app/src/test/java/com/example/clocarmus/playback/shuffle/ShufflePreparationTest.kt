@@ -125,4 +125,11 @@ class ShufflePreparationTest {
         assertEquals(queue.entries.filter { it.trackId != "c" }.toSet(), order.toSet())
         assertEquals(2, order.count { it.trackId == "a" })
     }
+    @Test fun disablingShufflePreparesOriginalOrderWithSchedulesAndOccurrenceIdentity() = runTest {
+        val original = TrackQueue.fromTracks(listOf("a", "b", "c", "d"), "a")
+        val edited = original.reorder(original.entries.map { it.id }, original.entries.last().id, 1).schedule("c", true)
+        val request = ShufflePreparationInput(edited, ShufflePreparationKind.ORIGINAL, emptySet(), emptyList(), "a")
+        assertEquals(listOf("a", "c", "b", "d"), prepareShuffle(request).map { it.trackId })
+    }
+
 }

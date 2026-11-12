@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.playback.shuffle.ShuffleCollection
+
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,13 +16,13 @@ internal fun AlbumsPane(
     selectedTrackId: String?, playing: Boolean, inactivity: BrowsingReturnInactivity,
     onSearchVisibilityChanged: (Boolean) -> Unit, onBack: () -> Unit,
     onNavigate: (BrowserDestination) -> Unit,
-    onSelectTrack: (String, List<TrackMenuEntry>) -> Unit, onPlayAlbum: (List<TrackMenuEntry>) -> Unit
+    onSelectTrack: (String, List<TrackMenuEntry>, ShuffleCollection) -> Unit, onPlayAlbum: (List<TrackMenuEntry>, ShuffleCollection) -> Unit
 ) {
     val libraryTracks = LocalLibraryTracks.current
     val albums = remember(preview, libraryTracks) { groupAlbums(if (preview == "albums") demoAlbumTracks.filter { it.effectiveAlbumArtist == "Artist" } else libraryTracks) }
     val album = albums.firstOrNull { it.identity == destination.album }
     if (destination.page == "album-options" && album != null) {
-        ArtistDetailPane(grid, album.identity.title, onBack, { onPlayAlbum(album.tracks) },
+        ArtistDetailPane(grid, album.identity.title, onBack, { onPlayAlbum(album.tracks, ShuffleCollection(kind = "album", album = album.identity)) },
             { onNavigate(destination.copy(page = "album-tracks")) },
             { onNavigate(BrowserDestination("detail", artist = album.identity.artist, scope = ArtistScope.ALBUM)) },
             album = true, onSearch = { onNavigate(destination.copy(page = "album-tracks", search = true)) },
@@ -47,7 +49,7 @@ internal fun AlbumsPane(
     BrowserPane(grid, rows, if (tracksPage) selectedTrackId else selectedAlbum, playing, scroll, query,
         { query = it }, onSearchVisibilityChanged, { inactivity.cancel() }, onBack,
         onSelect = { id ->
-            if (tracksPage) onSelectTrack(id, tracks) else {
+            if (tracksPage) onSelectTrack(id, tracks, ShuffleCollection(kind = "album", album = destination.album, query = query)) else {
                 selectedAlbum = id
                 albums.firstOrNull { it.identity.key == id }?.let {
                     onNavigate(BrowserDestination("album-options", album = it.identity))
