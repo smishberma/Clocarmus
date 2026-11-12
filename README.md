@@ -78,7 +78,7 @@ The [design directory](design/) contains the screen mockups and branding assets:
 | Compile / target SDK | 35 |
 | Java source / target compatibility | 17 |
 
-Dependency versions are declared in [gradle/libs.versions.toml](gradle/libs.versions.toml). Exact playback, persistence, and background-work dependencies will be verified for Android 6 compatibility before implementation.
+Dependency versions are declared in [gradle/libs.versions.toml](gradle/libs.versions.toml). Media3 1.9.4 and Room runtime 2.8.5 are pinned for API 23; production-facing library/playback contracts are under `core/`. See [compatibility checks and core contracts](docs/compatibility-and-contracts.md) for decisions, verification commands and remaining device/integration gates. Screens still use demo data and simulated playback.
 
 ### Run in Android Studio
 

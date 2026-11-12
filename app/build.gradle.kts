@@ -1,6 +1,45 @@
+import com.android.build.api.artifact.SingleArtifact
+import javax.xml.parsers.DocumentBuilderFactory
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Use the resolved graph and merged manifest, so transitive AAR requirements/permissions
+// are checked too. Runtime codec, SAF and foreground-service tests remain separate gates.
+androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+    val mergedManifest = variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)
+    val compatibilityCheck = tasks.register("verifyDebugCompatibility") {
+        group = "verification"
+        description = "Checks API 23/SDK 35 compatibility and the offline merged manifest."
+        dependsOn("checkDebugAarMetadata")
+        inputs.file(mergedManifest)
+        doLast {
+            val factory = DocumentBuilderFactory.newInstance().apply {
+                isNamespaceAware = true
+                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            }
+            val manifest = factory.newDocumentBuilder().parse(mergedManifest.get().asFile)
+            val namespace = "http://schemas.android.com/apk/res/android"
+            val sdk = manifest.getElementsByTagName("uses-sdk").item(0) as org.w3c.dom.Element
+            check(sdk.getAttributeNS(namespace, "minSdkVersion") == "23")
+            check(sdk.getAttributeNS(namespace, "targetSdkVersion") == "35")
+            check(manifest.documentElement.getAttribute("package") == "com.example.clocarmus")
+            val permissions = manifest.getElementsByTagName("uses-permission")
+            for (index in 0 until permissions.length) {
+                val name = (permissions.item(index) as org.w3c.dom.Element).getAttributeNS(namespace, "name")
+                check(name != "android.permission.INTERNET" && name != "android.permission.ACCESS_NETWORK_STATE") {
+                    "Offline app unexpectedly declares $name"
+                }
+            }
+            check(android.compileSdk == 35)
+            check(android.compileOptions.sourceCompatibility == JavaVersion.VERSION_17)
+            check(android.compileOptions.targetCompatibility == JavaVersion.VERSION_17)
+            logger.lifecycle("Compatibility passed: API 23 minimum, SDK 35, Java 17, original app ID, no network permissions.")
+        }
+    }
+    tasks.named("check").configure { dependsOn(compatibilityCheck) }
 }
 
 android {
@@ -33,6 +72,10 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 
