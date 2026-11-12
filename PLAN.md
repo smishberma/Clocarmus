@@ -814,6 +814,8 @@ Before committing to implementations, verify current official documentation for 
 
 ### Phase 1 — Compatibility and feasibility
 
+Implementation started 2026-11-12: compatible Media3/Room runtime versions are pinned, a repeatable `verifyDebugCompatibility` task checks the resolved build/merged manifest, and `core/library` / `core/playback` now define production contracts with invariant tests. See [compatibility decisions and remaining gates](docs/compatibility-and-contracts.md). Real scanner/database/service integration, codec/SAF checks on minimum and modern Android, and shuffle feasibility/performance remain pending; this does not mark Phase 1 complete.
+
 - Confirm the existing build/toolchain and available AVD API level, dimensions, and density.
 - Verify and pin dependencies compatible with API 23; document sources and any necessary configuration changes.
 - Validate folder selection and persisted access, representative audio decoding/seeking, background service/session behavior, and paused restoration on minimum and modern Android AVDs.
@@ -1159,7 +1161,7 @@ Streaming, cloud sync, accounts, monetization, online metadata/artwork, portrait
 
 ### Risks to resolve or document
 
-- Exact library/toolchain compatibility and Android-version restrictions are not yet verified against current documentation.
+- The compatibility/contracts stage verifies the retained toolchain and selected Media3/Room runtime build requirements against official documentation. Android service/storage/audio behavior and modern-AVD integration still require validation; see `docs/compatibility-and-contracts.md`.
 - USB providers, persisted access, boot UI launch, steering-wheel controls, and sleep signals vary by device; some require device-specific configuration.
 - Byte-identical copies and simultaneous moves can make original file identity impossible to infer unambiguously. Never silently transfer the wrong playlist/favorite references.
 - Content reads can be expensive; tag edits change byte hashes and are not yet promised to preserve identity across simultaneous moves.
