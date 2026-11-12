@@ -15,6 +15,10 @@ class ClocarmusApplication : Application() {
     // Session-only drawer page: survives activity recreation and external round trips.
     internal var drawerPage = 0
 
+    private val playbackDelegate = lazy { com.example.clocarmus.playback.PlaybackController(this) }
+    internal val playback by playbackDelegate
+    internal fun existingPlayback() = if (playbackDelegate.isInitialized()) playback else null
+
     internal val library by lazy { com.example.clocarmus.library.LocalLibrary(this) }
 
     internal lateinit var startup: StartupSession<PlaylistLibrary>

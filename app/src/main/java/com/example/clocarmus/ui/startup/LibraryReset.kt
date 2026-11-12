@@ -16,6 +16,10 @@ internal fun finishPendingLibraryReset(context: Context) {
     }
     val playlists = context.getSharedPreferences("demo-playlists", 0)
     savePlaylists(playlists, loadPlaylists(playlists).withoutMusic(), durable = true)
+    val playback = (context.applicationContext as com.example.clocarmus.ClocarmusApplication).existingPlayback()
+    if (playback != null) kotlinx.coroutines.runBlocking { playback.resetDurably() }
+    else com.example.clocarmus.playback.PlaybackStore(context).save(
+        com.example.clocarmus.playback.PlaybackCheckpoint(DemoSession(TrackQueue(), 0f, false, 0)))
     val sessions = context.getSharedPreferences("demo-session", 0)
     val session = loadDemoSession(sessions)
     saveDemoSession(sessions, DemoSession(TrackQueue(), 0f, session?.shuffle ?: false, session?.repeat ?: 0), durable = true)

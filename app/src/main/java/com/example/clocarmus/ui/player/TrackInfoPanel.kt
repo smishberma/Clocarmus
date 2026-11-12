@@ -22,8 +22,8 @@ import com.example.clocarmus.R
 import com.example.clocarmus.ui.theme.InterFontFamily
 
 @Composable
-internal fun TrackInfoPanel(grid: PlayerGrid, track: TrackMenuEntry?, onClose: () -> Unit) {
-    val content = trackInfoContent(track)
+internal fun TrackInfoPanel(grid: PlayerGrid, track: TrackMenuEntry?, onClose: () -> Unit, filename: String? = null) {
+    val content = trackInfoContent(track, filename)
     val scroll = rememberScrollState()
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onClose)

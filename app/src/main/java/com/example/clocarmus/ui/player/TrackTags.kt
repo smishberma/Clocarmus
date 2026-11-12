@@ -35,11 +35,22 @@ internal data class TrackTags(
 }
 
 internal data class TrackInfoContent(val fields: List<Pair<String, String?>>, val notice: String?)
-internal fun trackInfoContent(track: TrackMenuEntry?): TrackInfoContent = when {
-    track == null || (!track.available && track.tags == null) ->
-        TrackInfoContent(emptyList(), "File unavailable — no saved tags available")
-    else -> TrackInfoContent((track.tags ?: TrackTags()).fields().map { (label, value) ->
-        label to if (label in track.tags?.unreadFields.orEmpty() && value == null) "Not read" else value
-    },
-        if (!track.available) "File unavailable — showing saved tags" else null)
+/** File type comes from the cached provider filename, never the song title or document URI. */
+internal fun trackFileType(filename: String?): String? {
+    val name = filename?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val extension = name.substringAfterLast('.', "").takeIf { it.isNotBlank() && name.substringBeforeLast('.').isNotBlank() }
+        ?.uppercase(java.util.Locale.ROOT) ?: return null
+    return if (extension == "M4A") "M4A (AAC)" else extension
+}
+
+internal fun trackInfoContent(track: TrackMenuEntry?, filename: String? = null): TrackInfoContent {
+    val fileType = trackFileType(filename)
+    return when {
+        track == null || (!track.available && track.tags == null) ->
+            TrackInfoContent(if (track != null && fileType != null) listOf("File type" to fileType) else emptyList(),
+                "File unavailable — no saved tags available")
+        else -> TrackInfoContent(listOf("File type" to fileType) + (track.tags ?: TrackTags()).fields().map { (label, value) ->
+            label to if (label in track.tags?.unreadFields.orEmpty() && value == null) "Not read" else value
+        }, if (!track.available) "File unavailable — showing saved tags" else null)
+    }
 }

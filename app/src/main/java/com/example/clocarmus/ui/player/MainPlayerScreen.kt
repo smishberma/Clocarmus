@@ -81,7 +81,7 @@ internal class PlayerGrid(width: Float, height: Float) {
     }
 }
 
-/** Visual player shell; transport state is a demo until the playback service is connected. */
+/** Normal transport observes the process playback session; reference previews use local fixtures. */
 @Composable
 internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Boolean = false, tracksPreview: Boolean = false, artistsPreview: String? = null, albumsPreview: String? = null, playlistsPreview: String? = null, genresPreview: String? = null, collectionsPreview: String? = null, foldersPreview: String? = null, queuePreview: Boolean = false, settingsPreview: String? = null, initialPlaylists: PlaylistLibrary? = null, onPlaylistsChanged: (PlaylistLibrary) -> Unit = {}, freshStartup: Boolean = false) {
     val context = LocalContext.current
@@ -193,12 +193,11 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             lifecycle.removeObserver(lifecycleObserver)
         }
     }
-    val sessionPreferences = remember { context.getSharedPreferences("demo-session", Context.MODE_PRIVATE) }
-    val savedSession = remember { if (fixture) null else loadDemoSession(sessionPreferences)?.takeIf { session -> session.queue.entries.all { it.trackId.startsWith("local:") } } }
-    var playing by rememberSaveable { mutableStateOf(referencePreview) }
-    var position by rememberSaveable { mutableFloatStateOf(savedSession?.position ?: if (fixture) 113f else 0f) }
-    var shuffle by rememberSaveable { mutableStateOf(savedSession?.shuffle ?: fixture) }
-    var repeat by rememberSaveable { mutableIntStateOf(savedSession?.repeat ?: 0) }
+    val playback = remember { if (fixture) null else (context.applicationContext as com.example.clocarmus.ClocarmusApplication).playback }
+    var playing by if (fixture) remember { mutableStateOf(referencePreview) } else playback!!.playingState
+    var position by if (fixture) remember { mutableStateOf(113f) } else playback!!.positionState
+    var shuffle by if (fixture) remember { mutableStateOf(true) } else playback!!.shuffleState
+    var repeat by if (fixture) remember { mutableStateOf(0) } else playback!!.repeatState
     var menuOpen by rememberSaveable { mutableStateOf(settingsPreview != null || queuePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
     var queueOpen by rememberSaveable { mutableStateOf(queuePreview) }
     val queueScroll = rememberScrollState()
@@ -239,13 +238,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val navigate: (BrowserDestination) -> Unit = { browserStack = ArrayList(browserStack + it) }
     val artistStates = rememberSaveableStateHolder()
     val initialSelectedId = if (foldersPreview == "folder-directory") "folder:alley" else if (genresPreview == "genre-tracks") "genre:track:2" else if (artistsPreview == "artist-tracks") "artist:Ripple:18" else if (albumsPreview == "album-tracks") "album:Saffron:3" else if (playlistsPreview == "playlist-favorites") "playlist:Love" else if (playlistsPreview in setOf("playlist-added", "playlist-custom")) "playlist:Ripple" else demoPlayerTrack.id
-    var queue by rememberSaveable { mutableStateOf(if (resetPending) TrackQueue() else if (!fixture) savedSession?.queue?.takeIf { it.entries.all { entry -> entry.trackId.startsWith("local:") } } ?: TrackQueue() else savedSession?.queue ?: if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
+    var queue by if (!fixture) playback!!.queueState else remember { mutableStateOf(if (resetPending) TrackQueue() else if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
         listOf(initialSelectedId) + demoTracks.map { it.id }.filterNot { it == initialSelectedId }, initialSelectedId, shuffle)) }
     val selectedTrackId = queue.current?.trackId
     val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
     LaunchedEffect(librarySnapshot.version, librarySnapshot.ready, selectedTrackId) {
         if (!fixture && librarySnapshot.ready && selectedTrackId != null) {
-            if (selectedTrack == null) { playing = false; position = 0f; queue = TrackQueue() }
+            if (selectedTrack == null) { playing = false }
             else if (!selectedTrack.available) playing = false
         }
     }
@@ -265,12 +264,20 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         if (fixture && freshStartup && !referencePreview) playing = settings.autoplay && selectedTrack?.available == true
     }
     val stepTrack: (Int) -> Unit = { direction ->
-        queue = queue.step(direction, available)
+        if (!fixture) playback!!.step(direction) else queue = queue.step(direction, available)
         if (playing) queue.current?.trackId?.let { id -> playlistTracks.firstOrNull { it.id == id }?.let(recordDemoStart) }
-        position = 0f
+        if (fixture) position = 0f
     }
-    LaunchedEffect(queue, position, shuffle, repeat) {
-        if (!fixture) saveDemoSession(sessionPreferences, DemoSession(queue, position, shuffle, repeat))
+    LaunchedEffect(playback?.notice) {
+        playback?.notice?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            playback.dismissNotice()
+        }
+    }
+    if (!fixture) playback!!.warning?.let { message ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = playback::dismissWarning,
+            text = { androidx.compose.material3.Text(message) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = playback::dismissWarning) { androidx.compose.material3.Text("OK") } })
     }
     LaunchedEffect(playing, queue.currentId, duration, repeat, referencePreview) {
         if (fixture && playing && !referencePreview && duration != null) {
@@ -409,7 +416,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 interactive = optionsTarget == null && infoRequest == null, onBack = goBack,
                                 onSelect = { id ->
                                     val occurrence = queue.entries.firstOrNull { it.id == id }
-                                    if (occurrence != null && available(occurrence.trackId)) {
+                                    if (!fixture) playback!!.selectOccurrence(id)
+                                    else if (occurrence != null && available(occurrence.trackId)) {
                                         if (id != queue.currentId || queue.resumeAfterStop) position = 0f
                                         queue = queue.select(id); playing = true
                                         playlistTracks.firstOrNull { it.id == occurrence.trackId }?.let(recordDemoStart)
@@ -558,7 +566,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             PlayerLabel(selectedTitle ?: if (fixture) "Superman" else "No track selected", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
                             PlayerLabel(if (selectedTitle == null) if (fixture) "Lazlo Bane" else "Unknown artist" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
                             PlayerLabel(if (selectedTitle == null) if (fixture) "All the Time in the World" else "Unknown album" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
-                            PlayerLabel(if (selectedTitle == null) if (fixture) "2002" else "Unknown year" else selectedTrack?.year?.takeIf { it.isNotBlank() } ?: "Unknown year", grid.place(70f, 859f, 860f, 57f), 48f * grid.scale)
+                            val playerYear = if (selectedTitle == null && fixture) "2002"
+                                else com.example.clocarmus.library.releaseYear(selectedTrack?.year, selectedTrack?.tags?.releaseDate)
+                            playerYear?.let { PlayerLabel(it, grid.place(70f, 859f, 860f, 57f), 48f * grid.scale) }
                             PlayerSlider(if (duration != null) position / duration else 0f,
                                 { if (duration != null) position = it * duration },
                                 grid.place(79f, 970f, 841f, 87f), "Track position", grid.scale,
@@ -569,7 +579,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         }
                     }
                     infoRequest?.let { request ->
-                        TrackInfoPanel(grid, playlistTracks.firstOrNull { it.id == request.trackId }, closeOptions)
+                        TrackInfoPanel(grid, playlistTracks.firstOrNull { it.id == request.trackId }, closeOptions,
+                            filename = librarySnapshot.records.firstOrNull { it.id == request.trackId }?.filename)
                     }
                     if (optionsTarget != null && !optionsCollections && infoRequest == null) TrackOptionsPopup(grid,
                         playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions,
@@ -620,7 +631,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         }, onClose = closeCollections)
                     AssetButton("Previous track", R.drawable.player_skip_back, grid, 108f, 1136f, 74f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                     AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
-                        grid, 508f, 1137f, 123f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); if (playing) playing = false else {
+                        grid, 508f, 1137f, 123f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); if (!fixture) { if (playing) playback!!.pause() else playback!!.play() } else if (playing) playing = false else {
                             val before = queue.currentId
                             val resumed = queue.resume(available)
                             queue = resumed.queue; playing = resumed.playing
