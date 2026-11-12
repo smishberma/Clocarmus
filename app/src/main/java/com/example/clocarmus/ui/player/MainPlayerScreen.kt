@@ -43,6 +43,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -324,7 +326,9 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     }
     var dialog by remember { mutableStateOf<String?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
+    var searchOwner by remember { mutableStateOf<PlayerPaneDestination?>(null) }
     var playlistEditing by remember { mutableStateOf(false) }
+    var editingOwner by remember { mutableStateOf<PlayerPaneDestination?>(null) }
     val browsingReturn = rememberBrowsingReturnInactivity(menuOpen, suspended = dialog != null || searchOpen || playlistEditing || optionsTarget != null || infoRequest != null) {
         queueOpen = false
         tracksOpen = false
@@ -404,6 +408,18 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         menuOpen = false
     }
     val homeNavigation = remember { PlayerHomeNavigation { returnHome() } }
+    val paneDestination = when {
+        queueOpen -> PlayerPaneDestination(PlayerPaneRoot.QUEUE)
+        browserStack.isNotEmpty() -> PlayerPaneDestination(PlayerPaneRoot.BROWSER, browser = browserStack.last())
+        tracksOpen -> PlayerPaneDestination(PlayerPaneRoot.TRACKS)
+        menuOpen -> PlayerPaneDestination(PlayerPaneRoot.MENU)
+        collectionsOpen && !optionsCollections -> PlayerPaneDestination(PlayerPaneRoot.COLLECTIONS, collectionTrack = membershipTarget)
+        else -> PlayerPaneDestination(PlayerPaneRoot.PLAYER)
+    }
+    val overlayDestination = infoRequest?.let { PlayerOverlayDestination(it.trackId, info = it) }
+        ?: optionsTarget?.let { PlayerOverlayDestination(it, collections = optionsCollections, occurrence = optionsOccurrence) }
+    val sourceOpacity by animateFloatAsState(if (overlayDestination == null) 1f else 0f,
+        tween(PLAYER_PANE_FADE_DURATION_MS), label = "Source behind track panel")
     LaunchedEffect(activity?.homeActivation) {
         if ((activity?.homeActivation ?: 0) > 0) homeNavigation.returnToPlayer()
     }
@@ -416,230 +432,256 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             PlayerPaneLayout(settings.rightHandDrive) {
                 BoxWithConstraints(Modifier.fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
-                    Box(if (optionsTarget != null || infoRequest != null) Modifier.fillMaxSize().alpha(0f).clearAndSetSemantics {} else Modifier.fillMaxSize()) {
-                        if (queueOpen) {
-                            QueuePane(grid, queue, playlistTracks, playing, queueScroll, browsingReturn,
-                                interactive = optionsTarget == null && infoRequest == null, onBack = goBack,
-                                onSelect = { id ->
-                                    val occurrence = queue.entries.firstOrNull { it.id == id }
-                                    if (!fixture) playback!!.selectOccurrence(id)
-                                    else if (occurrence != null && available(occurrence.trackId)) {
-                                        if (id != queue.currentId || queue.resumeAfterStop) position = 0f
-                                        queue = queue.select(id); playing = true
-                                        playlistTracks.firstOrNull { it.id == occurrence.trackId }?.let(recordDemoStart)
-                                    }
-                                }, onOptions = { entry ->
-                                    browsingReturn.cancel(); optionsOccurrence = entry.id; optionsTarget = entry.trackId
-                                }, onReorder = { original, id, index -> queue = queue.reorder(original, id, index) })
-                        } else if (browserStack.isNotEmpty()) {
-                            val destination = browserStack.last()
-                            artistStates.SaveableStateProvider(destination.copy(search = false)) {
-                                val playCollection: (List<TrackMenuEntry>, ShuffleCollection) -> Unit = { tracks, source ->
-                                    shuffle = false
-                                    val first = tracks.firstOrNull { it.available }
-                                    if (!fixture && first != null) playback!!.selectCollection(tracks.map { it.id }, first.id, source)
-                                    else {
-                                        queue = TrackQueue.fromTracks(tracks.map { it.id }, first?.id)
-                                        playing = first != null
-                                        position = 0f
-                                    }
-                                    if (first != null) {
-                                        recordDemoStart(first)
-                                        browsingReturn.cancel()
-                                        browserStack = arrayListOf()
-                                        tracksOpen = false
-                                        menuOpen = false
-                                    }
-                                }
-                                if (destination.page == "settings") {
-                                    SettingsPane(grid, settings, updateSettings, goBack, settingsPreview, onLibrariesRemoved = {
-                                        playing = false
-                                        position = 0f
-                                        queue = TrackQueue()
-                                        // Stop transient state before awaiting durable reset; startup can replay the journal.
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            com.example.clocarmus.ui.startup.finishPendingLibraryReset(context)
-                                        }
-                                        settings = settings.copy(sources = emptySet(), exclusions = emptySet())
-                                        playing = false
-                                        position = 0f
-                                        queue = TrackQueue()
-                                        updatePlaylists(playlistLibrary.withoutMusic())
-                                    })
-                                } else if (destination.page == "folders") {
-                                    FoldersPane(grid, destination.directory, foldersPreview, selectedTrackId, playing, browsingReturn,
-                                        { searchOpen = it }, goBack,
-                                        { directory -> browserStack = ArrayList(browserStack.dropLast(1) + BrowserDestination("folders", directory = directory)) },
-                                        selectTrack, tree = settingsFolderTree, onSourceLost = { sourceId ->
-                                            if (sourceId != null && selectedTrackId?.let { demoFolderTree.source(it)?.id } == sourceId) playing = false
-                                        })
-                                } else if (destination.page.startsWith("genre-")) {
-                                    GenresPane(grid, destination, genresPreview, selectedTrackId, playing, browsingReturn,
-                                        { searchOpen = it }, goBack, navigate, selectTrack, playCollection)
-                                } else if (destination.page.startsWith("playlist-")) {
-                                    PlaylistsPane(grid, destination.playlistId, playlistLibrary, playlistTracks, selectedTrackId, playing,
-                                        browsingReturn, updatePlaylists, goBack,
-                                        { navigate(BrowserDestination("playlist-detail", playlistId = it)) }, selectTrack,
-                                        { playlistEditing = it })
-                                } else if (destination.page.startsWith("album-")) {
-                                    AlbumsPane(grid, destination, albumsPreview, selectedTrackId, playing, browsingReturn,
-                                        { searchOpen = it }, goBack, navigate, selectTrack, playCollection)
-                                } else {
-                                    ArtistsPane(grid, destination.page, destination.artist, artistsPreview, selectedTrackId, playing,
-                                        browsingReturn, onSearchVisibilityChanged = { searchOpen = it }, onBack = goBack,
-                                        onArtist = { navigate(BrowserDestination("detail", artist = it, genre = destination.genre)) },
-                                        onPage = { navigate(destination.copy(page = it)) },
-                                        onSelectTrack = selectTrack, onPlayAll = playCollection, scope = destination.scope, genre = destination.genre,
-                                        onAlbum = { navigate(BrowserDestination("album-options", album = it)) })
-                                }
-                            }
-                        } else if (tracksOpen) {
-                            TrackMenuPane(grid, visibleTracks, selectedTrackId, playing, trackScroll, trackQuery,
-                                onQuery = { trackQuery = it },
-                                onSearchVisibilityChanged = { searchOpen = it },
-                                onSearchEdited = { browsingReturn.cancel() },
-                                onBack = goBack, onSelect = { selectTrack(it, visibleTracks, ShuffleCollection(kind = "all", query = trackQuery)) },
-                                emptyMessage = if (!fixture && librarySnapshot.summary.running) "Scanning music…" else if (!fixture && allTracks.isEmpty()) "Add music folders in Settings" else "No matching tracks")
-                        } else if (menuOpen) {
-                            MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
-                                browsingReturn.interaction()
-                                if (it == "All tracks") tracksOpen = true
-                                else if (it == "Settings") { browsingReturn.cancel(); navigate(BrowserDestination("settings")) }
-                                else if (it == "Folders") navigate(BrowserDestination("folders"))
-                                else if (it == "Artists") navigate(BrowserDestination("artists"))
-                                else if (it == "Genres") navigate(BrowserDestination("genre-list"))
-                                else if (it == "Albums") navigate(BrowserDestination("album-list"))
-                                else if (it == "Playlists") navigate(BrowserDestination("playlist-list"))
-                                else {
-                                    dialog = it
-                                }
-                            })
-                        } else {
-                            MenuButton(grid, controlOpacity) { closeCollections(); menuOpen = true }
-                        }
-                    }
-                    if (optionsTarget != null || infoRequest != null) {
-                        // Opaque input shield keeps source composition/state while hiding its controls.
-                        Box(Modifier.fillMaxSize()
-                            .background(Color.Black).pointerInput(Unit) { detectTapGestures {} })
-                    }
                     PlayerSlider(volume, {
                         browsingReturn.interaction()
                         volume = it
                         audio.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0)
                     }, grid.place(283f, 61f, 434f, 83f), "Media volume", grid.scale, volume = true, pointers = sliderPointers)
-                    if (!menuOpen && infoRequest == null && optionsTarget == null) {
-                        AssetButton("Manage playlists", when {
-                            collectionsOpen -> R.drawable.collections_playlist_button_toggle_on
-                            selectedTrackId?.let(playlistLibrary::hasMembership) == true -> R.drawable.collections_track_present_in_playlists
-                            else -> R.drawable.collections_playlist_button_untoggled
-                        }, grid, 850f, 106f, if (collectionsOpen) 125f else 104f,
-                            state = if (collectionsOpen) "Expanded" else "Collapsed", opacity = controlOpacity,
-                            enabled = selectedTrack != null) {
-                            if (collectionsOpen) closeCollections() else collectionsTarget = selectedTrackId
-                        }
-                        if (!collectionsOpen) {
-                            val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, selectedTrack?.artworkPath) {
-                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    selectedTrack?.artworkPath?.let { path ->
-                                        android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+                    Box(Modifier.fillMaxSize().alpha(sourceOpacity)
+                        .then(if (overlayDestination != null) Modifier.clearAndSetSemantics {} else Modifier)) {
+                        PlayerPaneCrossfade(paneDestination) { displayed ->
+                            val reportSearch: (Boolean) -> Unit = { visible ->
+                                if (visible) { searchOwner = displayed; searchOpen = true }
+                                else if (searchOwner == displayed) { searchOwner = null; searchOpen = false }
+                            }
+                            val reportEditing: (Boolean) -> Unit = { editing ->
+                                if (editing) { editingOwner = displayed; playlistEditing = true }
+                                else if (editingOwner == displayed) { editingOwner = null; playlistEditing = false }
+                            }
+                            Box(Modifier.fillMaxSize()) {
+                                if (displayed.root == PlayerPaneRoot.QUEUE) {
+                                    QueuePane(grid, queue, playlistTracks, playing, queueScroll, browsingReturn,
+                                        interactive = optionsTarget == null && infoRequest == null, onBack = goBack,
+                                        onSelect = { id ->
+                                            val occurrence = queue.entries.firstOrNull { it.id == id }
+                                            if (!fixture) playback!!.selectOccurrence(id)
+                                            else if (occurrence != null && available(occurrence.trackId)) {
+                                                if (id != queue.currentId || queue.resumeAfterStop) position = 0f
+                                                queue = queue.select(id); playing = true
+                                                playlistTracks.firstOrNull { it.id == occurrence.trackId }?.let(recordDemoStart)
+                                            }
+                                        }, onOptions = { entry ->
+                                            browsingReturn.cancel(); optionsOccurrence = entry.id; optionsTarget = entry.trackId
+                                        }, onReorder = { original, id, index -> queue = queue.reorder(original, id, index) })
+                                } else if (displayed.root == PlayerPaneRoot.BROWSER) {
+                                    val destination = displayed.browser!!
+                                    artistStates.SaveableStateProvider(destination.copy(search = false)) {
+                                        val playCollection: (List<TrackMenuEntry>, ShuffleCollection) -> Unit = { tracks, source ->
+                                            shuffle = false
+                                            val first = tracks.firstOrNull { it.available }
+                                            if (!fixture && first != null) playback!!.selectCollection(tracks.map { it.id }, first.id, source)
+                                            else {
+                                                queue = TrackQueue.fromTracks(tracks.map { it.id }, first?.id)
+                                                playing = first != null
+                                                position = 0f
+                                            }
+                                            if (first != null) {
+                                                recordDemoStart(first)
+                                                browsingReturn.cancel()
+                                                browserStack = arrayListOf()
+                                                tracksOpen = false
+                                                menuOpen = false
+                                            }
+                                        }
+                                        if (destination.page == "settings") {
+                                            SettingsPane(grid, settings, updateSettings, goBack, settingsPreview, onLibrariesRemoved = {
+                                                playing = false
+                                                position = 0f
+                                                queue = TrackQueue()
+                                                // Stop transient state before awaiting durable reset; startup can replay the journal.
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    com.example.clocarmus.ui.startup.finishPendingLibraryReset(context)
+                                                }
+                                                settings = settings.copy(sources = emptySet(), exclusions = emptySet())
+                                                playing = false
+                                                position = 0f
+                                                queue = TrackQueue()
+                                                updatePlaylists(playlistLibrary.withoutMusic())
+                                            })
+                                        } else if (destination.page == "folders") {
+                                            FoldersPane(grid, destination.directory, foldersPreview, selectedTrackId, playing, browsingReturn,
+                                                reportSearch, goBack,
+                                                { directory -> browserStack = ArrayList(browserStack.dropLast(1) + BrowserDestination("folders", directory = directory)) },
+                                                selectTrack, tree = settingsFolderTree, onSourceLost = { sourceId ->
+                                                    if (sourceId != null && selectedTrackId?.let { demoFolderTree.source(it)?.id } == sourceId) playing = false
+                                                })
+                                        } else if (destination.page.startsWith("genre-")) {
+                                            GenresPane(grid, destination, genresPreview, selectedTrackId, playing, browsingReturn,
+                                                reportSearch, goBack, navigate, selectTrack, playCollection)
+                                        } else if (destination.page.startsWith("playlist-")) {
+                                            PlaylistsPane(grid, destination.playlistId, playlistLibrary, playlistTracks, selectedTrackId, playing,
+                                                browsingReturn, updatePlaylists, goBack,
+                                                { navigate(BrowserDestination("playlist-detail", playlistId = it)) }, selectTrack,
+                                                reportEditing)
+                                        } else if (destination.page.startsWith("album-")) {
+                                            AlbumsPane(grid, destination, albumsPreview, selectedTrackId, playing, browsingReturn,
+                                                reportSearch, goBack, navigate, selectTrack, playCollection)
+                                        } else {
+                                            ArtistsPane(grid, destination.page, destination.artist, artistsPreview, selectedTrackId, playing,
+                                                browsingReturn, onSearchVisibilityChanged = reportSearch, onBack = goBack,
+                                                onArtist = { navigate(BrowserDestination("detail", artist = it, genre = destination.genre)) },
+                                                onPage = { navigate(destination.copy(page = it)) },
+                                                onSelectTrack = selectTrack, onPlayAll = playCollection, scope = destination.scope, genre = destination.genre,
+                                                onAlbum = { navigate(BrowserDestination("album-options", album = it)) })
+                                        }
+                                    }
+                                } else if (displayed.root == PlayerPaneRoot.TRACKS) {
+                                    TrackMenuPane(grid, visibleTracks, selectedTrackId, playing, trackScroll, trackQuery,
+                                        onQuery = { trackQuery = it },
+                                        onSearchVisibilityChanged = reportSearch,
+                                        onSearchEdited = { browsingReturn.cancel() },
+                                        onBack = goBack, onSelect = { selectTrack(it, visibleTracks, ShuffleCollection(kind = "all", query = trackQuery)) },
+                                        emptyMessage = if (!fixture && librarySnapshot.summary.running) "Scanning music…" else if (!fixture && allTracks.isEmpty()) "Add music folders in Settings" else "No matching tracks")
+                                }
+                                if (displayed.root == PlayerPaneRoot.MENU) {
+                                    MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
+                                        browsingReturn.interaction()
+                                        if (it == "All tracks") tracksOpen = true
+                                        else if (it == "Settings") { browsingReturn.cancel(); navigate(BrowserDestination("settings")) }
+                                        else if (it == "Folders") navigate(BrowserDestination("folders"))
+                                        else if (it == "Artists") navigate(BrowserDestination("artists"))
+                                        else if (it == "Genres") navigate(BrowserDestination("genre-list"))
+                                        else if (it == "Albums") navigate(BrowserDestination("album-list"))
+                                        else if (it == "Playlists") navigate(BrowserDestination("playlist-list"))
+                                        else {
+                                            dialog = it
+                                        }
+                                    })
+                                }
+                                if (displayed.root == PlayerPaneRoot.PLAYER || displayed.root == PlayerPaneRoot.COLLECTIONS) {
+                                    MenuButton(grid, controlOpacity) { closeCollections(); menuOpen = true }
+                                }
+                            }
+                            if (displayed.root == PlayerPaneRoot.PLAYER || displayed.root == PlayerPaneRoot.COLLECTIONS) {
+                                AssetButton("Manage playlists", when {
+                                    collectionsOpen -> R.drawable.collections_playlist_button_toggle_on
+                                    selectedTrackId?.let(playlistLibrary::hasMembership) == true -> R.drawable.collections_track_present_in_playlists
+                                    else -> R.drawable.collections_playlist_button_untoggled
+                                }, grid, 850f, 106f, if (collectionsOpen) 125f else 104f,
+                                    state = if (collectionsOpen) "Expanded" else "Collapsed", opacity = controlOpacity,
+                                    enabled = selectedTrack != null) {
+                                    if (collectionsOpen) closeCollections() else collectionsTarget = selectedTrackId
+                                }
+                            }
+                            if (displayed.root == PlayerPaneRoot.PLAYER) {
+                                val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, selectedTrack?.artworkPath) {
+                                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        selectedTrack?.artworkPath?.let { path ->
+                                            android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+                                        }
                                     }
                                 }
-                            }
-                            if (artwork != null) Image(artwork!!, "Album artwork", grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
-                            else Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
-                                grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
-                            AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
-                                grid, 141f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
-                                if (!fixture) playback!!.toggleShuffle() else {
-                                    shuffle = !shuffle
-                                    val head = queue.entries.take(queue.currentIndex + 1)
-                                    val tail = queue.entries.drop(queue.currentIndex + 1)
-                                    val scheduled = queue.scheduledIds.mapNotNull { id -> tail.find { it.id == id } }
-                                    val rest = tail.filterNot { it.id in queue.scheduledIds }
-                                    queue = queue.copy(entries = head + scheduled + if (shuffle) rest.shuffled() else rest)
+                                if (artwork != null) Image(artwork!!, "Album artwork", grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
+                                else Image(painterResource(R.drawable.player_no_album_art), "No album artwork",
+                                    grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
+                                AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
+                                    grid, 141f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
+                                    if (!fixture) playback!!.toggleShuffle() else {
+                                        shuffle = !shuffle
+                                        val head = queue.entries.take(queue.currentIndex + 1)
+                                        val tail = queue.entries.drop(queue.currentIndex + 1)
+                                        val scheduled = queue.scheduledIds.mapNotNull { id -> tail.find { it.id == id } }
+                                        val rest = tail.filterNot { it.id in queue.scheduledIds }
+                                        queue = queue.copy(entries = head + scheduled + if (shuffle) rest.shuffled() else rest)
+                                    }
                                 }
+                                AssetButton("Repeat", when (repeat) {
+                                    1 -> R.drawable.player_repeat_one_active
+                                    2 -> R.drawable.player_repeat_active
+                                    else -> R.drawable.player_repeat_inactive
+                                }, grid, 846f, 230f, 78.3f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
+                                AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 409f, 90f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
+                                AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 846f, 409f, 90f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
+                                AssetButton("Queues", R.drawable.player_queue_button, grid, 141f, 624f, 67.5f,
+                                    opacity = controlOpacity) { queueOpen = true; menuOpen = true; browsingReturn.trackSelected() }
+                                AssetButton("Track info", R.drawable.player_info_icon, grid, 846f, 612f, 67.5f,
+                                    opacity = controlOpacity, enabled = selectedTrackId != null) {
+                                    browsingReturn.cancel()
+                                    infoRequest = TrackInfoRequest(selectedTrackId!!, TrackInfoDestination.MAIN_PLAYER)
+                                }
+                                PlayerLabel(selectedTitle ?: if (fixture) "Superman" else "No track selected", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
+                                PlayerLabel(if (selectedTitle == null) if (fixture) "Lazlo Bane" else "Unknown artist" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
+                                PlayerLabel(if (selectedTitle == null) if (fixture) "All the Time in the World" else "Unknown album" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
+                                val playerYear = if (selectedTitle == null && fixture) "2002"
+                                    else com.example.clocarmus.library.releaseYear(selectedTrack?.year, selectedTrack?.tags?.releaseDate)
+                                playerYear?.let { PlayerLabel(it, grid.place(70f, 859f, 860f, 57f), 48f * grid.scale) }
+                                PlayerSlider(if (duration != null) position / duration else 0f,
+                                    { if (duration != null) position = it * duration },
+                                    grid.place(79f, 970f, 841f, 87f), "Track position", grid.scale,
+                                    enabled = seekable, gestureKey = queue.currentId to duration, pointers = sliderPointers,
+                                    onPreview = { seekPreview = it })
+                                PlayerLabel(formatPosition(displayedPosition), grid.place(79f, 925f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
+                                PlayerLabel(duration?.let(::formatPosition) ?: "--:--", grid.place(740f, 925f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                             }
-                            AssetButton("Repeat", when (repeat) {
-                                1 -> R.drawable.player_repeat_one_active
-                                2 -> R.drawable.player_repeat_active
-                                else -> R.drawable.player_repeat_inactive
-                            }, grid, 846f, 230f, 78.3f, when (repeat) { 1 -> "Repeat one"; 2 -> "Repeat all"; else -> "Off" }, opacity = controlOpacity) { repeat = (repeat + 1) % 3 }
-                            AssetButton("Rewind 10 seconds", R.drawable.player_skip_10sec_backward, grid, 141f, 409f, 90f, opacity = controlOpacity) { position = (position - 10).coerceAtLeast(0f) }
-                            AssetButton("Forward 10 seconds", R.drawable.player_skip_10sec_forward, grid, 846f, 409f, 90f, opacity = controlOpacity) { position = (position + 10).coerceAtMost(duration ?: 225f) }
-                            AssetButton("Queues", R.drawable.player_queue_button, grid, 141f, 624f, 67.5f,
-                                opacity = controlOpacity) { queueOpen = true; menuOpen = true; browsingReturn.trackSelected() }
-                            AssetButton("Track info", R.drawable.player_info_icon, grid, 846f, 612f, 67.5f,
-                                opacity = controlOpacity, enabled = selectedTrackId != null) {
-                                browsingReturn.cancel()
-                                infoRequest = TrackInfoRequest(selectedTrackId!!, TrackInfoDestination.MAIN_PLAYER)
+                            if (displayed.root == PlayerPaneRoot.COLLECTIONS) {
+                                TrackCollectionsPopup(grid, playlistLibrary, displayed.collectionTrack!!,
+                                    onToggle = { id ->
+                                        if (playlistTracks.any { it.id == displayed.collectionTrack }) updatePlaylists(playlistLibrary.toggleMembership(id, displayed.collectionTrack, System.currentTimeMillis()))
+                                        else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
+                                    }, onCreate = {
+                                        if (playlistTracks.any { it.id == displayed.collectionTrack }) { collectionDraft = ""; collectionNaming = true }
+                                        else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
+                                    }, onClose = closeCollections)
                             }
-                            PlayerLabel(selectedTitle ?: if (fixture) "Superman" else "No track selected", grid.place(70f, 670f, 860f, 72f), 54f * grid.scale, bold = true, marquee = true)
-                            PlayerLabel(if (selectedTitle == null) if (fixture) "Lazlo Bane" else "Unknown artist" else selectedTrack?.artist ?: "Unknown artist", grid.place(70f, 744f, 860f, 57f), 48f * grid.scale, marquee = true)
-                            PlayerLabel(if (selectedTitle == null) if (fixture) "All the Time in the World" else "Unknown album" else selectedTrack?.album ?: "Unknown album", grid.place(60f, 802f, 880f, 57f), 48f * grid.scale, marquee = true)
-                            val playerYear = if (selectedTitle == null && fixture) "2002"
-                                else com.example.clocarmus.library.releaseYear(selectedTrack?.year, selectedTrack?.tags?.releaseDate)
-                            playerYear?.let { PlayerLabel(it, grid.place(70f, 859f, 860f, 57f), 48f * grid.scale) }
-                            PlayerSlider(if (duration != null) position / duration else 0f,
-                                { if (duration != null) position = it * duration },
-                                grid.place(79f, 970f, 841f, 87f), "Track position", grid.scale,
-                                enabled = seekable, gestureKey = queue.currentId to duration, pointers = sliderPointers,
-                                onPreview = { seekPreview = it })
-                            PlayerLabel(formatPosition(displayedPosition), grid.place(79f, 925f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterStart)
-                            PlayerLabel(duration?.let(::formatPosition) ?: "--:--", grid.place(740f, 925f, 180f, 53f), 43f * grid.scale, alignment = Alignment.CenterEnd)
                         }
                     }
-                    infoRequest?.let { request ->
-                        TrackInfoPanel(grid, playlistTracks.firstOrNull { it.id == request.trackId }, closeOptions,
-                            filename = librarySnapshot.records.firstOrNull { it.id == request.trackId }?.filename)
+                    if (overlayDestination != null) {
+                        Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures {} }.clearAndSetSemantics {})
                     }
-                    if (optionsTarget != null && !optionsCollections && infoRequest == null) TrackOptionsPopup(grid,
-                        playlistTracks.firstOrNull { it.id == optionsTarget }, closeOptions,
-                        onCollections = { optionsCollections = true }, onInfo = { infoRequest = TrackInfoRequest(optionsTarget!!, TrackInfoDestination.TRACK_OPTIONS) }, onSchedule = { stop ->
-                            val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
-                            if (target == null || (optionsOccurrence != null && queue.entries.none { it.id == optionsOccurrence }))
-                                Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
-                            else {
-                                if (queue.current == null) { playing = false; position = 0f }
-                                queue = optionsOccurrence?.let { queue.scheduleOccurrence(it, stop) } ?: queue.schedule(target.id, stop)
-                                optionsCollections = false; optionsTarget = null; optionsOccurrence = null; optionsCompleted++
-                                Toast.makeText(context, if (stop) "Will stop after this song" else "Will play next", Toast.LENGTH_SHORT).show()
-                            }
-                        }, fromQueue = optionsOccurrence != null,
-                        currentOccurrence = optionsOccurrence != null && optionsOccurrence == queue.currentId,
-                        onAdd = {
-                            val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
-                            if (target != null) {
-                                if (queue.entries.isEmpty()) { playing = false; position = 0f }
-                                queue = queue.append(target.id)
-                                optionsTarget = null; optionsOccurrence = null; optionsCollections = false; optionsCompleted++
-                                Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
-                            }
-                        }, onRemove = {
-                            val id = optionsOccurrence
-                            if (id != null && queue.entries.any { it.id == id }) {
-                                val wasCurrent = id == queue.currentId
-                                queue = queue.remove(id, available)
-                                if (wasCurrent) {
-                                    position = 0f
-                                    if (queue.current == null) playing = false
-                                    else if (playing) playlistTracks.firstOrNull { it.id == queue.current?.trackId }?.let(recordDemoStart)
+                    PlayerPaneCrossfade(overlayDestination) { overlay ->
+                        overlay?.info?.let { request ->
+                            TrackInfoPanel(grid, playlistTracks.firstOrNull { it.id == request.trackId }, closeOptions,
+                                filename = librarySnapshot.records.firstOrNull { it.id == request.trackId }?.filename)
+                        }
+                        if (overlay != null && !overlay.collections && overlay.info == null) TrackOptionsPopup(grid,
+                            playlistTracks.firstOrNull { it.id == overlay.trackId }, closeOptions,
+                            onCollections = { optionsCollections = true }, onInfo = { infoRequest = TrackInfoRequest(optionsTarget!!, TrackInfoDestination.TRACK_OPTIONS) }, onSchedule = { stop ->
+                                val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
+                                if (target == null || (optionsOccurrence != null && queue.entries.none { it.id == optionsOccurrence }))
+                                    Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
+                                else {
+                                    if (queue.current == null) { playing = false; position = 0f }
+                                    queue = optionsOccurrence?.let { queue.scheduleOccurrence(it, stop) } ?: queue.schedule(target.id, stop)
+                                    optionsCollections = false; optionsTarget = null; optionsOccurrence = null; optionsCompleted++
+                                    Toast.makeText(context, if (stop) "Will stop after this song" else "Will play next", Toast.LENGTH_SHORT).show()
                                 }
-                                optionsTarget = null; optionsOccurrence = null; optionsCollections = false; optionsCompleted++
-                                Toast.makeText(context, "Removed from queue", Toast.LENGTH_SHORT).show()
-                            }
-                        })
-                    if (optionsCollections) MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
-                        grid, 55f, 20f, 172f, 172f, closeOptions)
-                    if (collectionsOpen) TrackCollectionsPopup(grid, playlistLibrary, membershipTarget!!,
-                        onToggle = { id ->
-                            val target = membershipTarget
-                            if (playlistTracks.any { it.id == target }) updatePlaylists(playlistLibrary.toggleMembership(id, target, System.currentTimeMillis()))
-                            else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
-                        }, onCreate = {
-                            if (playlistTracks.any { it.id == membershipTarget }) { collectionDraft = ""; collectionNaming = true }
-                            else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
-                        }, onClose = closeCollections)
+                            }, fromQueue = overlay.occurrence != null,
+                            currentOccurrence = overlay.occurrence != null && overlay.occurrence == queue.currentId,
+                            onAdd = {
+                                val target = playlistTracks.firstOrNull { it.id == optionsTarget && it.available }
+                                if (target != null) {
+                                    if (queue.entries.isEmpty()) { playing = false; position = 0f }
+                                    queue = queue.append(target.id)
+                                    optionsTarget = null; optionsOccurrence = null; optionsCollections = false; optionsCompleted++
+                                    Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
+                                }
+                            }, onRemove = {
+                                val id = optionsOccurrence
+                                if (id != null && queue.entries.any { it.id == id }) {
+                                    val wasCurrent = id == queue.currentId
+                                    queue = queue.remove(id, available)
+                                    if (wasCurrent) {
+                                        position = 0f
+                                        if (queue.current == null) playing = false
+                                        else if (playing) playlistTracks.firstOrNull { it.id == queue.current?.trackId }?.let(recordDemoStart)
+                                    }
+                                    optionsTarget = null; optionsOccurrence = null; optionsCollections = false; optionsCompleted++
+                                    Toast.makeText(context, "Removed from queue", Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                        if (overlay?.collections == true) MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
+                            grid, 55f, 20f, 172f, 172f, closeOptions)
+                        if (overlay?.collections == true) {
+                            TrackCollectionsPopup(grid, playlistLibrary, overlay.trackId,
+                                onToggle = { id ->
+                                    if (playlistTracks.any { it.id == overlay.trackId }) updatePlaylists(playlistLibrary.toggleMembership(id, overlay.trackId, System.currentTimeMillis()))
+                                    else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
+                                }, onCreate = {
+                                    if (playlistTracks.any { it.id == overlay.trackId }) { collectionDraft = ""; collectionNaming = true }
+                                    else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
+                                }, onClose = closeCollections)
+                        }
+                    }
                     AssetButton("Previous track", R.drawable.player_skip_back, grid, 108f, 1136f, 74f, pressedAsset = R.drawable.player_skip_back_pressed) { browsingReturn.interaction(); stepTrack(-1) }
                     AssetButton(if (playing) "Pause" else "Play", if (playing) R.drawable.player_pause else R.drawable.player_play,
                         grid, 508f, 1137f, 123f, pressedAsset = if (playing) R.drawable.player_pause_pressed else R.drawable.player_play_pressed) { browsingReturn.interaction(); if (!fixture) { if (playing) playback!!.pause() else playback!!.play() } else if (playing) playing = false else {
@@ -652,10 +694,12 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                     AssetButton("Next track", R.drawable.player_skip_next, grid, 891f, 1136f, 74f, pressedAsset = R.drawable.player_skip_next_pressed) { browsingReturn.interaction(); stepTrack(1) }
                 }
                 BoxWithConstraints(Modifier.fillMaxHeight()) {
-                    if (drawerOpen) AppDrawer(drawerApps) { drawerOpen = false }
-                    else {
-                        ClockPane(referencePreview, Modifier.fillMaxSize(), settings)
-                        if (launcher?.enabled == true) DrawerButton(PlayerGrid(maxWidth.value, maxHeight.value), false, controlOpacity) { drawerOpen = true }
+                    PlayerPaneCrossfade(drawerOpen) { open ->
+                        if (open) AppDrawer(drawerApps) { drawerOpen = false }
+                        else {
+                            ClockPane(referencePreview, Modifier.fillMaxSize(), settings)
+                            if (launcher?.enabled == true) DrawerButton(PlayerGrid(maxWidth.value, maxHeight.value), false, controlOpacity) { drawerOpen = true }
+                        }
                     }
                 }
             }

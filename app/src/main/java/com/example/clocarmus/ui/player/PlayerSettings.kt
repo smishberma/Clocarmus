@@ -15,14 +15,15 @@ internal enum class PlayerBackground(val label: String, val color: Color, @Drawa
 }
 // Keep SEGMENTED as the stored key so existing LCD selections survive the font redesign.
 internal enum class ClockStyle(val label: String) { DEFAULT("Default"), VERTICAL("Vertical"), SEGMENTED("LCD"), DOT_MATRIX("Dot matrix") }
-internal enum class DividerStyle(val label: String) { DEFAULT("Default"), HIDDEN("Hidden"), DOTTED("Dotted"), SQUIGGLY("Squiggly"), BEAM("Beam") }
+// Preserve stored keys so existing divider selections keep their appearance.
+internal enum class DividerStyle(val label: String) { HIDDEN("Default"), DEFAULT("Line"), DOTTED("Dotted"), SQUIGGLY("Squiggly"), BEAM("Beam") }
 
 /** These source IDs belong to the existing demo tree, not Android storage grants. */
 internal data class PlayerSettings(
     val autoplay: Boolean = false, val statusBar: Boolean = false, val disableFade: Boolean = false,
     val background: PlayerBackground = PlayerBackground.DEFAULT,
     val clock: ClockStyle = ClockStyle.DEFAULT, val twentyFourHour: Boolean = false,
-    val divider: DividerStyle = DividerStyle.DEFAULT,
+    val divider: DividerStyle = DividerStyle.HIDDEN,
     val sources: Set<String> = setOf("music", "oriental", "mix"), val exclusions: Set<String> = emptySet(),
     val rightHandDrive: Boolean = false, val openAfterBoot: Boolean = false
 ) {
@@ -36,7 +37,7 @@ internal fun loadPlayerSettings(prefs: SharedPreferences): PlayerSettings {
     return PlayerSettings(prefs.getBoolean("autoplay", false), prefs.getBoolean("statusBar", false),
         prefs.getBoolean("disableFade", false), choice("background", PlayerBackground.entries.toTypedArray(), PlayerBackground.DEFAULT),
         choice("clock", ClockStyle.entries.toTypedArray(), ClockStyle.DEFAULT), prefs.getBoolean("twentyFourHour", false),
-        choice("divider", DividerStyle.entries.toTypedArray(), DividerStyle.DEFAULT),
+        choice("divider", DividerStyle.entries.toTypedArray(), DividerStyle.HIDDEN),
         prefs.getStringSet("sources", setOf("music", "oriental", "mix"))!!.toSet(), prefs.getStringSet("exclusions", emptySet())!!.toSet(),
         prefs.getBoolean("rightHandDrive", false), prefs.getBoolean("openAfterBoot", false))
 }
