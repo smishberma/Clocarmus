@@ -490,7 +490,7 @@ Validation: `assembleDebug`, all 94 unit tests, and `lintDebug` pass (0 lint err
 - Missing title: filename. Missing artist/album: Unknown artist/Unknown album. Missing year: Unknown year; always retain the year row directly below Album on the main player. Missing artwork: local placeholder.
 - No online metadata/artwork lookups or metadata editor.
 
-### Settings, onboarding and head-unit behavior — functionality interview complete, integration pending
+### Settings, onboarding and head-unit behavior — shell integrated; library/service integration pending
 
 Agreed on 2026-11-11 against implemented references 035–050, including gradient backgrounds and RHD. This supersedes earlier unconditional paused-startup/wake requirements only for the explicitly enabled autoplay policy below. Existing Settings/demo autoplay is not an implementation of that conditional policy. Real library, service, boot, and hardware integration remain pending.
 
@@ -825,7 +825,7 @@ Implementation started 2026-11-12: compatible Media3/Room runtime versions are p
 - Implement optional Launcher mode and references 051–052: Advanced setting and system Home workflow, actual default-status tracking/safe disable, app discovery and drawer, RHD, fading/inactivity integration, and Home-versus-boot launch handling. Keep normal app entry available and validate compatibility without making launcher mode the default.
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
-- Integrate the completed Settings/onboarding specification with real sources and playback: persist unfinished setup steps, share folder/exclusion state, apply failure-aware settings writes, implement confirmed Remove all libraries, and add the independent off-by-default boot-opening preference. Retain the implemented welcome and settings screens.
+- Shell integration implemented: persist the first unfinished onboarding step, share real folder/exclusion management with Settings, report settings write failures and restore saved values, keep splash/setup full-screen, suppress demo autoplay on setup completion, and implement confirmed, replayable library/queue/membership removal. The independent off-by-default boot-opening preference is already implemented. Real scanning, imported records, playback-service integration, and invalidation of future workers remain in the library/playback phases. See README’s Shell and onboarding integration section.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues now opens the implemented Queue screen described above.
 - Implement main-player inactivity fading with shared transient opacity/timer state and non-consuming touch observation across both panes. Apply opacity only to the designated controls, including the optional drawer button; cancel pending countdowns/animations when inactive and interrupt fading immediately on touch.

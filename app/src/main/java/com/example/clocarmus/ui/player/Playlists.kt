@@ -84,3 +84,7 @@ internal fun collectionsFixture(preview: String): PlaylistLibrary {
         if (preview == "collections-custom" && name in setOf("New playlist 01", "Trip 01")) listOf(demoPlayerTrack.id) else emptyList()) },
         favorites = if (preview in setOf("collections-favorites", "collections-member")) listOf(TimedTrack(demoPlayerTrack.id, 1)) else emptyList())
 }
+
+/** Reset retains playlist identities and names, but no music references. */
+internal fun PlaylistLibrary.withoutMusic() = copy(custom = custom.map { it.copy(tracks = emptyList()) },
+    favorites = emptyList(), imported = emptyList(), played = emptyList())
