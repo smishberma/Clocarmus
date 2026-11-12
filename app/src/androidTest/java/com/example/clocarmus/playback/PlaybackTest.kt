@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.test.InstrumentationTestCase
 import com.example.clocarmus.library.*
+import com.example.clocarmus.playback.shuffle.*
 import com.example.clocarmus.ui.player.*
 import com.example.clocarmus.ui.startup.*
 import kotlinx.coroutines.*
@@ -26,6 +27,9 @@ class PlaybackTest : InstrumentationTestCase() {
     private var publications = 0
     private var rejectAudio = false
     private var openedAudio = 0
+    private var shuffleCalls = 0
+    private var shuffleGate: CompletableDeferred<Unit>? = null
+    private var failShuffle = false
     override fun setUp() {
         super.setUp()
         val target = instrumentation.targetContext
@@ -64,7 +68,13 @@ class PlaybackTest : InstrumentationTestCase() {
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
     private fun createController() {
         main {
-            controller = PlaybackController(context, library) {
+            controller = PlaybackController(context, library, shuffleGenerator = { input ->
+                shuffleCalls++
+                val gate = shuffleGate
+                gate?.await()
+                if (failShuffle) error("Shuffle fixture failure")
+                prepareShuffle(input)
+            }) {
                 openedAudio++
                 if (rejectAudio) error("Decoder fixture failure")
                 AssetFileDescriptor(ParcelFileDescriptor.open(wav, ParcelFileDescriptor.MODE_READ_ONLY), 0, wav.length())
@@ -211,4 +221,212 @@ class PlaybackTest : InstrumentationTestCase() {
         stream.close() // Simulates loss before finishWrite; load must recover the previous snapshot.
         assertEquals(original, store.load())
     }
+    fun testShuffleTogglePreservesPausedOccurrencePositionSchedulingAndMarker() {
+        select()
+        await { controller.positionState.value > .25f }
+        var before = TrackQueue()
+        main {
+            controller.pause()
+            controller.positionState.value = 2f
+            val q = controller.queueState.value
+            controller.queueState.value = q.schedule(q.entries.last().trackId, true)
+            before = controller.queueState.value
+            controller.toggleShuffle()
+        }
+        await { shuffleCalls > 0 && !controller.preparingShuffle }
+        main {
+            assertTrue(controller.shuffleState.value)
+            assertFalse(controller.playingState.value)
+            assertEquals(before.currentId, controller.queueState.value.currentId)
+            assertEquals(before.scheduledIds, controller.queueState.value.scheduledIds)
+            assertEquals(before.stopAfterId, controller.queueState.value.stopAfterId)
+            assertEquals(before.entries, controller.queueState.value.entries)
+            assertEquals(2f, controller.positionState.value, .2f)
+        }
+        assertEquals(1, openedAudio)
+    }
+
+    fun testBrowserSelectionStartsAudioWhileShufflePreparationIsPending() {
+        val gate = CompletableDeferred<Unit>()
+        shuffleGate = gate
+        main {
+            val ids = library.state.value.tracks.map { it.id }
+            controller.shuffleState.value = true
+            controller.selectCollection(ids, ids.last())
+        }
+        await { controller.preparingShuffle && controller.positionState.value > .5f }
+        var current: String? = null
+        main {
+            current = controller.queueState.value.currentId
+            assertEquals(library.state.value.tracks.last().id, controller.queueState.value.entries.first().trackId)
+            gate.complete(Unit)
+        }
+        await { !controller.preparingShuffle }
+        main {
+            assertEquals(current, controller.queueState.value.currentId)
+            assertTrue(controller.positionState.value >= .5f)
+            assertTrue(controller.playingState.value)
+        }
+        assertEquals(1, openedAudio)
+    }
+
+    fun testShuffleBoundaryWaitPauseAndExplicitRetry() {
+        select()
+        await { controller.positionState.value > .25f }
+        main { controller.toggleShuffle() }
+        await { shuffleCalls > 0 && !controller.preparingShuffle }
+        val gate = CompletableDeferred<Unit>()
+        var finalId: String? = null
+        main {
+            shuffleGate = gate
+            controller.selectOccurrence(controller.queueState.value.entries.last().id)
+            finalId = controller.queueState.value.currentId
+            controller.repeatState.value = 2
+        }
+        await { controller.preparingShuffle && controller.positionState.value > .25f }
+        val openedBeforeBoundary = openedAudio
+        main { controller.positionState.value = 8f }
+        Thread.sleep(350)
+        main {
+            assertTrue(controller.playingState.value)
+            assertEquals(finalId, controller.queueState.value.currentId)
+            controller.pause()
+            gate.complete(Unit)
+        }
+        Thread.sleep(350)
+        main {
+            assertFalse(controller.playingState.value)
+            assertEquals(finalId, controller.queueState.value.currentId)
+        }
+        assertEquals(openedBeforeBoundary, openedAudio)
+        await { PlaybackStore(context).load()?.waitingForShuffle == true }
+        main { controller.close() }
+        val calls = shuffleCalls
+        createController()
+        Thread.sleep(250)
+        main {
+            assertFalse(controller.playingState.value)
+            assertEquals(finalId, controller.queueState.value.currentId)
+        }
+        assertEquals(calls, shuffleCalls)
+        main { controller.play() }
+        await { controller.queueState.value.currentId != finalId && controller.positionState.value > .25f }
+    }
+
+    fun testReplacingQueueInvalidatesPreparedPassAndPreservesNewScope() {
+        select()
+        await { controller.positionState.value > .25f }
+        main { controller.toggleShuffle() }
+        await { shuffleCalls > 0 && !controller.preparingShuffle }
+        val gate = CompletableDeferred<Unit>()
+        main { shuffleGate = gate; controller.repeatState.value = 2 }
+        await { controller.preparingShuffle }
+        var selected = ""
+        main {
+            shuffleGate = null
+            selected = library.state.value.tracks.last().id
+            controller.selectCollection(listOf(selected), selected)
+            gate.complete(Unit)
+        }
+        await { !controller.preparingShuffle && controller.positionState.value > .25f }
+        main {
+            assertEquals(listOf(selected), controller.queueState.value.entries.map { it.trackId })
+            assertTrue(controller.playingState.value)
+        }
+    }
+
+    fun testScheduledStopOverridesPreparedShufflePassAndRestoreDoesNotReshuffle() {
+        select()
+        await { controller.positionState.value > .25f }
+        main { controller.toggleShuffle(); controller.repeatState.value = 2 }
+        await { shuffleCalls > 0 && !controller.preparingShuffle }
+        main {
+            val id = controller.queueState.value.currentId
+            controller.queueState.value = controller.queueState.value.copy(stopAfterId = id)
+            controller.positionState.value = 8f
+        }
+        await { !controller.playingState.value && controller.queueState.value.resumeAfterStop }
+        var saved = TrackQueue()
+        main { saved = controller.queueState.value }
+        await { PlaybackStore(context).load()?.session?.queue == saved }
+        main { controller.close() }
+        val calls = shuffleCalls
+        createController()
+        Thread.sleep(250)
+        main {
+            assertEquals(saved, controller.queueState.value)
+            assertFalse(controller.playingState.value)
+            assertTrue(controller.shuffleState.value)
+        }
+        assertEquals(calls, shuffleCalls)
+    }
+
+    fun testFailedPassStopsAtBoundaryAndExplicitPlayCanRetry() {
+        select()
+        await { controller.positionState.value > .25f }
+        main { controller.toggleShuffle() }
+        await { shuffleCalls > 0 && !controller.preparingShuffle }
+        var finalId: String? = null
+        main {
+            failShuffle = true
+            controller.selectOccurrence(controller.queueState.value.entries.last().id)
+            finalId = controller.queueState.value.currentId
+            controller.repeatState.value = 2
+        }
+        await { controller.positionState.value > .25f }
+        main { controller.positionState.value = 8f }
+        await { !controller.playingState.value && controller.notice?.contains("could not be prepared") == true }
+        main {
+            assertTrue(controller.shuffleState.value)
+            assertEquals(finalId, controller.queueState.value.currentId)
+            failShuffle = false
+            controller.play()
+        }
+        await { controller.queueState.value.currentId != finalId && controller.positionState.value > .25f }
+    }
+
+    fun testPausedNextAcrossShuffleBoundaryChangesSelectionWithoutStartingAudio() {
+        select()
+        await { controller.positionState.value > .25f }
+        main { controller.toggleShuffle() }
+        await { shuffleCalls > 0 && !controller.preparingShuffle }
+        val opens = openedAudio
+        main {
+            controller.pause()
+            controller.repeatState.value = 2
+            controller.step(1)
+            assertEquals(1, controller.queueState.value.currentIndex)
+            controller.step(1)
+        }
+        await { controller.queueState.value.currentIndex == 0 && !controller.preparingShuffle }
+        main { assertFalse(controller.playingState.value); assertEquals(0f, controller.positionState.value) }
+        assertEquals(opens, openedAudio)
+    }
+
+    fun testExplicitQueueSelectionCancelsPendingRemainderOrdering() {
+        select()
+        await { controller.positionState.value > .25f }
+        val gate = CompletableDeferred<Unit>()
+        var original = TrackQueue()
+        main {
+            val ids = library.state.value.tracks.map { it.id }
+            controller.pause()
+            controller.queueState.value = TrackQueue.fromTracks(ids + ids, ids.first())
+            original = controller.queueState.value
+            shuffleGate = gate
+            controller.toggleShuffle()
+        }
+        await { controller.preparingShuffle }
+        main {
+            controller.selectOccurrence(original.entries[1].id)
+            gate.complete(Unit)
+        }
+        await { controller.positionState.value > .25f }
+        main {
+            assertEquals(original.entries, controller.queueState.value.entries)
+            assertEquals(original.entries[1].id, controller.queueState.value.currentId)
+            assertTrue(controller.playingState.value)
+        }
+    }
+
 }

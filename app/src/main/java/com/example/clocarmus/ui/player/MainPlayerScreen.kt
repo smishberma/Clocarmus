@@ -350,9 +350,12 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val selectTrack: (String, List<TrackMenuEntry>) -> Unit = { id, tracks ->
         val playable = playableTrack(tracks, id)
         if (playable != null) {
-            queue = TrackQueue.fromTracks(tracks.map { it.id }, playable.id, shuffle)
-            position = 0f
-            playing = true
+            if (!fixture) playback!!.selectCollection(tracks.map { it.id }, playable.id)
+            else {
+                queue = TrackQueue.fromTracks(tracks.map { it.id }, playable.id, shuffle)
+                position = 0f
+                playing = true
+            }
             recordDemoStart(playable); browsingReturn.trackSelected()
         } else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
     }
@@ -542,12 +545,14 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
                             AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
                                 grid, 141f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
-                                shuffle = !shuffle
-                                val head = queue.entries.take(queue.currentIndex + 1)
-                                val tail = queue.entries.drop(queue.currentIndex + 1)
-                                val scheduled = queue.scheduledIds.mapNotNull { id -> tail.find { it.id == id } }
-                                val rest = tail.filterNot { it.id in queue.scheduledIds }
-                                queue = queue.copy(entries = head + scheduled + if (shuffle) rest.shuffled() else rest)
+                                if (!fixture) playback!!.toggleShuffle() else {
+                                    shuffle = !shuffle
+                                    val head = queue.entries.take(queue.currentIndex + 1)
+                                    val tail = queue.entries.drop(queue.currentIndex + 1)
+                                    val scheduled = queue.scheduledIds.mapNotNull { id -> tail.find { it.id == id } }
+                                    val rest = tail.filterNot { it.id in queue.scheduledIds }
+                                    queue = queue.copy(entries = head + scheduled + if (shuffle) rest.shuffled() else rest)
+                                }
                             }
                             AssetButton("Repeat", when (repeat) {
                                 1 -> R.drawable.player_repeat_one_active

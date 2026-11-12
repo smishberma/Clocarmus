@@ -7,7 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-internal data class PlaybackCheckpoint(val session: DemoSession, val ended: Boolean = false)
+internal data class PlaybackCheckpoint(val session: DemoSession, val ended: Boolean = false, val waitingForShuffle: Boolean = false)
 
 /** Atomic replacement retains the previous complete file when a write is interrupted. IO only. */
 internal class PlaybackStore(context: Context) {
@@ -28,7 +28,7 @@ internal class PlaybackStore(context: Context) {
         val position = json.getDouble("position").toFloat()
         check(position.isFinite() && position >= 0)
         return PlaybackCheckpoint(DemoSession(TrackQueue(entries, marker("current"), marker("stop"), scheduled,
-            json.getBoolean("continuation")), position, json.getBoolean("shuffle"), json.getInt("repeat").also { check(it in 0..2) }), json.optBoolean("ended"))
+            json.getBoolean("continuation")), position, json.getBoolean("shuffle"), json.getInt("repeat").also { check(it in 0..2) }), json.optBoolean("ended"), json.optBoolean("shuffleBoundary"))
     }
     fun save(checkpoint: PlaybackCheckpoint) = synchronized(lock) { saveLocked(checkpoint) }
     private fun saveLocked(checkpoint: PlaybackCheckpoint) {
@@ -39,6 +39,7 @@ internal class PlaybackStore(context: Context) {
         }).put("current", q.currentId).put("stop", q.stopAfterId).put("scheduled", JSONArray(q.scheduledIds))
             .put("continuation", q.resumeAfterStop).put("position", s.position.toDouble())
             .put("shuffle", s.shuffle).put("repeat", s.repeat).put("ended", checkpoint.ended)
+            .put("shuffleBoundary", checkpoint.waitingForShuffle)
         val stream = file.startWrite()
         try { stream.write(json.toString().toByteArray()); file.finishWrite(stream) }
         catch (failure: Exception) { file.failWrite(stream); throw failure }

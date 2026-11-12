@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import com.example.clocarmus.ClocarmusApplication
 import com.example.clocarmus.library.Availability
 import com.example.clocarmus.ui.player.*
+import com.example.clocarmus.playback.shuffle.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
@@ -20,6 +21,7 @@ internal interface PlaybackHost { fun publish() }
 internal class PlaybackController(
     private val app: Context,
     private val library: com.example.clocarmus.library.LocalLibrary = (app.applicationContext as ClocarmusApplication).library,
+    private val shuffleGenerator: suspend (ShufflePreparationInput) -> List<QueueOccurrence> = ::prepareShuffle,
     private val openAudio: (Uri) -> android.content.res.AssetFileDescriptor? = { app.contentResolver.openAssetFileDescriptor(it, "r") }
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -28,6 +30,15 @@ internal class PlaybackController(
     private val store = PlaybackStore(app)
     private var loaded = false
     private var playAfterLoad = false
+    private var shuffleRemainderRequested = false
+    private var remainderPrevious: List<String>? = null
+    private var shuffleSuspended = false
+    private var shuffleBoundary = false
+    private var lastAudible: String? = null
+    private var generatedOrder = emptyList<String>()
+    private val shufflePreparation = ShufflePreparation(scope, shuffleGenerator) { schedule() }
+    var preparingShuffle by mutableStateOf(false)
+        private set
     internal val ready get() = loaded
     private var revision = 0L
     private var allowCheckpoint = true
@@ -73,12 +84,29 @@ internal class PlaybackController(
         }
     }
     val queueState = command(TrackQueue()) { old, next ->
+        invalidateShuffle()
+        // A manual ordering/replacement supersedes pending ordering; cursor advances do not.
+        if (old.entries != next.entries && next.scheduledIds.isEmpty()) shuffleRemainderRequested = false
+        if (old.currentId != next.currentId) shuffleBoundary = false
         if (old.currentId != next.currentId) { ended = false; failed.clear() }
     }
-    val playingState = command(false) { _, next -> if (!next) pauseEngine() }
-    val positionState = command(0f) { _, _ -> pendingSeek = true; ended = false }
-    val shuffleState = command(false)
-    val repeatState = command(0)
+    val playingState = command(false) { _, next ->
+        if (!next) { shuffleSuspended = true; invalidateShuffle(); pauseEngine() }
+        else shuffleSuspended = false
+    }
+    val positionState = command(0f) { _, _ ->
+        pendingSeek = true; ended = false
+        if (shuffleBoundary) { shuffleBoundary = false; invalidateShuffle() }
+    }
+    val shuffleState = command(false) { _, enabled ->
+        invalidateShuffle()
+        if (loaded) {
+            shuffleRemainderRequested = enabled
+            remainderPrevious = null
+            shuffleSuspended = false
+        }
+    }
+    val repeatState = command(0) { _, _ -> invalidateShuffle() }
     private var queue by queueState
     private var playing by playingState
     private var position by positionState
@@ -87,7 +115,7 @@ internal class PlaybackController(
     private val writeGeneration = AtomicLong()
     private val writeMutex = Mutex()
     private val writes = Channel<PendingCheckpoint>(Channel.CONFLATED)
-    private val reconcile = Runnable { if (loaded) { reconcileEngine(); checkpoint(); host?.publish() } }
+    private val reconcile = Runnable { if (loaded) { reconcileShuffle(); reconcileEngine(); checkpoint(); host?.publish() } }
     private fun schedule() { handler.removeCallbacks(reconcile); handler.post(reconcile) }
 
     init {
@@ -103,6 +131,9 @@ internal class PlaybackController(
                     queue = it.session.queue; position = it.session.position
                     shuffleState.value = it.session.shuffle; repeatState.value = it.session.repeat
                     ended = it.ended
+                    shuffleBoundary = it.waitingForShuffle
+                    shuffleSuspended = true // Restoration neither prepares nor activates a new pass.
+                    generatedOrder = it.session.queue.entries.map { entry -> entry.trackId }
                 }
                 if (saved.isFailure) warning = "Saved playback could not be read. The player was restored empty and paused."
             }
@@ -132,7 +163,15 @@ internal class PlaybackController(
             }
         }
         scope.launch {
+            var previousAvailability = emptySet<String>()
             library.state.collect { snapshot ->
+                val scopeIds = queue.entries.mapTo(HashSet()) { it.trackId }
+                val availability = snapshot.records.filter { it.id in scopeIds && it.availability == Availability.AVAILABLE }.mapTo(HashSet()) { it.id }
+                if (availability != previousAvailability) {
+                    previousAvailability = availability
+                    invalidateShuffle()
+                    schedule()
+                }
                 if (snapshot.ready && queue.current != null && !available(queue.current!!.trackId)) {
                     playing = false // Drive/access recovery never resumes audio.
                     if (snapshot.records.none { it.id == queue.current?.trackId }) {
@@ -168,7 +207,107 @@ internal class PlaybackController(
         reporting = false
     }
     private fun checkpoint() {
-        if (loaded && allowCheckpoint && !reporting) writes.trySend(PendingCheckpoint(writeGeneration.get(), PlaybackCheckpoint(DemoSession(queue, position, shuffleState.value, repeatState.value), ended)))
+        if (loaded && allowCheckpoint && !reporting) writes.trySend(PendingCheckpoint(writeGeneration.get(), PlaybackCheckpoint(DemoSession(queue, position, shuffleState.value, repeatState.value), ended, shuffleBoundary)))
+    }
+
+    /** Browser selection captures an unshuffled snapshot; ordering work belongs to this owner. */
+    fun selectCollection(ids: List<String>, selected: String) {
+        if (selected !in ids || !available(selected)) { notice = "Track unavailable"; return }
+        generatedOrder = emptyList()
+        shuffleBoundary = false
+        queue = TrackQueue.fromTracks(ids, selected)
+        if (shuffleState.value) {
+            // A browser-selected opening pins the chosen occurrence at the start of the session.
+            val current = queue.current!!
+            queue = queue.copy(entries = listOf(current) + queue.entries.filterNot { it.id == current.id })
+        }
+        shuffleRemainderRequested = shuffleState.value
+        remainderPrevious = emptyList() // A chosen opening starts an unconstrained first remainder.
+        shuffleSuspended = false
+        position = 0f
+        playing = true
+        schedule()
+    }
+
+    fun toggleShuffle() { shuffleState.value = !shuffleState.value }
+
+    private fun invalidateShuffle() {
+        shufflePreparation.invalidate()
+        preparingShuffle = false
+    }
+
+    private fun reconcileShuffle() {
+        if (!shuffleState.value) {
+            shuffleRemainderRequested = false
+            // Turning shuffle off while waiting at a boundary resumes the ordinary repeat path.
+            if (shuffleBoundary && !shuffleSuspended) {
+                shuffleBoundary = false
+                val first = queue.entries.firstOrNull { available(it.trackId) }
+                if (first == null) playing = false
+                else { queue = queue.copy(currentId = first.id, resumeAfterStop = false, scheduledIds = emptyList()); position = 0f }
+            }
+            return
+        }
+        if (shuffleSuspended || queue.current == null) return
+        if (!shuffleRemainderRequested && (repeatState.value != 2 || (!playing && !shuffleBoundary))) {
+            if (shuffleBoundary) { shuffleBoundary = false; playing = false; ended = true }
+            return
+        }
+        val kind = if (shuffleRemainderRequested) ShufflePreparationKind.REMAINDER else ShufflePreparationKind.PASS
+        val tail = queue.entries.drop(queue.currentIndex + 1).filterNot { it.id in queue.scheduledIds }
+        val scopeIds = queue.entries.mapTo(HashSet()) { it.trackId }
+        val input = ShufflePreparationInput(queue, kind,
+            library.state.value.records.filter { it.id in scopeIds && it.availability == Availability.AVAILABLE }.mapTo(HashSet()) { it.id },
+            if (kind == ShufflePreparationKind.REMAINDER) remainderPrevious ?: tail.map { it.trackId }
+                else generatedOrder.ifEmpty { queue.entries.map { it.trackId } },
+            lastAudible)
+        shufflePreparation.prepare(input)
+        preparingShuffle = shufflePreparation.result == null && shufflePreparation.failure == null
+        if (shufflePreparation.failure != null) {
+            preparingShuffle = false
+            if (kind == ShufflePreparationKind.REMAINDER) {
+                shuffleRemainderRequested = false
+                shuffleState.value = false
+                notice = "Shuffle could not be prepared. The current queue was kept."
+            } else if (shuffleBoundary) {
+                shuffleSuspended = true
+                playing = false
+                notice = "The next shuffled pass could not be prepared. Press Play to retry."
+            }
+            return
+        }
+        val entries = shufflePreparation.result ?: return
+        if (kind == ShufflePreparationKind.REMAINDER) {
+            shuffleRemainderRequested = false
+            if (generatedOrder.isEmpty()) generatedOrder = entries.map { it.trackId }
+            queue = queue.copy(entries = entries)
+            invalidateShuffle()
+            schedule()
+        } else if (shuffleBoundary && !shuffleSuspended) {
+            shuffleBoundary = false
+            if (entries.isEmpty()) {
+                playing = false
+                ended = true
+                notice = "No available tracks remain in this collection."
+            } else {
+                generatedOrder = entries.map { it.trackId }
+                queue = queue.copy(entries = entries, currentId = entries.first().id,
+                    scheduledIds = emptyList(), resumeAfterStop = false,
+                    stopAfterId = queue.stopAfterId?.takeIf { marker -> entries.any { it.id == marker } })
+                position = 0f
+                ended = false
+                releaseEngine()
+                invalidateShuffle()
+                schedule()
+            }
+        }
+    }
+
+    private fun waitForShufflePass() {
+        shuffleSuspended = false
+        shuffleBoundary = true
+        releaseEngine()
+        schedule()
     }
 
     fun play() {
@@ -176,23 +315,33 @@ internal class PlaybackController(
         if (queue.current == null) { notice = "Select a track to start playback."; return }
         if (!available(queue.current!!.trackId)) { notice = "Track unavailable"; return }
         failed.clear()
+        shuffleSuspended = false
+        if (shuffleBoundary) {
+            invalidateShuffle()
+            playing = true
+            schedule()
+            return
+        }
         if (queue.resumeAfterStop) {
             val next = queue.step(1, available)
             if (next.currentId == queue.currentId) {
                 if (repeatState.value != 2) return
+                if (shuffleState.value) { playing = true; waitForShufflePass(); return }
                 val first = queue.entries.firstOrNull { available(it.trackId) } ?: return
                 queue = queue.copy(currentId = first.id, resumeAfterStop = false, scheduledIds = emptyList())
             } else queue = next
             position = 0f
         } else if (ended) { position = 0f; ended = false; releaseEngine() }
-        else if (durationMs() > 0 && position * 1000 >= durationMs()) { complete(); return }
+        else if (durationMs() > 0 && position * 1000 >= durationMs()) { playing = true; complete(); return }
         playing = true
         schedule()
     }
-    fun pause() { playAfterLoad = false; playing = false; checkpoint(); host?.publish() }
+    fun pause() { playAfterLoad = false; shuffleSuspended = true; invalidateShuffle(); playing = false; checkpoint(); host?.publish() }
     fun selectOccurrence(id: String) {
         val occurrence = queue.entries.firstOrNull { it.id == id } ?: return
         if (!available(occurrence.trackId)) { notice = "Track unavailable"; return }
+        shuffleRemainderRequested = false
+        invalidateShuffle()
         if (id == queue.currentId) { play(); return }
         queue = queue.select(id).copy(stopAfterId = null)
         position = 0f
@@ -200,6 +349,7 @@ internal class PlaybackController(
     }
     fun step(direction: Int) {
         if (queue.current == null) return
+        if (direction < 0) { shuffleRemainderRequested = false; invalidateShuffle() }
         if (direction < 0 && position > 3f) {
             position = 0f; releaseEngine(); schedule(); return
         }
@@ -208,6 +358,7 @@ internal class PlaybackController(
         if (direction > 0 && old.stopAfterId == old.currentId) next = next.copy(stopAfterId = null)
         if (next.currentId == old.currentId) {
             if (repeatState.value == 2) {
+                if (direction > 0 && shuffleState.value) { queue = next; waitForShufflePass(); return }
                 val entry = if (direction > 0) next.entries.firstOrNull { available(it.trackId) }
                     else next.entries.lastOrNull { available(it.trackId) }
                 if (entry != null) next = next.copy(currentId = entry.id, resumeAfterStop = false, scheduledIds = emptyList())
@@ -225,6 +376,7 @@ internal class PlaybackController(
     private fun durationMs(): Int = if (prepared) runCatching { player?.duration ?: 0 }.getOrDefault(0)
         else (library.state.value.tracks.firstOrNull { it.id == queue.current?.trackId }?.durationSeconds ?: 0) * 1000
     private fun reconcileEngine() {
+        if (shuffleBoundary) return
         if (queue.currentId != engineOccurrence) releaseEngine()
         if (queue.current == null) { if (playing) playing = false; releaseEngine(); return }
         if (playing && !available(queue.current!!.trackId)) {
@@ -296,6 +448,8 @@ internal class PlaybackController(
         try {
             engine.setVolume(if (ducked) .2f else 1f, if (ducked) .2f else 1f)
             engine.start()
+            val audible = queue.current?.trackId
+            if (lastAudible != audible) { lastAudible = audible; invalidateShuffle(); schedule() }
             if (newStart) {
                 newStart = false
                 val track = library.state.value.tracks.firstOrNull { it.id == queue.current?.trackId }
@@ -308,6 +462,11 @@ internal class PlaybackController(
     }
     private fun complete() {
         if (prepared) positionStateInternal(durationMs() / 1000f)
+        if (shuffleState.value && repeatState.value == 2 && queue.currentId != queue.stopAfterId &&
+            queue.entries.drop(queue.currentIndex + 1).none { available(it.trackId) }) {
+            waitForShufflePass()
+            return
+        }
         val result = queue.complete(repeatState.value, available)
         queue = result.queue
         releaseEngine()
