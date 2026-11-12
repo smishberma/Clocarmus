@@ -68,16 +68,17 @@ MediaPlayer opens indexed SAF content through a descriptor, with provider openin
 
 Focus loss pauses and requires explicit Play. Navigation ducking attenuates the decoder, leaving Android's media-volume setting intact. Focus gain only clears attenuation. Focus callbacks carry a generation guard so late callbacks cannot resume a paused or denied request. `ACTION_AUDIO_BECOMING_NOISY` pauses the same session. Backgrounding and display-off do not imply sleep. The existing Activity window flag keeps the display awake only while its UI is visible.
 
-`files/playback-v1.json` stores a versioned, validated queue/cursor snapshot through Android AtomicFile. Queue occurrences, current entry, position, repeat/shuffle, scheduled requests, stop marker, consumed-stop continuation and natural completion survive restoration. Checkpoints run on IO after transitions and on a five-second target while playing, through a serial conflated writer with capped retry backoff. Failed writes preserve the previous committed file and display one storage warning per controller lifetime. Interrupted replacements recover through AtomicFile's backup. A corrupt/unrecognized snapshot yields an explained empty paused player; it does not guess a queue. Remove all libraries also clears the new durable checkpoint under the existing reset journal.
+`files/playback-v1.json` now holds a checksummed version-3 cursor envelope linked to immutable SHA-256-addressed queue structures with independent recovery copies. Legacy inline version-1 and linked version-2 cursors remain readable. Original occurrence order, consumption/replay, semantic collection/search provenance, generated order/history revision, scheduling, stop markers, end state and both preparation continuations restore paused. Position checkpoints write compact cursor/bitmap data rather than serialize the full queue. A validated previous generation provides recovery for damaged committed data; a session with no valid generation restores explained empty paused state. Writes remain serialized/coalesced with retry backoff and one storage warning. Confirmed library reset clears both generations and per-collection history under the reset journal. This is not a sudden-power-loss durability claim.
 
 ### Remaining playback work
 
-- Genuine Shuffle still uses the existing demo ordering algorithm. Collection provenance, consumption/history, uniform/fresh sampling, source refresh at shuffled Repeat All, and cancellable large-collection preparation remain unimplemented.
-- Checkpoints currently rewrite the full queue. Separate version-linked structural/cursor saves, an additional validated recovery generation for damaged committed files, storage-failure injection, and 100k-entry performance measurements remain required. AtomicFile interruption tests do not establish sudden-power-loss durability.
+- Genuine Shuffle now captures browser provenance/search, refreshes collection membership at shuffled Repeat All, tracks consumption independently from deliberate replay, restores original order on shuffle-off, and persists per-collection generated history. Preparation/activation and both ordering directions run on workers; Queue rows are virtualized. Large identical and single-minority duplicate collections have exact linear sampling policies. General mixed-duplicate feasibility has a cancellable but potentially combinatorial fallback, so arbitrary 100k duplicate-heavy performance is not established. See [full contracts and remaining acceptance](genuine-shuffle.md).
+- Linked structural/cursor persistence, recovery generations, corruption checks and injected write-failure tests are implemented. Further owning-thread/list-memory optimization and physical storage/power-loss acceptance remain required. The full 100k-library lifecycle benchmark was removed from the agenda at the user’s request on 2026-11-12 and is not a pending acceptance requirement. Component measurements do not establish full app scalability.
+
 - The saved autoplay setting does not yet request real startup playback. Durable previously-active eligibility, qualifying one-shot startup attempts and device-specific sleep/wake integration remain pending. Boot/Home navigation does not start audio.
 - Broader call/output overlap, navigation ducking, denied focus, Bluetooth/USB/SD disconnection, display-off/task-dismissal survival, and notification/hardware-control behavior need modern-Android and physical-device acceptance. No OEM sleep signal is assumed.
 
-### Playback validation
+### Initial playback validation
 
 Debug/test APK builds, all 121 host unit tests, lint (0 errors, 45 warnings), and all 20 API 23 instrumentation tests pass (ten existing library tests plus ten playback tests). The playback suite uses an isolated library/database/session and generated eight-second PCM audio. It checks real decoder progress, pause/seek/resume, uninterrupted queue reorder, no extra Recently played entry on ordinary resume, scheduled-stop continuation, paused end-seek restoration, final completion/restart, Previous/repeat boundary behavior, bounded failure with Repeat One, competing focus with no gain-driven resume, corrupt-snapshot recovery, reset save-generation invalidation, and atomic interrupted-write recovery. The actual service also passed an API 23 startup smoke check: its MediaSession and three-action MediaStyle notification register paused. Full audible service/UI lifecycle acceptance is still pending.
 
@@ -101,3 +102,23 @@ Validation: debug and instrumented-test APK builds, all 125 host tests, all 12 l
 ## Track info file type (2026-11-12)
 
 Track info displays File type above Artist(s), using the cached provider filename's extension in uppercase (for example FLAC, MP3, OPUS, WAV, OGG, and M4A (AAC)). It follows the fixed Track info target and remains available for disconnected sources. Existing imports need no rescan or database migration. Missing extensions use the panel's existing Empty value.
+
+### Genuine Shuffle validation
+
+Core collection/consumption/history integration passes all 165 host tests and all 35
+playback instrumentation tests on both API 23 and API 31. The 12 library
+instrumentation regressions also pass on API 31. Debug/test APK builds and
+lint pass (0 errors, 48 warnings). Coverage includes scoped membership refresh,
+empty/deleted playlists, manual duplicate counts, paused restoration of consumption
+and pending ordering, Repeat One/stop precedence, per-collection checksums/revisions,
+legacy migration, linked-generation recovery and injected write-failure retry.
+Historical 100k component measurements, the removal of the full 100k-track benchmark
+from the agenda, and the remaining mixed-duplicate/physical acceptance gaps are recorded in [Genuine Shuffle](genuine-shuffle.md). Queue UI checks
+cover lazy rows, current-occurrence drag and scrolling to the final entry.
+
+Simulated removable-storage validation (2026-11-12): API 31 passes all 14 library
+instrumentation tests plus three new playback checks for provider disconnection,
+access loss, paused checkpoint restoration, reconnection without autoplay and finite
+Next traversal. Five of those checks are new. Failures are injected at the document
+access boundary; physical USB/SD events, actual URI-grant revocation and OEM detection
+remain unvalidated. See [Genuine Shuffle](genuine-shuffle.md).

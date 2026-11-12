@@ -87,6 +87,40 @@ class LocalLibraryTest : InstrumentationTestCase() {
         runBlocking { repository.removeMissing(setOf(id)) }
         assertTrue(repository.state.value.records.isEmpty())
     }
+    fun testDisconnectedDriveRetainsIdentityAndPlaylistsAcrossRestartAndReconnect() =
+        verifyUnavailableSourceRecovery(Availability.DISCONNECTED)
+
+    fun testLostPermissionRetainsIdentityAndPlaylistsAcrossRestartAndRegrant() =
+        verifyUnavailableSourceRecovery(Availability.ACCESS_LOST)
+
+    private fun verifyUnavailableSourceRecovery(expected: Availability) {
+        val original = repository.state.value.records.single()
+        runBlocking { repository.editPlaylists { it.add(FAVORITES, original.id, 10).create("Storage recovery") } }
+        val playlist = repository.state.value.playlists.custom.single().id
+        runBlocking { repository.editPlaylists { it.add(playlist, original.id, 11) } }
+        access.fail = expected == Availability.DISCONNECTED
+        access.accessLost = expected == Availability.ACCESS_LOST
+        refresh()
+        assertEquals(expected, repository.state.value.records.single().availability)
+        runBlocking { repository.removeMissing(setOf(original.id)) }
+        assertEquals(original.id, repository.state.value.records.single().id)
+        runBlocking { repository.close() }
+        repository = LocalLibrary(context, access)
+        awaitIdle { it.records.singleOrNull()?.availability == expected }
+        assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
+        assertTrue(repository.state.value.playlists.contains(playlist, original.id))
+        access.fail = false
+        access.accessLost = false
+        refresh()
+        val returned = repository.state.value.records.single()
+        assertEquals(Availability.AVAILABLE, returned.availability)
+        assertEquals(original.id, returned.id)
+        assertEquals(original.importedAt, returned.importedAt)
+        assertEquals(original.track, returned.track)
+        assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
+        assertTrue(repository.state.value.playlists.contains(playlist, original.id))
+    }
+
     fun testCancellationRetainsCompletedImportsAndDirtyRequestGetsFollowup() {
         access.file = "slow"
         access.slow = true
@@ -235,11 +269,13 @@ class LocalLibraryTest : InstrumentationTestCase() {
     private class FakeDocuments : DocumentAccess {
         @Volatile var file: String? = "song"
         @Volatile var fail = false
+        @Volatile var accessLost = false
         @Volatile var slow = false
         @Volatile var started = false
         @Volatile var reads = 0
         @Volatile var nested = false
         override fun children(tree: Uri, id: String): MatrixCursor {
+            if (accessLost) throw SecurityException("Simulated persisted grant loss")
             if (fail) error("Drive disconnected")
             return MatrixCursor(arrayOf("id", "name", "mime", "size", "modified")).apply {
                 if (nested && id == "music") {

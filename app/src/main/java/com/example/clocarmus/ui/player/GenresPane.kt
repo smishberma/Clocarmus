@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.playback.shuffle.ShuffleCollection
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.*
@@ -34,7 +36,7 @@ internal fun GenresPane(
     selectedTrackId: String?, playing: Boolean, inactivity: BrowsingReturnInactivity,
     onSearchVisibilityChanged: (Boolean) -> Unit, onBack: () -> Unit,
     onNavigate: (BrowserDestination) -> Unit,
-    onSelectTrack: (String, List<TrackMenuEntry>) -> Unit, onPlayAll: (List<TrackMenuEntry>) -> Unit
+    onSelectTrack: (String, List<TrackMenuEntry>, ShuffleCollection) -> Unit, onPlayAll: (List<TrackMenuEntry>, ShuffleCollection) -> Unit
 ) {
     val libraryTracks = LocalLibraryTracks.current
     val genres = remember(libraryTracks) { groupGenres(libraryTracks) }
@@ -43,7 +45,7 @@ internal fun GenresPane(
     val page = destination.page
     if (page == "genre-options") {
         // Reuse the established options geometry and supplied play/back assets.
-        ArtistDetailPane(grid, name, onBack, { onPlayAll(genre?.tracks.orEmpty()) },
+        ArtistDetailPane(grid, name, onBack, { onPlayAll(genre?.tracks.orEmpty(), ShuffleCollection(kind = "genre", genre = destination.genre)) },
             { onNavigate(destination.copy(page = "genre-tracks")) },
             { onNavigate(destination.copy(page = "genre-albums")) },
             genre = true, onArtists = { onNavigate(destination.copy(page = "genre-artists")) },
@@ -87,7 +89,7 @@ internal fun GenresPane(
                         onNavigate(BrowserDestination("album-options", album = it.identity))
                     }
                 }
-                else -> onSelectTrack(id, tracks)
+                else -> onSelectTrack(id, tracks, ShuffleCollection(kind = "genre", genre = destination.genre, query = query))
             }
         }, heading = "GENRES", icon = R.drawable.menu_genres,
         searchName = when (page) { "genre-list" -> "genres"; "genre-artists" -> "artists"; "genre-albums" -> "albums"; else -> "tracks" },

@@ -1,5 +1,7 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.playback.shuffle.ShuffleCollection
+
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 
@@ -22,6 +24,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -200,7 +203,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var repeat by if (fixture) remember { mutableStateOf(0) } else playback!!.repeatState
     var menuOpen by rememberSaveable { mutableStateOf(settingsPreview != null || queuePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || foldersPreview != null) }
     var queueOpen by rememberSaveable { mutableStateOf(queuePreview) }
-    val queueScroll = rememberScrollState()
+    val queueScroll = rememberLazyListState()
     var tracksOpen by rememberSaveable { mutableStateOf(tracksPreview) }
     var browserStack by rememberSaveable { mutableStateOf(arrayListOf<BrowserDestination>().apply {
         if (settingsPreview != null) add(BrowserDestination("settings"))
@@ -347,12 +350,15 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         }
     }
     BackHandler(enabled = menuOpen && optionsTarget == null && infoRequest == null, onBack = goBack)
-    val selectTrack: (String, List<TrackMenuEntry>) -> Unit = { id, tracks ->
+    val selectTrack: (String, List<TrackMenuEntry>, ShuffleCollection) -> Unit = { id, tracks, source ->
         val playable = playableTrack(tracks, id)
         if (playable != null) {
-            queue = TrackQueue.fromTracks(tracks.map { it.id }, playable.id, shuffle)
-            position = 0f
-            playing = true
+            if (!fixture) playback!!.selectCollection(tracks.map { it.id }, playable.id, source)
+            else {
+                queue = TrackQueue.fromTracks(tracks.map { it.id }, playable.id, shuffle)
+                position = 0f
+                playing = true
+            }
             recordDemoStart(playable); browsingReturn.trackSelected()
         } else Toast.makeText(context, "Track unavailable", Toast.LENGTH_SHORT).show()
     }
@@ -428,12 +434,15 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                         } else if (browserStack.isNotEmpty()) {
                             val destination = browserStack.last()
                             artistStates.SaveableStateProvider(destination.copy(search = false)) {
-                                val playCollection: (List<TrackMenuEntry>) -> Unit = { tracks ->
+                                val playCollection: (List<TrackMenuEntry>, ShuffleCollection) -> Unit = { tracks, source ->
                                     shuffle = false
                                     val first = tracks.firstOrNull { it.available }
-                                    queue = TrackQueue.fromTracks(tracks.map { it.id }, first?.id)
-                                    playing = first != null
-                                    position = 0f
+                                    if (!fixture && first != null) playback!!.selectCollection(tracks.map { it.id }, first.id, source)
+                                    else {
+                                        queue = TrackQueue.fromTracks(tracks.map { it.id }, first?.id)
+                                        playing = first != null
+                                        position = 0f
+                                    }
                                     if (first != null) {
                                         recordDemoStart(first)
                                         browsingReturn.cancel()
@@ -489,7 +498,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 onQuery = { trackQuery = it },
                                 onSearchVisibilityChanged = { searchOpen = it },
                                 onSearchEdited = { browsingReturn.cancel() },
-                                onBack = goBack, onSelect = { selectTrack(it, visibleTracks) },
+                                onBack = goBack, onSelect = { selectTrack(it, visibleTracks, ShuffleCollection(kind = "all", query = trackQuery)) },
                                 emptyMessage = if (!fixture && librarySnapshot.summary.running) "Scanning music…" else if (!fixture && allTracks.isEmpty()) "Add music folders in Settings" else "No matching tracks")
                         } else if (menuOpen) {
                             MenuPane(grid, onBack = { browsingReturn.cancel(); menuOpen = false }, onDestination = {
@@ -542,12 +551,14 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                 grid.place(273f, 187f, 457f, 457f), contentScale = ContentScale.Fit)
                             AssetButton("Shuffle", if (shuffle) R.drawable.player_shuffle_active else R.drawable.player_shuffle_inactive,
                                 grid, 141f, 230f, 90f, if (shuffle) "On" else "Off", opacity = controlOpacity) {
-                                shuffle = !shuffle
-                                val head = queue.entries.take(queue.currentIndex + 1)
-                                val tail = queue.entries.drop(queue.currentIndex + 1)
-                                val scheduled = queue.scheduledIds.mapNotNull { id -> tail.find { it.id == id } }
-                                val rest = tail.filterNot { it.id in queue.scheduledIds }
-                                queue = queue.copy(entries = head + scheduled + if (shuffle) rest.shuffled() else rest)
+                                if (!fixture) playback!!.toggleShuffle() else {
+                                    shuffle = !shuffle
+                                    val head = queue.entries.take(queue.currentIndex + 1)
+                                    val tail = queue.entries.drop(queue.currentIndex + 1)
+                                    val scheduled = queue.scheduledIds.mapNotNull { id -> tail.find { it.id == id } }
+                                    val rest = tail.filterNot { it.id in queue.scheduledIds }
+                                    queue = queue.copy(entries = head + scheduled + if (shuffle) rest.shuffled() else rest)
+                                }
                             }
                             AssetButton("Repeat", when (repeat) {
                                 1 -> R.drawable.player_repeat_one_active

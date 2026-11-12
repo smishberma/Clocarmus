@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-12",
+  "avd": "clocarmus_splash_api31",
+  "api": "31",
+  "fingerprint": "Android/sdk_phone64_x86_64/emulator64_x86_64:12/SE1A.220826.006.A1/10064458:userdebug/test-keys",
+  "app_sha256": "0698281de1f9c377b2b571ee1430849c0b5e66e84ede7c610b104b8daaf82c24",
+  "test_apk_sha256": "055070fb8fef9fc575a90e3a5938a729e2996349736c3371e54a776230614542",
+  "passed": 17,
+  "failed": 0,
+  "tests": [
+    "testAlbumYearUsesReleaseTagInsteadOfContainerCreationDate",
+    "testCancellationRetainsCompletedImportsAndDirtyRequestGetsFollowup",
+    "testChangeDuringScanQueuesFollowupWithoutLosingDirtyState",
+    "testCleanupRechecksFileReturnedAfterPreview",
+    "testDisconnectedDriveRetainsIdentityAndPlaylistsAcrossRestartAndReconnect",
+    "testFullDateTagBecomesYearAndAbsentReleaseTagsStayEmpty",
+    "testIncompleteTraversalNeverConfirmsMissingAndCleanupRevalidates",
+    "testIncrementalRefreshRenameAndDurableMemberships",
+    "testLostPermissionRetainsIdentityAndPlaylistsAcrossRestartAndRegrant",
+    "testMetadataReaderAcceptsUntaggedShortWaveWithFilenameFallback",
+    "testMetadataReaderUpdateRefreshesCachedTracksWithoutChangingIdentity",
+    "testOverlappingSourcesExclusionAndRemovalKeepOnlyCoveredMemberships",
+    "testResetInvalidatesSlowWorkAndPreservesEmptyCustomPlaylists",
+    "testSourceScopedExclusionKeepsOverlappingGrantAndEmptyDirectories",
+    "testSimulatedDriveDisconnectionRestoresShufflePausedAndReconnectNeedsPlay",
+    "testSimulatedStoragePermissionLossRestoresPausedAndRegrantNeedsPlay",
+    "testNextWithDisconnectedDriveTerminatesWithoutOpeningUnavailableAudio"
+  ],
+  "method": "Injected DocumentAccess failures with real SQLite, MediaPlayer decoding and PlaybackStore files. No physical volume unmount or Android persisted-grant revocation.",
+  "log": "build/reports/genuine-shuffle/removable-storage-api31/instrumentation.txt"
+}

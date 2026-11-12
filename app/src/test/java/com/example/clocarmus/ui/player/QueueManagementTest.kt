@@ -98,4 +98,14 @@ class QueueManagementTest {
         assertEquals(stopped.entries, resumed.queue.entries)
         assertEquals(stopped.currentId, resumed.queue.currentId)
     }
+    @Test fun virtualPreviewMatchesEveryCommittedMoveWithoutChangingTheQueue() {
+        val q = queue("a", "b", "a", "c", "d", "e")
+        val original = q.entries.toList()
+        val ids = q.entries.map { it.id }
+        for (from in q.entries.indices) for (to in q.entries.indices) {
+            assertEquals(q.reorder(ids, ids[from], to).entries, queuePreview(q.entries, from, to))
+            assertEquals(original, q.entries)
+        }
+    }
+
 }
