@@ -36,7 +36,8 @@ internal fun GenresPane(
     onNavigate: (BrowserDestination) -> Unit,
     onSelectTrack: (String, List<TrackMenuEntry>) -> Unit, onPlayAll: (List<TrackMenuEntry>) -> Unit
 ) {
-    val genres = remember { groupGenres(demoLibraryTracks) }
+    val libraryTracks = LocalLibraryTracks.current
+    val genres = remember(libraryTracks) { groupGenres(libraryTracks) }
     val genre = genres.firstOrNull { it.key == destination.genre }
     val name = genre?.name ?: "Unknown genre"
     val page = destination.page
@@ -61,7 +62,7 @@ internal fun GenresPane(
     val tracks = (if (preview == "genre-tracks") genreReferenceTracks else genre?.tracks.orEmpty())
         .filter { it.title.contains(query, true) }
     val artists = groupArtists(genre?.tracks.orEmpty())
-    val albums = genreAlbums(demoLibraryTracks, genre?.tracks.orEmpty())
+    val albums = genreAlbums(libraryTracks, genre?.tracks.orEmpty())
     val rows = when (page) {
         "genre-list" -> if (preview == "genres") listOf("Acoustic" to 4, "African" to 6, "Alternative Rock" to 9,
             "Classical" to 4, "Folk" to 2).map { (title, count) -> BrowserRow(genreKey(title), title, "$count Tracks") }

@@ -43,6 +43,8 @@ androidComponents.onVariants(androidComponents.selector().withBuildType("debug")
 }
 
 android {
+    useLibrary("android.test.runner", false)
+    useLibrary("android.test.base", false)
     namespace = "com.example.clocarmus"
     compileSdk = 35
 
@@ -52,6 +54,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
         // Compose renders vectors directly on API 23, including gradients.
         vectorDrawables.useSupportLibrary = true
     }

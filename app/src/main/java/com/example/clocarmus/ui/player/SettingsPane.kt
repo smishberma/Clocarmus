@@ -54,13 +54,15 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     val context = LocalContext.current
     val sources = rememberSourceManagement(OnboardingState(), preview != null)
     SourceManagementError(sources)
+    val repository = remember { (context.applicationContext as com.example.clocarmus.ClocarmusApplication).library }
+    if (prompt == "scan") com.example.clocarmus.library.LibraryScanDialog { prompt = null }
     if (prompt == "real-exclusions") ExclusionsDialog(sources.state, { prompt = null }, { sources.save(it) })
     if (prompt == "real-reset" || prompt?.startsWith("content:") == true) {
         val target = prompt!!
         AlertDialog(onDismissRequest = { if (!sources.busy) prompt = null },
             title = { Text(if (target == "real-reset") "Remove all libraries?" else "Remove folder?") },
             text = { Text(if (target == "real-reset") "Remove sources, exclusions and music memberships, and stop and clear the queue. Empty custom playlists and appearance settings are kept. Music files are kept."
-                else "Remove this source and its exclusions. Music files are kept.") },
+                else "Remove this source and its exclusions. Tracks no longer covered by another source will be removed from the library, playlists, Favorites and history. Music files are kept.") },
             confirmButton = { TextButton(enabled = !sources.busy, onClick = {
                 val next = if (target == "real-reset") sources.state.copy(folders = emptyList(), exclusions = emptySet(), resetPending = true) else sources.state.remove(target)
                 sources.save(next) {
@@ -124,7 +126,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
         LaunchedEffect(preview) { if (preview == "settings-scrolled") { snapshotFlow { scroll.maxValue }.collect { if (it > 0) scroll.scrollTo(it) } } }
         Column(grid.place(41f, 264f, 864f, 732f).verticalScroll(scroll)) {
             heading("Library"); gap(8f)
-            action("Manual rescan") { Toast.makeText(context, "Demo library: device scanning is not connected yet.", Toast.LENGTH_LONG).show() }
+            action("Manual rescan") { if (preview == null) { repository.refresh(); prompt = "scan" } }
             gap(16f); action("Manage folders") { page = "Manage folders" }
             gap(42f); heading("Playback"); gap(18f)
             toggle("Allow music auto-playback on start", settings.autoplay) { onChange(settings.copy(autoplay = it)) }
@@ -206,8 +208,11 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                         }
                         TextButton(enabled = !sources.busy, onClick = { prompt = source.uri }) { Text("Remove") }
                     }
+                    TextButton(onClick = { repository.refresh(source.uri); prompt = "scan" }) { Text("Rescan this source") }
+                    TextButton(onClick = { sources.add() }) { Text("Grant access again") }
                     gap(24f)
                 }
+                action("Scan status") { prompt = "scan" }; gap(27f)
                 action("ADD FOLDER") { sources.add() }; gap(27f)
                 action("Exclusions") { prompt = "real-exclusions" }; gap(27f)
                 action("Reset all (remove all libraries)") { if (!sources.busy) prompt = "real-reset" }
@@ -245,7 +250,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             }
         }
     }
-    prompt?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
+    prompt?.takeIf { preview != null }?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
         val available = demoFolderTree.contents(null).filter { it.id !in settings.sources }
         AlertDialog(onDismissRequest = { prompt = null }, title = { Text(when (target) { "add" -> "Add demo folder"; "reset" -> "Remove all libraries?"; else -> "Remove folder?" }) },
             text = {

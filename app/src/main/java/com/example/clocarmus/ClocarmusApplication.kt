@@ -15,6 +15,8 @@ class ClocarmusApplication : Application() {
     // Session-only drawer page: survives activity recreation and external round trips.
     internal var drawerPage = 0
 
+    internal val library by lazy { com.example.clocarmus.library.LocalLibrary(this) }
+
     internal lateinit var startup: StartupSession<PlaylistLibrary>
         private set
 

@@ -16,7 +16,8 @@ internal fun AlbumsPane(
     onNavigate: (BrowserDestination) -> Unit,
     onSelectTrack: (String, List<TrackMenuEntry>) -> Unit, onPlayAlbum: (List<TrackMenuEntry>) -> Unit
 ) {
-    val albums = remember(preview) { groupAlbums(if (preview == "albums") demoAlbumTracks.filter { it.effectiveAlbumArtist == "Artist" } else demoLibraryTracks) }
+    val libraryTracks = LocalLibraryTracks.current
+    val albums = remember(preview, libraryTracks) { groupAlbums(if (preview == "albums") demoAlbumTracks.filter { it.effectiveAlbumArtist == "Artist" } else libraryTracks) }
     val album = albums.firstOrNull { it.identity == destination.album }
     if (destination.page == "album-options" && album != null) {
         ArtistDetailPane(grid, album.identity.title, onBack, { onPlayAlbum(album.tracks) },

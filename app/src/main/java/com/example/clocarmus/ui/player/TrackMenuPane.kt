@@ -33,6 +33,8 @@ import com.example.clocarmus.R
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+internal val LocalLibraryTracks = staticCompositionLocalOf { demoLibraryTracks }
+
 /** Fixed demo data for exercising scrolling before the offline library is connected. */
 internal val demoTrackTitles = listOf(
     "Amber", "Anchor", "Blossom", "Canyon", "Drift", "Ember", "Fern", "Glimmer",
@@ -47,8 +49,8 @@ internal data class TrackMenuEntry(
     val albumArtist: String? = null, val discNumber: Int? = null,
     val trackNumber: Int? = null, val durationSeconds: Int? = null,
     val genres: List<String> = emptyList(),
-    val tags: TrackTags? = null
-)
+    val tags: TrackTags? = null, val artworkPath: String? = null
+) : java.io.Serializable
 
 // Placeholder metadata matches the visual fixture until the library supplies real tags.
 internal val marqueeDemoTrack = TrackMenuEntry(
@@ -84,10 +86,10 @@ internal fun TrackMenuPane(
     grid: PlayerGrid, tracks: List<TrackMenuEntry>, selectedId: String?, playing: Boolean,
     scroll: ScrollState, query: String, onQuery: (String) -> Unit,
     onSearchVisibilityChanged: (Boolean) -> Unit, onSearchEdited: () -> Unit,
-    onBack: () -> Unit, onSelect: (String) -> Unit, artist: String? = null
+    onBack: () -> Unit, onSelect: (String) -> Unit, artist: String? = null, emptyMessage: String = "No matching tracks"
 ) = BrowserPane(grid, tracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") },
     selectedId, playing, scroll, query, onQuery, onSearchVisibilityChanged, onSearchEdited,
-    onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT), trackRows = true)
+    onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT), trackRows = true, emptyMessage = emptyMessage)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
