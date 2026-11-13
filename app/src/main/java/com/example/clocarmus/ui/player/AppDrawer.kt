@@ -13,6 +13,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -101,6 +103,8 @@ internal fun AppDrawer(apps: List<DrawerApp>?, onClose: () -> Unit) {
     val pages = drawerPageCount(apps?.size ?: 0)
     val pager = rememberPagerState(initialPage = clampDrawerPage(application.drawerPage, apps?.size ?: 0)) { pages }
     val scope = rememberCoroutineScope()
+    val settingsInteraction = remember { MutableInteractionSource() }
+    val settingsPressed by settingsInteraction.collectIsPressedAsState()
     // Wait for discovery before clamping the retained session page.
     LaunchedEffect(apps) {
         if (apps != null) pager.scrollToPage(clampDrawerPage(application.drawerPage, apps.size))
@@ -114,8 +118,10 @@ internal fun AppDrawer(apps: List<DrawerApp>?, onClose: () -> Unit) {
     }
     BoxWithConstraints(Modifier.fillMaxHeight()) {
         val grid = PlayerGrid(maxWidth.value, maxHeight.value)
-        Box(grid.place(322f, 42f, 356f, 101f).clickable(role = Role.Button) { launch(Intent(Settings.ACTION_SETTINGS)) }) {
-            Image(painterResource(R.drawable.drawer_android_settings_button), "Android Settings", Modifier.fillMaxSize())
+        Box(grid.place(322f, 42f, 356f, 101f).clickable(interactionSource = settingsInteraction, indication = null,
+            role = Role.Button) { launch(Intent(Settings.ACTION_SETTINGS)) }) {
+            Image(painterResource(if (settingsPressed) R.drawable.drawer_android_settings_button_pressed
+                else R.drawable.drawer_android_settings_button), "Android Settings", Modifier.fillMaxSize())
         }
         VerticalPager(pager, Modifier.then(grid.place(70f, 178f, 850f, 870f))) { page ->
             Box(Modifier.fillMaxSize()) {
@@ -154,9 +160,17 @@ internal fun AppDrawer(apps: List<DrawerApp>?, onClose: () -> Unit) {
 
 @Composable
 internal fun DrawerButton(grid: PlayerGrid, open: Boolean, opacity: Float, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
     Box(grid.touchTarget(500f, 1158f, 86f).then(Modifier.semantics { contentDescription = if (open) "Close app drawer" else "App drawer" })
-        .clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        Image(painterResource(if (open) R.drawable.drawer_back_button else R.drawable.drawer_app_drawer_button), null,
+        .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        val drawable = when {
+            open && pressed -> R.drawable.drawer_app_drawer_back_button_pressed
+            open -> R.drawable.drawer_app_drawer_back_button
+            pressed -> R.drawable.drawer_app_drawer_button_pressed
+            else -> R.drawable.drawer_app_drawer_button
+        }
+        Image(painterResource(drawable), null,
             Modifier.size(((if (open) 54f else 45f) * grid.scale).dp).alpha(opacity))
     }
 }

@@ -42,7 +42,7 @@ internal fun StyledClock(day: String, time: String, period: String, date: String
         grid.place(15f, if (style == ClockStyle.SEGMENTED) 325f else 337f, 970f, 140f), 100f * grid.scale, font)
     ClockTimeRow(time, period, grid.place(if (style == ClockStyle.SEGMENTED) 35f else 85f, if (style == ClockStyle.SEGMENTED) 487f else 495f, 850f, 248f),
         (if (style == ClockStyle.SEGMENTED) 270f else 200f) * grid.scale, 80f * grid.scale, font, grid.scale)
-    ClockFaceLabel(date, grid.place(15f, if (style == ClockStyle.SEGMENTED) 780f else 748f, 970f, 130f), 100f * grid.scale, font)
+    ClockFaceLabel(date, grid.place(if (style == ClockStyle.SEGMENTED) -35f else 15f, if (style == ClockStyle.SEGMENTED) 780f else 748f, 970f, 130f), 100f * grid.scale, font)
 }
 
 private fun clockTextStyle(size: Float, font: FontFamily, bold: Boolean = false) = TextStyle(
