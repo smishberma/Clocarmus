@@ -11,11 +11,12 @@ import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.example.clocarmus.HomeActivity
 
 /** Eligibility, user preference, pending disable and actual Home selection are independent. */
 class LauncherController(private val activity: Activity, private val requestSelection: (Intent) -> Unit) {
     private val prefs = activity.getSharedPreferences("player-settings", Activity.MODE_PRIVATE)
-    private val home = ComponentName(activity, "${activity.packageName}.HomeActivity")
+    private val home = ComponentName(activity, HomeActivity::class.java)
     var enabled by mutableStateOf(prefs.getBoolean("launcherMode", false))
         private set
     var isDefault by mutableStateOf(false)

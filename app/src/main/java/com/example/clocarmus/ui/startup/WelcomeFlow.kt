@@ -92,7 +92,7 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
     else if (dialog != null) AlertDialog(onDismissRequest = { dialog = null },
         title = { Text(when (dialog) { "permission-denied" -> "Storage access denied"; "skip" -> "Skip setup?"; else -> "Continue without folders?" }) },
         text = { Text(if (dialog == "permission-denied") "Allow music access in Android settings, or continue to select individual folders using the system picker."
-            else "You can add music folders later in Settings. Audio playback is still under development.") },
+            else "You can add music folders later in Settings.") },
         confirmButton = { TextButton(onClick = {
             if (dialog == "permission-denied") { dialog = null; navigate(WelcomePage.Folders) } else finish()
         }) { Text("Continue") } },

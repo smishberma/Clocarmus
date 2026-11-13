@@ -25,7 +25,7 @@ androidComponents.onVariants(androidComponents.selector().withBuildType("debug")
             val sdk = manifest.getElementsByTagName("uses-sdk").item(0) as org.w3c.dom.Element
             check(sdk.getAttributeNS(namespace, "minSdkVersion") == "23")
             check(sdk.getAttributeNS(namespace, "targetSdkVersion") == "35")
-            check(manifest.documentElement.getAttribute("package") == "com.example.clocarmus")
+            check(manifest.documentElement.getAttribute("package") == "com.smishberma.clocarmus")
             val permissions = manifest.getElementsByTagName("uses-permission")
             for (index in 0 until permissions.length) {
                 val name = (permissions.item(index) as org.w3c.dom.Element).getAttributeNS(namespace, "name")
@@ -36,7 +36,7 @@ androidComponents.onVariants(androidComponents.selector().withBuildType("debug")
             check(android.compileSdk == 35)
             check(android.compileOptions.sourceCompatibility == JavaVersion.VERSION_17)
             check(android.compileOptions.targetCompatibility == JavaVersion.VERSION_17)
-            logger.lifecycle("Compatibility passed: API 23 minimum, SDK 35, Java 17, original app ID, no network permissions.")
+            logger.lifecycle("Compatibility passed: API 23 minimum, SDK 35, Java 17, com.smishberma.clocarmus app ID, no network permissions.")
         }
     }
     tasks.named("check").configure { dependsOn(compatibilityCheck) }
@@ -49,7 +49,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.clocarmus"
+        applicationId = "com.smishberma.clocarmus"
         minSdk = 23
         targetSdk = 35
         versionCode = 1

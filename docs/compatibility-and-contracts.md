@@ -4,7 +4,7 @@ Implementation started 2026-11-12. This records the current local-library implem
 
 ## Stack
 
-Application identity remains `com.example.clocarmus`, minimum SDK 23, compile/target SDK 35, Java source/target 17, AGP 9.2.1, Kotlin Compose plugin 2.2.10, Compose BOM 2024.09.03, Activity Compose 1.8.2. No playback or database dependency was added. SQLite, document traversal, metadata extraction and image decoding use Android platform APIs. The existing coroutine dependency supplies IO scheduling and cancellation.
+Application ID is `com.smishberma.clocarmus`; the Kotlin/resource namespace remains `com.example.clocarmus`. Minimum SDK 23, compile/target SDK 35, Java source/target 17, AGP 9.2.1, Kotlin Compose plugin 2.2.10, Compose BOM 2024.09.03, Activity Compose 1.8.2. No playback or database dependency was added. SQLite, document traversal, metadata extraction and image decoding use Android platform APIs. The existing coroutine dependency supplies IO scheduling and cancellation.
 
 Instrumentation uses the platform JUnit 3 runner and optional platform test compile libraries; the test APK explicitly declares `android.test.runner`. Tests inject the document boundary but use real SQLite in an isolated cache database. A separate test reads a real generated short PCM WAV through `MediaMetadataRetriever`.
 

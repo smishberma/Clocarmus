@@ -75,7 +75,8 @@ The [design directory](design/) contains the screen mockups and branding assets:
 | Setting | Value |
 | --- | --- |
 | Language / UI | Kotlin / Jetpack Compose |
-| Application ID and namespace | `com.example.clocarmus` |
+| Application ID | `com.smishberma.clocarmus` |
+| Kotlin/resource namespace | `com.example.clocarmus` |
 | Minimum Android SDK | 23 (Android 6.0) |
 | Compile / target SDK | 35 |
 | Java source / target compatibility | 17 |
