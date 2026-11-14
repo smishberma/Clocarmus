@@ -10,6 +10,8 @@ Clocarmus is an offline music player and clock for Android car head units. Play 
 
 It runs on **Android 6.0 and newer**, with no account, internet connection, or Google Play Services required.
 
+**[Download the APK from GitHub Releases](https://github.com/smishberma/Clocarmus/releases).**
+
 ![Clocarmus main player with music controls and a large clock](docs/screenshots/player.png)
 
 ## What you can do
@@ -39,10 +41,11 @@ The clock stays visible while you browse. Your library and settings stay on your
 
 <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="Clocarmus app icon" width="64">
 
-1. Install the Clocarmus APK on your Android device. You can build the APK from this repository using the instructions below.
-2. Open **Clocarmus** and follow the welcome screens.
-3. Allow music access when asked, then choose the folders containing your songs.
-4. Let the library scan, select a song, and tap **Play**.
+1. Download the APK from [GitHub Releases](https://github.com/smishberma/Clocarmus/releases) to your Android device.
+2. Open the APK to install it. If Android asks, allow your browser or file manager to install apps from this source.
+3. Open **Clocarmus** and follow the welcome screens.
+4. Allow music access when asked, then choose the folders containing your songs.
+5. Let the library scan, select a song, and tap **Play**.
 
 To add or remove folders later, open **Menu → Settings → Manage folders**. Use **Manual rescan** to refresh your library after changing its files.
 
