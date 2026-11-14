@@ -36,6 +36,8 @@ The import script outlines text with Inkscape and calls the Android build tools'
 
 Inter 4.1 regular and bold are bundled as static TTF fonts for Android 6 compatibility. Source: https://github.com/rsms/inter/releases/tag/v4.1. Inter is distributed under the SIL Open Font License; see [the included license](licenses/Inter-LICENSE.txt).
 
+The complete Inter notice and license are also bundled in the APK's Settings → About → Open source licenses document. See [About and license maintenance](../docs/about-and-licenses.md) when updating fonts or dependencies.
+
 ## Menu assets
 
 The sixteen normal/pressed SVGs in [assets/menu-page/](assets/menu-page/) are imported as `menu_*.xml`. Back and Settings retain their supplied outlined lettering and square source canvases, with touch targets on the visible pills. Category icons retain their source proportions; category labels use bundled Inter Bold. No SVG source is modified.

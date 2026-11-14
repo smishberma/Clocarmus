@@ -1,0 +1,22 @@
+Clocarmus privacy policy
+Last updated: 14 November 2026
+
+Clocarmus is an offline music player and clock developed by smishberma. No account is required. The app has no internet permission and does not send your music, library, listening history or settings to the developer. It contains no advertising, analytics or remote crash-reporting service.
+
+Music and folder access
+Clocarmus requests audio access and read access to folders you select through Android's folder picker. It reads audio files, file identifiers, locations, tags and artwork to discover and play your music. Selected locations may include internal storage, USB drives and SD cards. Access is used for music library and playback features. Clocarmus does not modify or delete your music files.
+
+Data stored by the app
+Clocarmus saves library metadata and file identities, selected sources and exclusions, cached artwork, playlists, favorites, recently added and recently played entries, playback queue and position, shuffle state, and your preferences in its private app storage. This data supports browsing, playback restoration and your chosen settings. It is retained until changed or removed through the app or Android's app controls. Removing a source removes library entries no longer covered by another source and their music memberships; your music files remain untouched.
+
+Launcher and device features
+If you enable launcher features, Clocarmus reads the list of launchable apps to display an app drawer and checks your Home app selection. Boot and foreground playback permissions support the optional startup behavior and background music playback. Clocarmus also reads system time and volume information to display the clock and control playback. These features do not send information to the developer.
+
+Sharing and Android backup
+Clocarmus does not sell or transmit your data to the developer or advertising companies. Android may display playback information, such as song title and artist, to system media controls and connected devices. Android backup is enabled: depending on your device and system settings, Android or the device manufacturer may back up or transfer app data, including to a backup account. These system services operate under their own settings and privacy policies. A storage provider you select through Android may also have its own data handling practices.
+
+Your controls
+You can remove selected sources and exclusions in Settings → Manage folders. Reset all removes sources, exclusions and music memberships and clears the playback queue, while keeping appearance settings and empty custom playlists. To remove the app's saved data completely, use Android Settings → Apps → Clocarmus → Storage → Clear storage (wording varies by device). You can also revoke audio and folder access in Android settings. Manage system backups separately in Android's backup settings; clearing local app data does not necessarily remove existing backups. None of these app reset actions deletes your music files.
+
+Changes and contact
+Future versions may update this policy to reflect changes to the app. The policy bundled with each version is available in Settings → About. For privacy questions, contact the developer through the project issue tracker at https://github.com/smishberma/Clocarmus/issues. Information you choose to post there is handled by GitHub and may be public; do not include private music paths or other sensitive information.

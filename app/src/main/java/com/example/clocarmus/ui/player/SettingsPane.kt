@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -57,6 +58,8 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
         onDispose { unregister?.invoke() }
     }
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val privacyScroll = rememberLazyListState()
+    val licensesScroll = rememberLazyListState()
     val context = LocalContext.current
     val sources = rememberSourceManagement(OnboardingState(), preview != null)
     SourceManagementError(sources)
@@ -82,7 +85,13 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             dismissButton = { TextButton(enabled = !sources.busy, onClick = { prompt = null }) { Text("Cancel") } })
     }
     val launcher = (context as? com.example.clocarmus.MainActivity)?.launcher
-    val back = { if (page == "Settings") onExit() else page = if (page == "Exclusions") "Manage folders" else "Settings" }
+    val back = {
+        if (page == "Settings") onExit() else page = when (page) {
+            "Exclusions" -> "Manage folders"
+            "Privacy policy", "Open source licenses" -> "About"
+            else -> "Settings"
+        }
+    }
     BackHandler(onBack = back)
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed, grid, 55f, 20f, 172f, 172f, back)
     Row(grid.place(60f, 183f, 880f, 58f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -163,9 +172,20 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                     "Request opening after boot where Android allows it. This does not enable autoplay.",
                     color = Color.White, fontFamily = InterFontFamily, fontSize = (28f * s).sp,
                     modifier = Modifier.padding(horizontal = (27f * s).dp))
+                gap(42f); action("About") { page = "About" }
                 gap(40f)
             }
             TrackScrollbar(grid, scroll, emptyList(), "Settings", proportional = true, top = 272f, showAlphabetIndicator = false)
+        } else if (shownPage == "About") {
+            Column(grid.place(41f, 264f, 864f, 732f)) {
+                heading("About Clocarmus"); gap(30f)
+                action("Privacy policy") { page = "Privacy policy" }; gap(16f)
+                action("Open source licenses") { page = "Open source licenses" }
+            }
+        } else if (shownPage == "Privacy policy" || shownPage == "Open source licenses") {
+            AboutDocumentPane(grid, shownPage,
+                if (shownPage == "Privacy policy") "about/privacy_policy.txt" else "about/open_source_licenses.txt",
+                if (shownPage == "Privacy policy") privacyScroll else licensesScroll)
         } else if (shownPage in setOf("Background", "Clock", "Divider")) {
             Column(grid.place(95f, 264f, 800f, if (shownPage == "Clock" || shownPage == "Background") 800f else 732f)) {
                 heading(shownPage, inset = 0f); gap(if (shownPage == "Background") 4f else 18f)

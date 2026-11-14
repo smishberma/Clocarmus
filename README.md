@@ -23,7 +23,7 @@ It runs on **Android 6.0 and newer**, with no account, internet connection, or G
 - **Keep listening in the background.** Return to the app without interrupting your music. After an app restart, your saved queue and position return paused, ready for Play.
 - **Make it yours.** Choose backgrounds, clock styles, a 12- or 24-hour clock, and a layout for right-hand-drive cars.
 
-The clock stays visible while you browse. Your library and settings stay on your device, and removing a music source from the app leaves your music files untouched.
+The clock stays visible while you browse. Your library and settings are stored locally; Android may back them up or transfer them according to your device settings. Removing a music source from the app leaves your music files untouched.
 
 ## Screenshots
 
@@ -48,6 +48,8 @@ The clock stays visible while you browse. Your library and settings stay on your
 5. Let the library scan, select a song, and tap **Play**.
 
 To add or remove folders later, open **Menu → Settings → Manage folders**. Use **Manual rescan** to refresh your library after changing its files.
+
+Open **Menu → Settings → About** to read the privacy policy and open source license notices. Both documents are bundled with the APK and available offline.
 
 ## Build from source
 
