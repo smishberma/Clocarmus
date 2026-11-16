@@ -12,9 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 class ClocarmusApplication : Application() {
-    // Session-only drawer page: survives activity recreation and external round trips.
-    internal var drawerPage = 0
-
     private val playbackDelegate = lazy { com.example.clocarmus.playback.PlaybackController(this) }
     internal val playback by playbackDelegate
     internal fun existingPlayback() = if (playbackDelegate.isInitialized()) playback else null

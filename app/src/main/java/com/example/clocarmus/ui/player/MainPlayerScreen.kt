@@ -97,6 +97,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val activity = context as? com.example.clocarmus.MainActivity
     val launcher = activity?.launcher
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
+    var drawerOpening by remember { mutableIntStateOf(0) }
     val drawerApps = if (launcher?.enabled == true) rememberDrawerApps() else null
     LaunchedEffect(launcher?.enabled) { if (launcher?.enabled != true) drawerOpen = false }
     val settingsPreferences = remember { context.getSharedPreferences("player-settings", Context.MODE_PRIVATE) }
@@ -695,10 +696,12 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                 }
                 BoxWithConstraints(Modifier.fillMaxHeight()) {
                     PlayerPaneCrossfade(drawerOpen) { open ->
-                        if (open) AppDrawer(drawerApps) { drawerOpen = false }
+                        if (open) key(drawerOpening) {
+                            AppDrawer(drawerApps, onPopupChanged = drawerTimeout::setSuspended) { drawerOpen = false }
+                        }
                         else {
                             ClockPane(referencePreview, Modifier.fillMaxSize(), settings)
-                            if (launcher?.enabled == true) DrawerButton(PlayerGrid(maxWidth.value, maxHeight.value), false, controlOpacity) { drawerOpen = true }
+                            if (launcher?.enabled == true) DrawerButton(PlayerGrid(maxWidth.value, maxHeight.value), false, controlOpacity) { drawerOpening++; drawerOpen = true }
                         }
                     }
                 }

@@ -30,8 +30,8 @@ internal fun TrackCollectionsPopup(
     grid: PlayerGrid, library: PlaylistLibrary, track: String,
     onToggle: (String) -> Unit, onCreate: () -> Unit, onClose: () -> Unit
 ) {
-    CollectionsButton("Create playlist", grid, 55f, onCreate)
-    CollectionsButton("Close", grid, 511f, onClose)
+    CollectionsButton("Create playlist", grid, 55f, onClick = onCreate)
+    CollectionsButton("Close", grid, 511f, onClick = onClose)
     // The panel consumes blank-space taps; the covered player controls are also absent.
     Box(grid.place(51f, 304f, 893f, 759f).clip(RoundedCornerShape((75f * grid.scale).dp))
         .background(Color(0xff333333)).pointerInput(Unit) { detectTapGestures {} })
@@ -86,10 +86,10 @@ private fun CollectionMembershipRow(grid: PlayerGrid, name: String, checked: Boo
 }
 
 @Composable
-internal fun CollectionsButton(label: String, grid: PlayerGrid, x: Float, onClick: () -> Unit) {
+internal fun CollectionsButton(label: String, grid: PlayerGrid, x: Float, y: Float = 169f, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    Box(grid.place(x, 169f, 419f, 113f).clip(RoundedCornerShape(percent = 50))
+    Box(grid.place(x, y, 419f, 113f).clip(RoundedCornerShape(percent = 50))
         .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)) {
         Image(painterResource(if (pressed) R.drawable.collections_button_pressed else R.drawable.collections_button_unpressed),
             null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)

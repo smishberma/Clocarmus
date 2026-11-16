@@ -30,7 +30,7 @@ internal fun TrackOptionsPopup(grid: PlayerGrid, track: TrackMenuEntry?, onClose
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onClose)
     Image(painterResource(R.drawable.track_search), null, grid.place(858.5f, 59.5f, 87f, 87f))
-    CollectionsButton("Close", grid, 293f, onClose)
+    CollectionsButton("Close", grid, 293f, onClick = onClose)
     Box(grid.place(69f, 304f, 862f, 554f).clip(RoundedCornerShape((56f * grid.scale).dp))
         .background(Color(0xff333333)).pointerInput(Unit) { detectTapGestures {} })
     Row(grid.place(69f, 326f, 862f, 50f),

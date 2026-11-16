@@ -25,6 +25,7 @@ internal class BrowsingReturnInactivity(private val scope: CoroutineScope, priva
     private var armed = false
     private var fingerDown = false
     private var scrolling = false
+    private var suspended = false
     private var countdown: Job? = null
 
     fun setActive(value: Boolean) {
@@ -57,6 +58,12 @@ internal class BrowsingReturnInactivity(private val scope: CoroutineScope, priva
         restart()
     }
 
+    fun setSuspended(value: Boolean) {
+        if (suspended == value) return
+        suspended = value
+        restart()
+    }
+
     fun cancel() {
         armed = false
         restart()
@@ -65,7 +72,7 @@ internal class BrowsingReturnInactivity(private val scope: CoroutineScope, priva
     private fun restart() {
         countdown?.cancel()
         countdown = null
-        if (active && armed && !fingerDown && !scrolling) {
+        if (active && armed && !fingerDown && !scrolling && !suspended) {
             countdown = scope.launch {
                 delay(15_000)
                 armed = false

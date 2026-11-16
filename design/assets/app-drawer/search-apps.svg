@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="31.318207"
+   height="31.318113"
+   viewBox="0 0 8.2862757 8.2862509"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   sodipodi:docname="015-app-drawer.svg"
+   xml:space="preserve"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#cccccc"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="1"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:zoom="0.89871669"
+     inkscape:cx="490.14334"
+     inkscape:cy="2913.0426"
+     inkscape:current-layer="layer1"><inkscape:page
+       x="0"
+       y="0"
+       width="8.2862759"
+       height="8.2862511"
+       id="page2"
+       margin="0"
+       bleed="0" /></sodipodi:namedview><defs
+     id="defs1" /><g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-50.47184,-838.52887)"><g
+       id="g219"
+       transform="translate(-1.8434021,350.27927)"
+       inkscape:export-filename="/home/ismail/Projects/vibe-coded-projects/Clocarmus/design/assets/app-drawer/search-apps.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><circle
+         style="opacity:0.3;fill:#ffffff;stroke:none;stroke-width:0.48527;stroke-linecap:square;stroke-linejoin:round"
+         id="circle218"
+         cx="56.458374"
+         cy="492.3927"
+         r="4.1431375" /><path
+         style="fill:#ffffff;stroke:none;stroke-width:0.597637"
+         d="m 58.212414,494.53641 c -0.05826,-0.0454 -0.349002,-0.32763 -0.646092,-0.62691 -0.297073,-0.29924 -0.552265,-0.54414 -0.567076,-0.54414 -0.01484,0 -0.06539,0.0263 -0.112381,0.058 -0.250584,0.17023 -0.655825,0.26969 -1.010332,0.24783 -0.775455,-0.0478 -1.415442,-0.57815 -1.605541,-1.3307 -0.05588,-0.22131 -0.05707,-0.62001 -0.003,-0.83195 0.0674,-0.26186 0.236313,-0.57423 0.414586,-0.76673 0.626883,-0.67718 1.638414,-0.76804 2.36251,-0.21235 0.699848,0.537 0.890415,1.52759 0.440641,2.29042 l -0.07016,0.11898 0.626065,0.62921 c 0.473171,0.47549 0.629958,0.64765 0.641983,0.70496 0.03444,0.16399 -0.118439,0.34582 -0.2908,0.34602 -0.04882,6e-5 -0.111854,-0.0285 -0.180839,-0.0827 z m -1.971948,-1.38788 c 0.178229,-0.0331 0.447253,-0.17294 0.584303,-0.30422 0.252433,-0.24188 0.376971,-0.50761 0.39565,-0.84435 0.02141,-0.3867 -0.08844,-0.67995 -0.357596,-0.95437 -0.689896,-0.70351 -1.860394,-0.37318 -2.107508,0.59476 -0.162087,0.63486 0.254014,1.31822 0.910324,1.49501 0.150498,0.0406 0.395844,0.0464 0.574827,0.0132 z"
+         id="path219"
+         inkscape:export-filename="/home/ismail/Projects/vibe-coded-projects/Clocarmus/design/assets/track-menu/search.svg"
+         inkscape:export-xdpi="233.67665"
+         inkscape:export-ydpi="233.67665" /></g></g></svg>

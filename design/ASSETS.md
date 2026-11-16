@@ -102,3 +102,10 @@ Reference: `029-Splash-screen.png`. `scripts/import-splash-assets.py` exports `a
 ## Track Options
 
 References `030`–`031` use the supplied `assets/long-press/info-icon.svg`, imported as `options_info_icon.xml`. Regenerate with `python3 scripts/import-player-assets.py --group long-press`. The popup reuses the collections Close button assets and shared Back/transport controls. Option pills use the reference's gray fill with white text, switching to white with black text while pressed; deferred actions use muted text and have no click action.
+
+
+## App drawer redesign
+
+References 03–05 under `screens/app-drawer/` use dedicated drawer layouts and the supplied `assets/app-drawer/search-apps.svg`, `refresh-apps.svg`, and `pin.svg`, imported as `drawer_search_apps.xml`, `drawer_refresh_apps.xml`, and `drawer_pin.xml`. Settings and Back retain their drawer SVG variants. App icons come from Android package discovery, rather than placeholder artwork. The options panel and search controls use drawer-specific geometry with bundled Inter. The app-options Close button uses the shared collections button and its supplied `track-collections/button-unpressed.svg` and `button-pressed.svg` resources, including pressed feedback.
+
+Regenerate with `python3 scripts/import-player-assets.py --group app-drawer`. Enable Launcher mode in the emulator first, then capture with `python3 scripts/compare-main-player.py --screen app-drawer --install`. The comparison uses real installed apps; app icons/names naturally differ from the wireframe.

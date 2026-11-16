@@ -27,7 +27,7 @@ internal fun TrackInfoPanel(grid: PlayerGrid, track: TrackMenuEntry?, onClose: (
     val scroll = rememberScrollState()
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onClose)
-    CollectionsButton("Close", grid, 293f, onClose)
+    CollectionsButton("Close", grid, 293f, onClick = onClose)
     Box(grid.place(69f, 304f, 862f, 754f).clip(RoundedCornerShape((80f * grid.scale).dp))
         .background(Color(0xff333333)))
     Row(grid.place(69f, 326f, 862f, 50f), horizontalArrangement = Arrangement.Center,
