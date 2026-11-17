@@ -14,7 +14,7 @@ class TrackTagsTest {
 
     @Test fun fileTypePrecedesTagsAndMissingTagsNeverUseLibraryFallbacks() {
         val fields = trackInfoContent(track()).fields
-        assertEquals(listOf("File type", "Artist(s)", "Album", "Year", "Comment", "Description",
+        assertEquals(listOf("File type", "File path", "Artist(s)", "Album", "Year", "Comment", "Description",
             "Total album tracks", "Track number", "Composer", "Copyright", "Publisher"), fields.map { it.first })
         assertTrue(fields.all { it.second == null })
     }
@@ -46,7 +46,7 @@ class TrackTagsTest {
 
     @Test fun disconnectedTracksDistinguishCachedEmptyTagsFromNoCache() {
         val cached = trackInfoContent(track(TrackTags(), false))
-        assertEquals(11, cached.fields.size)
+        assertEquals(12, cached.fields.size)
         assertEquals("File unavailable — showing saved tags", cached.notice)
         val missing = trackInfoContent(track(available = false))
         assertTrue(missing.fields.isEmpty())
@@ -60,7 +60,7 @@ class TrackTagsTest {
             "song.live.wav" to "WAV", "song.ogg" to "OGG")) {
             val fields = trackInfoContent(track(TrackTags()), filename).fields
             assertEquals("File type" to expected, fields.first())
-            assertEquals("Artist(s)", fields[1].first)
+            assertEquals("Artist(s)", fields[2].first)
         }
     }
 
@@ -72,6 +72,15 @@ class TrackTagsTest {
         assertEquals("File type" to "FLAC", trackInfoContent(track(TrackTags(), false), "song.flac").fields.first())
         assertEquals(listOf("File type" to "OPUS"), trackInfoContent(track(available = false), "song.opus").fields)
         assertTrue(trackInfoContent(null, "song.mp3").fields.isEmpty())
+    }
+
+    @Test fun filePathIsPreservedIncludingWhenTagsOrSourceAreUnavailable() {
+        val path = "Music/日本語/Album/01 - Song.flac"
+        for (entry in listOf(track(TrackTags()), track(TrackTags(), false), track(available = false))) {
+            assertEquals(path, trackInfoContent(entry, "01 - Song.flac", path).fields.toMap()["File path"])
+        }
+        assertNull(trackInfoContent(track(), filePath = "  ").fields.toMap()["File path"])
+        assertTrue(trackInfoContent(null, filePath = path).fields.isEmpty())
     }
 
     @Test fun rawSnapshotSurvivesStorageRoundTripWithEveryFieldIntact() {

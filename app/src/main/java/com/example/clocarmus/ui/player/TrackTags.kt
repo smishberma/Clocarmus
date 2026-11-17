@@ -43,13 +43,14 @@ internal fun trackFileType(filename: String?): String? {
     return if (extension == "M4A") "M4A (AAC)" else extension
 }
 
-internal fun trackInfoContent(track: TrackMenuEntry?, filename: String? = null): TrackInfoContent {
+internal fun trackInfoContent(track: TrackMenuEntry?, filename: String? = null, filePath: String? = null): TrackInfoContent {
     val fileType = trackFileType(filename)
+    val fileFields = listOf("File type" to fileType, "File path" to filePath?.takeIf { it.isNotBlank() })
     return when {
         track == null || (!track.available && track.tags == null) ->
-            TrackInfoContent(if (track != null && fileType != null) listOf("File type" to fileType) else emptyList(),
+            TrackInfoContent(if (track != null) fileFields.filter { it.second != null } else emptyList(),
                 "File unavailable — no saved tags available")
-        else -> TrackInfoContent(listOf("File type" to fileType) + (track.tags ?: TrackTags()).fields().map { (label, value) ->
+        else -> TrackInfoContent(fileFields + (track.tags ?: TrackTags()).fields().map { (label, value) ->
             label to if (label in track.tags?.unreadFields.orEmpty() && value == null) "Not read" else value
         }, if (!track.available) "File unavailable — showing saved tags" else null)
     }

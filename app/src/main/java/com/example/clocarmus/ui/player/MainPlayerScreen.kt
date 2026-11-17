@@ -1,5 +1,6 @@
 package com.example.clocarmus.ui.player
 
+import com.example.clocarmus.library.trackFilePath
 import com.example.clocarmus.playback.shuffle.ShuffleCollection
 
 import kotlinx.coroutines.launch
@@ -631,8 +632,13 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                     }
                     PlayerPaneCrossfade(overlayDestination) { overlay ->
                         overlay?.info?.let { request ->
+                            val record = librarySnapshot.byId[request.trackId]
+                            val filePath by produceState<String?>(record?.uri, record?.uri, record?.availability) {
+                                value = record?.uri
+                                record?.let { value = trackFilePath(context.contentResolver, it.uri) ?: it.uri }
+                            }
                             TrackInfoPanel(grid, playlistTracks.firstOrNull { it.id == request.trackId }, closeOptions,
-                                filename = librarySnapshot.records.firstOrNull { it.id == request.trackId }?.filename)
+                                filename = record?.filename, filePath = filePath)
                         }
                         if (overlay != null && !overlay.collections && overlay.info == null) TrackOptionsPopup(grid,
                             playlistTracks.firstOrNull { it.id == overlay.trackId }, closeOptions,

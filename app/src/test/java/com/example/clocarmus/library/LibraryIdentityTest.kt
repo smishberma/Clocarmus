@@ -7,6 +7,15 @@ import org.junit.Test
 class LibraryIdentityTest {
     private fun record(id: String, hash: String = "same") = LibraryRecord(id, id, id, "$id.mp3", 10, 20, hash,
         TrackMenuEntry(id, "Artist", "Album", id = id), 1, listOf(LibraryPath("source", emptyList(), emptyList())))
+    @Test fun absoluteFilePathsExcludePipesAndDeletedFiles() {
+        assertEquals("/storage/emulated/0/Music/日本語/song.flac",
+            absoluteTrackFilePath("/storage/emulated/0/Music/日本語/song.flac"))
+        assertEquals("/storage/1234-ABCD/song.mp3", absoluteTrackFilePath("/storage/1234-ABCD/song.mp3"))
+        assertNull(absoluteTrackFilePath("pipe:[1234]"))
+        assertNull(absoluteTrackFilePath("anon_inode:[eventfd]"))
+        assertNull(absoluteTrackFilePath("/storage/emulated/0/song.mp3 (deleted)"))
+    }
+
     @Test fun uniqueMovePreservesOldIdentityOnlyWithConfirmedAbsence() {
         val old = listOf(record("old")); val incoming = listOf(record("new"))
         assertTrue(relocationMatches(old, incoming, emptySet()).isEmpty())

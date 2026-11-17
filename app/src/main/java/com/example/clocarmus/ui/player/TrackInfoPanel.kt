@@ -22,8 +22,8 @@ import com.example.clocarmus.R
 import com.example.clocarmus.ui.theme.InterFontFamily
 
 @Composable
-internal fun TrackInfoPanel(grid: PlayerGrid, track: TrackMenuEntry?, onClose: () -> Unit, filename: String? = null) {
-    val content = trackInfoContent(track, filename)
+internal fun TrackInfoPanel(grid: PlayerGrid, track: TrackMenuEntry?, onClose: () -> Unit, filename: String? = null, filePath: String? = null) {
+    val content = trackInfoContent(track, filename, filePath)
     val scroll = rememberScrollState()
     MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed,
         grid, 55f, 20f, 172f, 172f, onClose)
@@ -43,7 +43,8 @@ internal fun TrackInfoPanel(grid: PlayerGrid, track: TrackMenuEntry?, onClose: (
         }
         content.fields.forEach { (label, value) ->
             TagText(label, 34f * grid.scale, Color(0xffcccccc))
-            TagText(value ?: "Empty", 48f * grid.scale, if (value == null) Color(0xffcccccc) else Color.White)
+            val valueSize = if (label == "File path") 48f * 0.81f else 48f
+            TagText(value ?: "Empty", valueSize * grid.scale, if (value == null) Color(0xffcccccc) else Color.White)
             Spacer(Modifier.height((33f * grid.scale).dp))
         }
     }
