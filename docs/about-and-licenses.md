@@ -50,3 +50,23 @@ use the checked-in text without downloading notices.
 For acceptance, open both documents, scroll through the final paragraphs, return
 using system and on-screen Back, rotate/recreate the activity, and confirm that
 reading does not interrupt playback or trigger an automatic return to the player.
+
+## About and developer screens
+
+About uses the supplied Clocarmus banner above the existing Settings action rows.
+Developer opens the supplied avatar, Ismail Al Bermah credit, Twitter/X, LinkedIn,
+GitHub and email shortcuts. Links delegate to external apps with `ACTION_VIEW`;
+when no handler is installed, a toast explains that the link cannot open. Clocarmus
+still has no network permission and does not fetch remote content itself.
+
+Donate opens a small panel in the same half of the display with the Bitcoin address
+`bc1q78uhgjzje48jxsshngsh5ted7dfv39x426ny2z` and a Copy address button. Copy writes
+the exact address to Android's clipboard and confirms with a toast. It does not
+initiate a payment. Close and Back return to Developer; Back from Developer returns
+to About. Long-press Back retains the shared home cleanup behavior. The panels
+use the shared crossfade, and recreation retains the current page.
+
+Visual checks: `python3 scripts/compare-main-player.py --screen settings-about --install`
+and `--screen settings-developer`. The debug-only `settings-donate` Settings preview
+opens the donation panel for interaction checks. Also verify external link handling,
+Copy address, document navigation and Back without interrupting playback.

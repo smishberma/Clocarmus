@@ -41,6 +41,7 @@ import com.example.clocarmus.ui.startup.*
 internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: (PlayerSettings) -> Unit,
                           onExit: () -> Unit, preview: String? = null, onLibrariesRemoved: suspend () -> Unit = {}) {
     var page by rememberSaveable { mutableStateOf(when (preview) {
+        "settings-about" -> "About"; "settings-developer" -> "Developer"; "settings-donate" -> "Donate";
         "settings-folders" -> "Manage folders"; "settings-background" -> "Background"; "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix" -> "Clock";
         "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam" -> "Divider"; else -> "Settings"
     }) }
@@ -88,7 +89,8 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     val back = {
         if (page == "Settings") onExit() else page = when (page) {
             "Exclusions" -> "Manage folders"
-            "Privacy policy", "Open source licenses" -> "About"
+            "Privacy policy", "Open source licenses", "Developer" -> "About"
+            "Donate" -> "Developer"
             else -> "Settings"
         }
     }
@@ -177,11 +179,17 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             }
             TrackScrollbar(grid, scroll, emptyList(), "Settings", proportional = true, top = 272f, showAlphabetIndicator = false)
         } else if (shownPage == "About") {
-            Column(grid.place(41f, 264f, 864f, 732f)) {
-                heading("About Clocarmus"); gap(30f)
+            Image(painterResource(R.drawable.about_banner), "Clocarmus", grid.place(80f, 255f, 840f, 454f),
+                contentScale = ContentScale.Fit)
+            Column(grid.place(68f, 732f, 864f, 316f)) {
+                action("Developer") { page = "Developer" }; gap(16f)
                 action("Privacy policy") { page = "Privacy policy" }; gap(16f)
                 action("Open source licenses") { page = "Open source licenses" }
             }
+        } else if (shownPage == "Developer") {
+            DeveloperPane(grid) { page = "Donate" }
+        } else if (shownPage == "Donate") {
+            DonationPane(grid) { page = "Developer" }
         } else if (shownPage == "Privacy policy" || shownPage == "Open source licenses") {
             AboutDocumentPane(grid, shownPage,
                 if (shownPage == "Privacy policy") "about/privacy_policy.txt" else "about/open_source_licenses.txt",

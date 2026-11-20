@@ -109,3 +109,19 @@ References `030`–`031` use the supplied `assets/long-press/info-icon.svg`, imp
 References 03–05 under `screens/app-drawer/` use dedicated drawer layouts and the supplied `assets/app-drawer/search-apps.svg`, `refresh-apps.svg`, and `pin.svg`, imported as `drawer_search_apps.xml`, `drawer_refresh_apps.xml`, and `drawer_pin.xml`. Settings and Back retain their drawer SVG variants. App icons come from Android package discovery, rather than placeholder artwork. The options panel and search controls use drawer-specific geometry with bundled Inter. The app-options Close button uses the shared collections button and its supplied `track-collections/button-unpressed.svg` and `button-pressed.svg` resources, including pressed feedback.
 
 Regenerate with `python3 scripts/import-player-assets.py --group app-drawer`. Enable Launcher mode in the emulator first, then capture with `python3 scripts/compare-main-player.py --screen app-drawer --install`. The comparison uses real installed apps; app icons/names naturally differ from the wireframe.
+
+## About and developer assets
+
+The supplied `assets/about-sreen/` directory (original spelling retained) contains
+`clocarmus-about-graphic.png` and `developer-avatar.png`. These are copied unchanged
+to `drawable-nodpi/about_banner.png` and `about_developer_avatar.png`, preserving
+their proportions with `ContentScale.Fit`. The supplied social SVGs are imported
+as `about_x.xml`, `about_linkedin.xml`, `about_github.xml` and `about_email.xml`:
+
+```sh
+python3 scripts/import-player-assets.py --group about-sreen
+```
+
+References are `screens/about-screen/redesigned-about-screen.png` and
+`screens/about-screen/about-developer.png`. Back, volume, Settings heading, clock,
+transport, action rows and panel buttons reuse the established implementations.

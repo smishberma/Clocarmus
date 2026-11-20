@@ -1,0 +1,17 @@
+<!-- Loaded with Compose painterResource; gradient/fillType verified on API 23. -->
+<vector xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedAttribute" xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="6.7745dp"
+    android:height="6.7745dp"
+    android:viewportWidth="6.7745"
+    android:viewportHeight="6.7745">
+  <path
+      android:pathData="m0.7527,6.7745h5.2691c0.4157,0 0.7527,-0.337 0.7527,-0.7527v-5.2691c0,-0.4157 -0.337,-0.7527 -0.7527,-0.7527h-5.2691c-0.4157,0 -0.7527,0.337 -0.7527,0.7527v5.2691c0,0.4157 0.337,0.7527 0.7527,0.7527z"
+      android:strokeWidth="0.0940903"
+      android:fillColor="#ffffff"
+      android:fillType="evenOdd"/>
+  <path
+      android:pathData="m5.8336,5.8336h-1.0053v-1.7122c0,-0.4695 -0.1784,-0.7318 -0.55,-0.7318 -0.4042,0 -0.6154,0.273 -0.6154,0.7318v1.7122h-0.9688v-3.2618h0.9688v0.4394c0,0 0.2913,-0.539 0.9835,-0.539 0.6919,0 1.1872,0.4225 1.1872,1.2963zM1.5383,2.1447c-0.33,0 -0.5974,-0.2695 -0.5974,-0.6019 0,-0.3324 0.2674,-0.6019 0.5974,-0.6019 0.33,0 0.5973,0.2695 0.5973,0.6019 0,0.3324 -0.2673,0.6019 -0.5973,0.6019zM1.0381,5.8336h1.0102v-3.2618L1.0381,2.5718Z"
+      android:strokeWidth="0.0940903"
+      android:fillColor="#000000"
+      android:fillType="evenOdd"/>
+</vector>
