@@ -104,7 +104,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val settingsPreferences = remember { context.getSharedPreferences("player-settings", Context.MODE_PRIVATE) }
     var settings by remember {
         val initial = if (referencePreview) PlayerSettings(sources = if (settingsPreview == "settings-folders") setOf("music") else setOf("music", "oriental", "mix")) else loadPlayerSettings(settingsPreferences)
-        mutableStateOf(initial.copy(clock = when (settingsPreview) {
+        mutableStateOf((if (settingsPreview == "settings-background-gradient") initial.selectBackground(PlayerBackground.GRADIENT_DEFAULT) else initial).copy(clock = when (settingsPreview) {
             "settings-clock-vertical" -> ClockStyle.VERTICAL
             "settings-clock-lcd" -> ClockStyle.SEGMENTED
             "settings-clock-dotmatrix" -> ClockStyle.DOT_MATRIX
@@ -425,13 +425,18 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     LaunchedEffect(activity?.homeActivation) {
         if ((activity?.homeActivation ?: 0) > 0) homeNavigation.returnToPlayer()
     }
-    CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation, LocalLibraryTracks provides if (fixture) demoLibraryTracks else playlistTracks) {
+    var backgroundDropdown by remember { mutableStateOf<BackgroundDropdown?>(null) }
+    val backgroundDropdownHost = remember { { next: BackgroundDropdown? -> backgroundDropdown = next } }
+    CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation,
+        LocalBackgroundDropdownHost provides backgroundDropdownHost,
+        LocalLibraryTracks provides if (fixture) demoLibraryTracks else playlistTracks) {
         Box(Modifier.fillMaxSize().background(settings.background.color).observePlayerTouches(inactivity, sliderPointers)
             .observeBrowsingTouches(browsingReturn).observeBrowsingTouches(drawerTimeout).onPreviewKeyEvent { browsingReturn.interaction(); drawerTimeout.interaction(); false }) {
             settings.background.gradientAsset?.let { asset ->
                 Image(painterResource(asset), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
             }
-            PlayerPaneLayout(settings.rightHandDrive) {
+            PlayerPaneLayout(settings.rightHandDrive,
+                if (backgroundDropdown != null) Modifier.clearAndSetSemantics {} else Modifier) {
                 BoxWithConstraints(Modifier.fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
                     PlayerSlider(volume, {
@@ -713,6 +718,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                 }
             }
             PlayerDivider(settings.divider, Modifier.align(Alignment.Center))
+            backgroundDropdown?.let { BackgroundDropdownOverlay(it) }
         }
         BackHandler(enabled = optionsTarget != null || infoRequest != null, onBack = closeOptions)
     }

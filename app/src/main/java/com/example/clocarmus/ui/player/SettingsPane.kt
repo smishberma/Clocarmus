@@ -42,10 +42,11 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                           onExit: () -> Unit, preview: String? = null, onLibrariesRemoved: suspend () -> Unit = {}) {
     var page by rememberSaveable { mutableStateOf(when (preview) {
         "settings-about" -> "About"; "settings-developer" -> "Developer"; "settings-donate" -> "Donate";
-        "settings-folders" -> "Manage folders"; "settings-background" -> "Background"; "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix" -> "Clock";
+        "settings-background-solid", "settings-background-gradient" -> "Customize background";
+        "settings-folders" -> "Manage folders"; "settings-background", "settings-background-expanded" -> "Background"; "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix" -> "Clock";
         "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam" -> "Divider"; else -> "Settings"
     }) }
-    var gradientTab by rememberSaveable { mutableStateOf(settings.background.gradientAsset != null) }
+    var backgroundExpanded by rememberSaveable { mutableStateOf(preview == "settings-background-expanded") }
     var prompt by rememberSaveable { mutableStateOf<String?>(null) }
     val home = LocalPlayerHome.current
     var homeExitPage by remember { mutableStateOf<String?>(null) }
@@ -55,6 +56,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             homeExitPage = page
             page = "Settings"
             prompt = null
+            backgroundExpanded = false
         }
         onDispose { unregister?.invoke() }
     }
@@ -62,6 +64,9 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     val privacyScroll = rememberLazyListState()
     val licensesScroll = rememberLazyListState()
     val context = LocalContext.current
+    val versionName = remember(context) {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+    }
     val sources = rememberSourceManagement(OnboardingState(), preview != null)
     SourceManagementError(sources)
     val repository = remember { (context.applicationContext as com.example.clocarmus.ClocarmusApplication).library }
@@ -87,7 +92,9 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     }
     val launcher = (context as? com.example.clocarmus.MainActivity)?.launcher
     val back = {
-        if (page == "Settings") onExit() else page = when (page) {
+        if (backgroundExpanded) backgroundExpanded = false
+        else if (page == "Settings") onExit() else page = when (page) {
+            "Customize background" -> "Background"
             "Exclusions" -> "Manage folders"
             "Privacy policy", "Open source licenses", "Developer" -> "About"
             "Donate" -> "Developer"
@@ -175,6 +182,9 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                     color = Color.White, fontFamily = InterFontFamily, fontSize = (28f * s).sp,
                     modifier = Modifier.padding(horizontal = (27f * s).dp))
                 gap(42f); action("About") { page = "About" }
+                gap(20f)
+                PlayerLabel("Version $versionName", Modifier.fillMaxWidth().height((50f * s).dp), 28f * s,
+                    Alignment.Center)
                 gap(40f)
             }
             TrackScrollbar(grid, scroll, emptyList(), "Settings", proportional = true, top = 272f, showAlphabetIndicator = false)
@@ -194,35 +204,36 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             AboutDocumentPane(grid, shownPage,
                 if (shownPage == "Privacy policy") "about/privacy_policy.txt" else "about/open_source_licenses.txt",
                 if (shownPage == "Privacy policy") privacyScroll else licensesScroll)
-        } else if (shownPage in setOf("Background", "Clock", "Divider")) {
-            Column(grid.place(95f, 264f, 800f, if (shownPage == "Clock" || shownPage == "Background") 800f else 732f)) {
-                heading(shownPage, inset = 0f); gap(if (shownPage == "Background") 4f else 18f)
-                if (shownPage == "Background") {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = (4f * s).dp).height((85f * s).dp).selectableGroup(),
-                        horizontalArrangement = Arrangement.spacedBy((18f * s).dp)) {
-                        listOf("Normal", "Gradients").forEachIndexed { index, label ->
-                            val selected = gradientTab == (index == 1)
-                            PlayerLabel(label, Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(percent = 50))
-                                .background(if (selected) Color.White else Color.Transparent)
-                                .border((2.5f * s).dp, Color.White, RoundedCornerShape(percent = 50))
-                                .selectable(selected, role = Role.Tab) { gradientTab = index == 1 },
-                                40f * s, bold = selected, color = if (selected) Color.Black else Color.White)
-                        }
-                    }
-                    gap(31f)
-                }
+        } else if (shownPage == "Background") {
+            Column(grid.place(95f, 264f, 800f, 100f)) {
+                heading("Background", inset = 0f)
+                gap(8f)
+                heading("Background type", cyan = false, inset = 0f)
+            }
+            BackgroundTypeSelector(grid, settings, backgroundExpanded, { backgroundExpanded = it }, onChange)
+            Image(painterResource(R.drawable.settings_customize_button), "Customize",
+                grid.place(250f, 596f, 500f, 95f).clip(RoundedCornerShape((32f * s).dp))
+                    .clickable(role = Role.Button) { page = "Customize background" })
+            Image(painterResource(R.drawable.settings_reset_all_button), "Reset all",
+                grid.place(250f, 751f, 500f, 95f).clip(RoundedCornerShape((32f * s).dp))
+                    .clickable(role = Role.Button) { prompt = "background-reset" })
+        } else if (shownPage in setOf("Customize background", "Clock", "Divider")) {
+            Column(grid.place(95f, 264f, 800f, if (shownPage == "Divider") 732f else 800f)) {
+                heading(if (shownPage == "Customize background") "Background" else shownPage, inset = 0f)
+                gap(if (shownPage == "Customize background") 28f else 18f)
                 if (shownPage == "Clock") {
                     toggle("24-hour clock", settings.twentyFourHour, inset = 12f) { onChange(settings.copy(twentyFourHour = it)) }
                     gap(29f)
                 }
                 Column(Modifier.fillMaxWidth().padding(horizontal = (15f * s).dp).selectableGroup()) {
                     when (shownPage) {
-                        "Background" -> PlayerPaneCrossfade(gradientTab) { gradients ->
-                            Column {
-                                PlayerBackground.entries.filter { (it.gradientAsset != null) == gradients }.forEach {
-                                    choice(it.label, settings.background == it, it.color, 122f, it.gradientAsset) { onChange(settings.copy(background = it)) }; gap(34f)
-                                }
+                        "Customize background" -> PlayerBackground.entries.filter {
+                            (it.gradientAsset != null) == (settings.backgroundType == BackgroundType.GRADIENT)
+                        }.forEach {
+                            choice(it.label, settings.background == it, it.color, 122f, it.gradientAsset) {
+                                onChange(settings.selectBackground(it))
                             }
+                            gap(34f)
                         }
                         "Clock" -> ClockStyle.entries.forEach {
                             choice(it.label, settings.clock == it, height = 122f) { onChange(settings.copy(clock = it)) }; gap(35f)
@@ -290,7 +301,16 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             }
         }
     }
-    prompt?.takeIf { preview != null }?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
+    if (prompt == "background-reset") {
+        AlertDialog(onDismissRequest = { prompt = null },
+            text = { Text("Reset background to default?") },
+            confirmButton = { TextButton(onClick = {
+                onChange(settings.resetBackground())
+                prompt = null
+            }) { Text("Reset") } },
+            dismissButton = { TextButton(onClick = { prompt = null }) { Text("Cancel") } })
+    }
+    prompt?.takeUnless { it == "background-reset" }?.takeIf { preview != null }?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
         val available = demoFolderTree.contents(null).filter { it.id !in settings.sources }
         AlertDialog(onDismissRequest = { prompt = null }, title = { Text(when (target) { "add" -> "Add demo folder"; "reset" -> "Remove all libraries?"; else -> "Remove folder?" }) },
             text = {

@@ -8,8 +8,8 @@ import androidx.compose.ui.unit.Constraints
 
 /** Place the stable player/clock subtrees on either side without mirroring their contents. */
 @Composable
-internal fun PlayerPaneLayout(rightHandDrive: Boolean, content: @Composable () -> Unit) {
-    Layout(content = content, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
+internal fun PlayerPaneLayout(rightHandDrive: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Layout(content = content, modifier = modifier.fillMaxSize()) { measurables, constraints ->
         val leftWidth = constraints.maxWidth / 2
         val rightWidth = constraints.maxWidth - leftWidth
         val playerWidth = if (rightHandDrive) rightWidth else leftWidth

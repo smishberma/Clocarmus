@@ -125,3 +125,16 @@ python3 scripts/import-player-assets.py --group about-sreen
 References are `screens/about-screen/redesigned-about-screen.png` and
 `screens/about-screen/about-developer.png`. Back, volume, Settings heading, clock,
 transport, action rows and panel buttons reuse the established implementations.
+
+
+## Background settings redesign
+
+The references under `screens/settings-screen/01-settings-redesigned-drop-down-collapsed.png`,
+`02-settings-redesigned-drop-down-expanded.png` and `03-settings-customize-solid-colors.png`
+replace the tabbed background selector. The supplied `drop-down.svg`, `customize-button.svg`
+and `reset-all-button.svg` are imported as `settings_drop_down.xml`,
+`settings_customize_button.xml` and `settings_reset_all_button.xml`, preserving outlined
+Inter labels. Regenerate with `python3 scripts/import-player-assets.py --group settings-screen --asset STEM`
+for each of those three stems. Existing radio and preset-gradient assets remain in use.
+Capture the three references using `scripts/compare-main-player.py --screen settings-background`,
+`--screen settings-background-expanded` and `--screen settings-background-solid`.

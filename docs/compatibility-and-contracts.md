@@ -8,6 +8,24 @@ Application ID is `com.smishberma.clocarmus`; the Kotlin/resource namespace rema
 
 Instrumentation uses the platform JUnit 3 runner and optional platform test compile libraries; the test APK explicitly declares `android.test.runner`. Tests inject the document boundary but use real SQLite in an isolated cache database. A separate test reads a real generated short PCM WAV through `MediaMetadataRetriever`.
 
+## Background preferences
+
+The `player-settings` preferences retain `background` as the applied preset's enum name.
+The active type is derived from that preset. `solidBackground` and `gradientBackground`
+store the two independently remembered preset names. Loading older preferences preserves
+all eight legacy selections and defaults only the unrecorded other type. Invalid or
+wrong-type remembered values fall back to that type's Default; the applied selection
+remains authoritative. All three keys share the existing off-main-thread committed save
+and UI rollback/error path. Reset background activates Solid Default and clears only the
+solid memory, retaining the gradient memory and other settings. Album art is disabled.
+
+The background type dropdown renders above both panes inside the Activity window. Opening,
+selecting, and dismissing it retain Activity focus and the current system-bar policy. Its
+shield covers transport and clock controls; underlying controls are excluded from accessibility
+while it is open. Android Back dismisses it before navigating, and shared Back retains its
+long-press return action. Keep these properties when changing dropdown presentation; a separate
+focusable Android popup can briefly reveal system bars during focus transfer.
+
 ## Library ownership
 
 `ClocarmusApplication.library` owns a process-scoped `LocalLibrary`. Its state flow publishes immutable, versioned snapshots. Database access, recursive provider queries, hashing, metadata extraction and artwork decoding run on IO. Startup readiness does not wait for scanning. Normal browsers consume repository snapshots; reference previews keep deterministic fixtures.

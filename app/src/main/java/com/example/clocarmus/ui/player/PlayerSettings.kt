@@ -13,6 +13,8 @@ internal enum class PlayerBackground(val label: String, val color: Color, @Drawa
     GRADIENT_POTION("Potion", Color.Black, R.drawable.settings_potion_gradient),
     GRADIENT_LAVA("Lava", Color.Black, R.drawable.settings_lava_gradient)
 }
+internal enum class BackgroundType { SOLID, GRADIENT }
+
 // Keep SEGMENTED as the stored key so existing LCD selections survive the font redesign.
 internal enum class ClockStyle(val label: String) { DEFAULT("Default"), VERTICAL("Vertical"), SEGMENTED("LCD"), DOT_MATRIX("Dot matrix") }
 // Preserve stored keys so existing divider selections keep their appearance.
@@ -25,8 +27,26 @@ internal data class PlayerSettings(
     val clock: ClockStyle = ClockStyle.DEFAULT, val twentyFourHour: Boolean = false,
     val divider: DividerStyle = DividerStyle.HIDDEN,
     val sources: Set<String> = setOf("music", "oriental", "mix"), val exclusions: Set<String> = emptySet(),
-    val rightHandDrive: Boolean = false, val openAfterBoot: Boolean = false
+    val rightHandDrive: Boolean = false, val openAfterBoot: Boolean = false,
+    val solidBackground: PlayerBackground = background.takeIf { it.gradientAsset == null } ?: PlayerBackground.DEFAULT,
+    val gradientBackground: PlayerBackground = background.takeIf { it.gradientAsset != null } ?: PlayerBackground.GRADIENT_DEFAULT
 ) {
+    val backgroundType: BackgroundType
+        get() = if (background.gradientAsset == null) BackgroundType.SOLID else BackgroundType.GRADIENT
+    val solidBackgroundLabel: String
+        get() = if (solidBackground == PlayerBackground.DEFAULT) "Solid color (Default)" else "Solid color"
+
+    fun selectBackground(preset: PlayerBackground): PlayerSettings = if (preset.gradientAsset == null) {
+        copy(background = preset, solidBackground = preset)
+    } else {
+        copy(background = preset, gradientBackground = preset)
+    }
+
+    fun selectBackgroundType(type: BackgroundType): PlayerSettings =
+        selectBackground(if (type == BackgroundType.SOLID) solidBackground else gradientBackground)
+
+    fun resetBackground(): PlayerSettings = selectBackground(PlayerBackground.DEFAULT)
+
     fun folderTree(tree: FolderTree): FolderTree = FolderTree(tree.entries.filter { entry ->
         tree.source(entry.id)?.id in sources && generateSequence(entry) { tree.get(it.parent) }.none { it.id in exclusions }
     })
@@ -34,16 +54,23 @@ internal data class PlayerSettings(
 
 internal fun loadPlayerSettings(prefs: SharedPreferences): PlayerSettings {
     fun <T : Enum<T>> choice(key: String, values: Array<T>, default: T) = values.firstOrNull { it.name == prefs.getString(key, null) } ?: default
+    val background = choice("background", PlayerBackground.entries.toTypedArray(), PlayerBackground.DEFAULT)
     return PlayerSettings(prefs.getBoolean("autoplay", false), prefs.getBoolean("statusBar", false),
-        prefs.getBoolean("disableFade", false), choice("background", PlayerBackground.entries.toTypedArray(), PlayerBackground.DEFAULT),
+        prefs.getBoolean("disableFade", false), background,
         choice("clock", ClockStyle.entries.toTypedArray(), ClockStyle.DEFAULT), prefs.getBoolean("twentyFourHour", false),
         choice("divider", DividerStyle.entries.toTypedArray(), DividerStyle.HIDDEN),
         prefs.getStringSet("sources", setOf("music", "oriental", "mix"))!!.toSet(), prefs.getStringSet("exclusions", emptySet())!!.toSet(),
-        prefs.getBoolean("rightHandDrive", false), prefs.getBoolean("openAfterBoot", false))
+        prefs.getBoolean("rightHandDrive", false), prefs.getBoolean("openAfterBoot", false),
+        // The legacy applied selection remains authoritative, including on upgrade.
+        if (background.gradientAsset == null) background else
+            choice("solidBackground", PlayerBackground.entries.filter { it.gradientAsset == null }.toTypedArray(), PlayerBackground.DEFAULT),
+        if (background.gradientAsset != null) background else
+            choice("gradientBackground", PlayerBackground.entries.filter { it.gradientAsset != null }.toTypedArray(), PlayerBackground.GRADIENT_DEFAULT))
 }
 internal fun savePlayerSettings(prefs: SharedPreferences, settings: PlayerSettings) {
     prefs.edit().putBoolean("autoplay", settings.autoplay).putBoolean("statusBar", settings.statusBar)
         .putBoolean("disableFade", settings.disableFade).putString("background", settings.background.name)
+        .putString("solidBackground", settings.solidBackground.name).putString("gradientBackground", settings.gradientBackground.name)
         .putString("clock", settings.clock.name).putBoolean("twentyFourHour", settings.twentyFourHour)
         .putString("divider", settings.divider.name).putStringSet("sources", settings.sources)
         .putStringSet("exclusions", settings.exclusions).putBoolean("rightHandDrive", settings.rightHandDrive).putBoolean("openAfterBoot", settings.openAfterBoot).commit().also { check(it) { "Could not save settings. Please try again." } }

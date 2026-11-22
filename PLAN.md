@@ -25,7 +25,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Right side by default: persistent day, digital clock, and date during normal app use, including browsing/settings. Settings > Display > Change to right-hand drive (RHD) swaps the clock to the left and the player/browsers/settings/panels to the right, preserving the split and centered divider styles. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
-- Preset backgrounds only: Normal colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. No image backgrounds.
+- Preset backgrounds only: Solid colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. No image backgrounds.
 - Configurable 12/24-hour time, default 12-hour. Date remains fixed at DD-MM-YYYY; additional date formats are deferred.
 - English-only interface; preserve music metadata in its original language.
 
@@ -514,9 +514,49 @@ Agreed on 2026-11-11 against implemented references 035–050, including gradien
 - Disable buttons fade out in main player defaults off. When enabled, keep the affected controls fully visible; when disabled, use the existing inactivity-fading rules.
 - Change to right-hand drive (RHD) defaults off. Swap clock and content panes by placement, retaining control orientation/actions, screen state, and scrolling. Background/divider selections remain independent.
 - Keep 12-hour time as the default, with the existing 24-hour switch and Default, Vertical, LCD, and Dot matrix clock styles. Date is fixed at DD-MM-YYYY for this release; other date formats are deferred.
-- Normal backgrounds: Default (black), Indigo, Coffee, Grey. Gradients: Default, Modern, Potion, Lava. Divider choices: Default, Hidden, Dotted, Squiggly, Beam. Initial selections are solid Default, Default clock, and Default divider.
-- Switching Normal/Gradients tabs only browses choices; selecting a row changes the background. On opening Background, initially show the tab containing the applied selection.
+- Solid backgrounds: Default (black), Indigo, Coffee, Grey. Gradients: Default, Modern, Potion, Lava. Divider choices: Default, Hidden, Dotted, Squiggly, Beam. Initial selections are solid Default, Default clock, and Default divider.
+- The Background settings redesign below replaces Normal/Gradients tabs with a background-type dropdown and separate customization screens. Selecting a type applies its remembered preset immediately; selecting a preset also applies immediately.
 - Keep the display awake while Clocarmus is visible, including paused playback and Settings, and release that request in the background. This must not prevent actual head-unit sleep; display-off alone is not a sleep signal.
+
+#### Background settings redesign — implemented
+
+Agreed on 2026-11-23. References under `design/screens/settings-screen/`: `01-settings-redesigned-drop-down-collapsed.png`, `02-settings-redesigned-drop-down-expanded.png`, and `03-settings-customize-solid-colors.png`. Use updated assets under `design/assets/settings-screen/`, including `drop-down.svg`, `customize-button.svg`, and `reset-all-button.svg`. This specification supersedes the previous tab-based background selector.
+
+- Appearance > Background opens the new Background screen with Background type dropdown, Customize, and Reset all. Reuse existing shared Back, volume, transport, clock, split layout, RHD placement, and Settings interaction rules.
+- The dropdown contains Solid color, Gradient, and Album art. Indicate the active type with both its radio button and slight row highlight. Album art is visible but disabled pending its separate interview and implementation.
+- Choosing an enabled type applies and saves its remembered preset immediately, collapses the dropdown, and stays on the Background screen. Selecting Gradient does not automatically navigate to its choices; Customize opens those choices.
+- Remember the last chosen solid preset and gradient preset independently across restarts. Each initially defaults to its own Default preset. Switching from Indigo to Gradient and back to Solid color restores Indigo; a type switch does not reset its remembered preset.
+- Show “Solid color (Default)” in the collapsed dropdown and its solid-type option when the remembered solid preset is Default. Show “Solid color” when that preset is Indigo, Coffee, or Grey. Keep Gradient and Album art labels unchanged.
+- Customize opens the choices for the active type. Retain the existing Solid presets Default (black), Indigo, Coffee, Grey and Gradient presets Default, Modern, Potion, Lava, with existing swatches/selection indicators. Remove both Normal and Gradient tabs from these choice screens.
+- Selecting a preset applies and saves it immediately and leaves the user on the customization screen. There is no Save button. Existing persistence failure rollback/error behavior applies to both type and preset changes.
+- Reset all opens a confirmation with the exact message “Reset background to default?” and Cancel/Reset actions. Cancel changes nothing. Confirming activates Solid color and sets its remembered preset to Default, updates the label to “Solid color (Default)”, and stays on the Background screen. Preserve the remembered gradient preset and all other Appearance settings.
+- Back first closes an expanded dropdown without changing selection. Tapping its top line/arrow toggles it closed; tapping outside also dismisses it and consumes that dismissal tap so controls underneath do not activate.
+- With the dropdown closed, ordinary app Back and Android Back follow Customize > Background > Settings. Long-pressing the shared Back button returns to the main player under the existing rules. Settings remains exempt from automatic browsing return.
+- Preserve existing saved background choices on upgrade: derive active type and its remembered preset from the saved selection, and initialize any previously unrecorded other-type preset to Default. Do not reset the user's applied background merely because the selector UI changes.
+- Album-art backgrounds and their customization remain outside this implementation; do not enable image selection or infer album-art behavior from the placeholder.
+
+Implemented and validated on 2026-11-23. The applied `background` preference remains compatible;
+new `solidBackground` and `gradientBackground` keys retain each type's preset through the existing
+committed save and rollback path. Four host regression tests cover all legacy selections,
+independent preset memory across reloads, reset scope, and invalid remembered values.
+`assembleDebug`, `assembleDebugAndroidTest`, `verifyDebugCompatibility`, and `lintDebug` pass
+(lint: no errors, 60 warnings). Host tests: 198 passed, one opt-in scalability measurement skipped.
+Two focused UI instrumentation tests pass on both API 23 (`headunit_a6`) and API 31
+(`clocarmus_splash_api31`), covering type/customize/reset navigation, disabled Album art,
+Android/shared Back, consumed outside transport taps, and long-press Back from the open dropdown.
+Manual API 23 checks also cover RHD, a visible status bar, and outside-clock dismissal. All three
+updated references were visually compared; captures are under `build/visual-comparison/settings-background*`
+and `build/visual-comparison/background-redesign/`. Physical head-unit validation remains pending.
+
+System-bar flash follow-up (2026-11-23): the dropdown now renders in the Activity's root
+Compose overlay instead of a separate Android window. Activity focus and its system-bar
+policy remain unchanged; the overlay shields both panes and hides their controls from
+accessibility until dismissal. A third UI regression records focus-loss callbacks through
+opening, type selection and Back. All three tests pass on API 23 (`headunit_a6`), API 29
+(`headunit_a10`) and API 31 (`clocarmus_splash_api31`); build, unit tests, lint and compatibility
+checks pass. A recording of repeated real touches on `headunit_a10` shows no bar glyphs
+across 271 sampled frames, including header toggles and outside-clock/Android Back dismissal.
+Recording and analysis: `build/visual-comparison/dropdown-immersive/`.
 
 #### Opt-in autoplay and boot opening
 
@@ -864,6 +904,7 @@ Implementation started 2026-11-12: compatible Media3/Room runtime versions are p
 - Implement optional Launcher mode and references 051–052: Advanced setting and system Home workflow, actual default-status tracking/safe disable, app discovery and drawer, RHD, fading/inactivity integration, and Home-versus-boot launch handling. Keep normal app entry available and validate compatibility without making launcher mode the default.
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
+- Background settings redesign implemented: type dropdown, remembered solid/gradient presets, tab-free Customize screens, disabled Album art placeholder, confirmed reset to Solid Default, and compatible saved-selection migration.
 - Shell integration implemented: persist the first unfinished onboarding step, share real folder/exclusion management with Settings, report settings write failures and restore saved values, keep splash/setup full-screen, suppress demo autoplay on setup completion, and implement confirmed, replayable library/queue/membership removal. The independent off-by-default boot-opening preference is already implemented. Real scanning, imported records, playback-service integration, and invalidation of future workers remain in the library/playback phases. See README’s Shell and onboarding integration section.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues now opens the implemented Queue screen described above.
@@ -954,14 +995,25 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 
 ### Settings, onboarding and head-unit behavior acceptance
 
+- Verify Settings displays the installed app version centered below the About button.
 - Test each onboarding step, Back hierarchy, confirmed skipping, empty-folder confirmation, permission denial, folder-picker cancellation, and successful completion. Interrupt/relaunch each step: preserve committed sources/exclusions, resume the first unfinished step, and repeat only unfinished driving acknowledgement. Persist completion only after successful save.
 - Verify the three-second onboarding animation is independent of real scan completion and the splash has no artificial delay. Completion/skip never starts audio, even when autoplay was previously enabled. Selected sources/exclusions appear consistently in onboarding, Manage folders, and the repository; broad permission alone imports nothing.
 - Remove all libraries: confirm before changing state, keep files/empty custom playlists/appearance and onboarding completion, remove source and music references, stop/clear the queue, and reject stale scan/preparation results. Verify no deleted memberships or playback return on restart.
-- Verify immediate persisted settings, failure rollback/error, unchanged playback/screen/scroll, hidden status-bar default and full-screen onboarding, both fading/RHD defaults, all backgrounds/clock/divider choices, 12/24-hour time and fixed DD-MM-YYYY. Background tab changes alone do not alter the applied selection; reopening selects its current tab.
+- Verify immediate persisted settings, failure rollback/error, unchanged playback/screen/scroll, hidden status-bar default and full-screen onboarding, both fading/RHD defaults, all backgrounds/clock/divider choices, 12/24-hour time and fixed DD-MM-YYYY. Verify the Background redesign applies remembered presets on type selection, removes the old tabs, and reopens with the active type and preset intact.
 - Exercise autoplay off/on across manual launch, boot, and detected wake with previously playing, user-paused, naturally completed, consumed-stop, empty, unavailable, interrupted, and inconsistent-restoration states. Only enabled, previously-active, uninterrupted eligible sessions get one attempt at the saved track/position. Restored shuffle queues do not regenerate.
 - Verify toggle changes and setup completion never start playback; live-service reconnection does not restart it. Simulate overlapping boot/launch/wake events, focus denial, and delayed storage/focus recovery: no duplicate attempt, skipped selection, or latent retry. Calls, focus/output/drive loss clear eligibility across later restarts/wakes; sleep's own pause preserves only legitimate pre-sleep intent.
 - Test Open app after boot independently from autoplay with all four switch combinations. Defaults are both off. Validate unsupported boot opening and manual-launch fallback without claiming Android/OEM restrictions are bypassed.
 - Verify screen-awake request while visible, including paused and Settings, and its release in background. Display-off is not a head-unit sleep signal. Test sleep/boot/output behavior on representative head units; emulator results alone do not establish platform guarantees.
+
+### Background settings redesign acceptance
+
+- Match collapsed/expanded and solid-customization references, using updated SVGs and existing shared controls. Verify active-type radio/highlight, unchanged preset swatches, and absence of Normal/Gradient tabs on both customization screens.
+- Start with Solid Default and verify “Solid color (Default)”. Choose Indigo and verify “Solid color”; switch to Gradient, choose a preset, and switch back to restore Indigo. Restart and verify both remembered presets and active type survive.
+- Verify type selection applies immediately and collapses the dropdown without navigating; Customize opens only the active type's choices. Preset selection stays on its choices screen and saves without a Save action.
+- Verify Album art is visible but disabled and cannot change the background.
+- Reset confirmation uses exactly “Reset background to default?”; Cancel preserves all state. Reset activates Solid Default, restores its Default label, retains the remembered gradient preset, and leaves other Appearance settings intact.
+- Verify Back, top-line/arrow tap, and outside tap close the dropdown without selection changes or accidental activation underneath. Check ordinary navigation hierarchy and long-press Back to player.
+- Verify upgrade preserves the existing applied solid/gradient choice, missing remembered choices initialize safely, save failure rolls back with an error, and settings interactions preserve playback and avoid automatic return.
 
 ### Launcher mode and app drawer acceptance
 
