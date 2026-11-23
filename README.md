@@ -33,7 +33,7 @@ The clock stays visible while you browse. Your library and settings are stored l
 
 | Playback queue | Appearance settings |
 | --- | --- |
-| ![Reorder the songs in the playback queue](docs/screenshots/queue.png) | ![Choose a background while keeping the clock visible](docs/screenshots/appearance.png) |
+| ![Reorder the songs in the playback queue](docs/screenshots/queue.png) | ![Select a background type, customize it, or reset it while keeping the clock visible](docs/screenshots/appearance.png) |
 
 *Captured from the latest debug build on the headunit_a10 Android emulator using the device’s music library for the main player and preview data for the other screens. Song titles and playlists are examples; music is not bundled.*
 
