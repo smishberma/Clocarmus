@@ -30,7 +30,7 @@ class BackgroundSettingsTest {
     }
 
     @Test fun everyLegacySelectionSurvivesUpgradeWithOtherTypeDefaulted() {
-        PlayerBackground.entries.forEach { preset ->
+        PlayerBackground.entries.filter { it != PlayerBackground.ALBUM_ART }.forEach { preset ->
             val settings = loadPlayerSettings(preferences(mutableMapOf("background" to preset.name)))
             assertEquals(preset, settings.background)
             if (preset.gradientAsset == null) {
@@ -58,6 +58,20 @@ class BackgroundSettingsTest {
         savePlayerSettings(prefs, settings)
         settings = loadPlayerSettings(prefs).selectBackgroundType(BackgroundType.GRADIENT)
         assertEquals(PlayerBackground.GRADIENT_POTION, settings.background)
+    }
+
+    @Test fun albumArtPersistsWithoutChangingPresetsAndResetRetainsGradient() {
+        val prefs = preferences()
+        val selected = PlayerSettings().selectBackground(PlayerBackground.INDIGO)
+            .selectBackground(PlayerBackground.GRADIENT_LAVA).selectBackgroundType(BackgroundType.ALBUM_ART)
+        savePlayerSettings(prefs, selected)
+        val loaded = loadPlayerSettings(prefs)
+        assertEquals(selected, loaded)
+        assertEquals(BackgroundType.ALBUM_ART, loaded.backgroundType)
+        assertEquals(PlayerBackground.INDIGO, loaded.selectBackgroundType(BackgroundType.SOLID).background)
+        assertEquals(PlayerBackground.GRADIENT_LAVA, loaded.selectBackgroundType(BackgroundType.GRADIENT).background)
+        assertEquals(PlayerBackground.DEFAULT, loaded.resetBackground().background)
+        assertEquals(PlayerBackground.GRADIENT_LAVA, loaded.resetBackground().gradientBackground)
     }
 
     @Test fun resetOnlyChangesAppliedBackgroundAndSolidMemory() {

@@ -17,7 +17,31 @@ all eight legacy selections and defaults only the unrecorded other type. Invalid
 wrong-type remembered values fall back to that type's Default; the applied selection
 remains authoritative. All three keys share the existing off-main-thread committed save
 and UI rollback/error path. Reset background activates Solid Default and clears only the
-solid memory, retaining the gradient memory and other settings. Album art is disabled.
+solid memory, retaining the gradient memory and other settings. `ALBUM_ART` is an additive
+applied selection in the same `background` key; it leaves both preset memories intact.
+Customize is disabled for this type and uses the shared disabled-control appearance (40% opacity).
+
+Album art uses only the local JPEGs extracted from embedded pictures by `readAudio`;
+no folder images, placeholders, or artwork overrides supply the runtime background.
+The Activity-level preparation owner survives pane navigation. Track/type changes cancel
+pending work, a generation guard rejects stale completion, and a track-keyed three-second delay runs
+concurrently with IO hashing/decoding. Artwork-path/display-size updates reuse the remaining
+track stability interval rather than restarting it. A single decoded cache entry and two transition
+layers bound image retention; decoding is sampled to the display size. Equal artwork
+content hashes suppress redundant fades even when different audio files own the covers.
+The outgoing layer (including initial black) fades over 500 ms above the prepared cover;
+one shared 70% black overlay keeps darkening constant. Missing/unreadable art targets black.
+Only the player and its Manage playlists surface use this background; main-player Track
+info and the app drawer preserve that originating pane. Browsers/Settings use the remembered
+solid preset. Preparation continues behind navigation, so hidden eligible artwork is ready
+on return. Timing, decoded images, and animation state are transient.
+
+For local visual comparison, place a cover at the debug app's
+`files/reference-album-art.jpg`, then run
+`python3 scripts/compare-main-player.py --screen player-album-art --startup-wait 12 --install`.
+The explicit `reference_preview`/`album_art_preview` fixture uses that file for the demo
+track only; normal library/playback wiring never reads it. Relaunch without preview extras
+afterward.
 
 The background type dropdown renders above both panes inside the Activity window. Opening,
 selecting, and dismissing it retain Activity focus and the current system-bar policy. Its

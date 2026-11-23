@@ -91,13 +91,13 @@ internal fun BackgroundDropdownOverlay(dropdown: BackgroundDropdown) {
             Spacer(Modifier.height((8f * s).dp))
             Column(Modifier.fillMaxWidth().selectableGroup()) {
                 listOf(settings.solidBackgroundLabel, "Gradient", "Album art").forEachIndexed { index, label ->
-                    val type = BackgroundType.entries.getOrNull(index)
+                    val type = BackgroundType.entries[index]
                     val selected = type == settings.backgroundType
                     Row(Modifier.fillMaxWidth().height((97f * s).dp)
                         .clip(RoundedCornerShape((8f * s).dp))
                         .background(if (selected) Color(0xff333333) else Color.Transparent)
-                        .selectable(selected, enabled = type != null, role = Role.RadioButton) {
-                            type?.let { dropdown.onChange(settings.selectBackgroundType(it)) }
+                        .selectable(selected, role = Role.RadioButton) {
+                            dropdown.onChange(settings.selectBackgroundType(type))
                             dropdown.onDismiss()
                         }.padding(horizontal = (55f * s).dp), verticalAlignment = Alignment.CenterVertically) {
                         PlayerLabel(label, Modifier.weight(1f).fillMaxHeight(), 40f * s, Alignment.CenterStart)
@@ -116,7 +116,11 @@ private fun BackgroundTypeHeader(s: Float, settings: PlayerSettings, expanded: B
         .clickable(role = Role.Button, onClick = onToggle)
         .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
         .padding(horizontal = (55f * s).dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayerLabel(if (settings.backgroundType == BackgroundType.SOLID) settings.solidBackgroundLabel else "Gradient",
+        PlayerLabel(when (settings.backgroundType) {
+            BackgroundType.SOLID -> settings.solidBackgroundLabel
+            BackgroundType.GRADIENT -> "Gradient"
+            BackgroundType.ALBUM_ART -> "Album art"
+        },
             Modifier.weight(1f).fillMaxHeight(), 40f * s, Alignment.CenterStart)
         Image(painterResource(R.drawable.settings_drop_down), null, Modifier.size((34f * s).dp, (20f * s).dp))
     }

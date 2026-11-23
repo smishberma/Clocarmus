@@ -25,7 +25,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Right side by default: persistent day, digital clock, and date during normal app use, including browsing/settings. Settings > Display > Change to right-hand drive (RHD) swaps the clock to the left and the player/browsers/settings/panels to the right, preserving the split and centered divider styles. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
-- Preset backgrounds only: Solid colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. No image backgrounds.
+- Background choices: Solid colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. Embedded album-art backgrounds are specified below; arbitrary background images remain out of scope.
 - Configurable 12/24-hour time, default 12-hour. Date remains fixed at DD-MM-YYYY; additional date formats are deferred.
 - English-only interface; preserve music metadata in its original language.
 
@@ -523,7 +523,7 @@ Agreed on 2026-11-11 against implemented references 035–050, including gradien
 Agreed on 2026-11-23. References under `design/screens/settings-screen/`: `01-settings-redesigned-drop-down-collapsed.png`, `02-settings-redesigned-drop-down-expanded.png`, and `03-settings-customize-solid-colors.png`. Use updated assets under `design/assets/settings-screen/`, including `drop-down.svg`, `customize-button.svg`, and `reset-all-button.svg`. This specification supersedes the previous tab-based background selector.
 
 - Appearance > Background opens the new Background screen with Background type dropdown, Customize, and Reset all. Reuse existing shared Back, volume, transport, clock, split layout, RHD placement, and Settings interaction rules.
-- The dropdown contains Solid color, Gradient, and Album art. Indicate the active type with both its radio button and slight row highlight. Album art is visible but disabled pending its separate interview and implementation.
+- The dropdown contains Solid color, Gradient, and Album art. Indicate the active type with both its radio button and slight row highlight. Album art remains disabled until the planned embedded-art background feature below is implemented; then it becomes selectable with Customize disabled.
 - Choosing an enabled type applies and saves its remembered preset immediately, collapses the dropdown, and stays on the Background screen. Selecting Gradient does not automatically navigate to its choices; Customize opens those choices.
 - Remember the last chosen solid preset and gradient preset independently across restarts. Each initially defaults to its own Default preset. Switching from Indigo to Gradient and back to Solid color restores Indigo; a type switch does not reset its remembered preset.
 - Show “Solid color (Default)” in the collapsed dropdown and its solid-type option when the remembered solid preset is Default. Show “Solid color” when that preset is Indigo, Coffee, or Grey. Keep Gradient and Album art labels unchanged.
@@ -533,7 +533,7 @@ Agreed on 2026-11-23. References under `design/screens/settings-screen/`: `01-se
 - Back first closes an expanded dropdown without changing selection. Tapping its top line/arrow toggles it closed; tapping outside also dismisses it and consumes that dismissal tap so controls underneath do not activate.
 - With the dropdown closed, ordinary app Back and Android Back follow Customize > Background > Settings. Long-pressing the shared Back button returns to the main player under the existing rules. Settings remains exempt from automatic browsing return.
 - Preserve existing saved background choices on upgrade: derive active type and its remembered preset from the saved selection, and initialize any previously unrecorded other-type preset to Default. Do not reset the user's applied background merely because the selector UI changes.
-- Album-art backgrounds and their customization remain outside this implementation; do not enable image selection or infer album-art behavior from the placeholder.
+- The original redesign shipped Album art as a disabled placeholder. The feature below enables embedded-art backgrounds with fixed presentation; arbitrary image selection and artwork customization remain out of scope.
 
 Implemented and validated on 2026-11-23. The applied `background` preference remains compatible;
 new `solidBackground` and `gradientBackground` keys retain each type's preset through the existing
@@ -557,6 +557,38 @@ opening, type selection and Back. All three tests pass on API 23 (`headunit_a6`)
 checks pass. A recording of repeated real touches on `headunit_a10` shows no bar glyphs
 across 271 sampled frames, including header toggles and outside-clock/Android Back dismissal.
 Recording and analysis: `build/visual-comparison/dropdown-immersive/`.
+
+#### Album art background — implemented
+
+Agreed on 2026-11-23. Reference: `design/screens/main-player-screen/02-main-player-album-art-bkg.png`. Enable Album art in the existing Background type dropdown when this feature is implemented.
+
+- Selecting Album art saves the type, collapses the dropdown, and retains the independent remembered solid/gradient presets. Disable Customize for this type: cropping, darkening, delay, and fade duration are fixed. Existing save-failure rollback and confirmed Reset all behavior still apply.
+- Use only artwork embedded in the selected audio track. Do not use configured overrides, folder images, online art, or the generic missing-art placeholder. No new artwork picker is included.
+- Render one centered image across the full main-player background behind both panes. Scale proportionally to fill, cropping overflow without stretching or tiling. Apply a 70%-opaque black overlay to the background image only; leave foreground artwork, text, controls, and clock at their existing appearance.
+- Main-player Track info, Manage playlists (including its nested prompt), and the app drawer retain this background behind their existing surfaces. These are explicit exceptions to the main-player-only scope. When those flows originate from browsing/Settings, their background follows that originating screen instead.
+- Menus, browsers, Settings, and other non-player screens use the remembered solid-color preset while Album art is the selected type. Preserve existing splash/onboarding branding. Main-player missing-art fallback is always Default black, independent of the remembered solid preset.
+- Whenever the selected track changes, start a three-second stability delay regardless of playing/paused state. Every further selection change restarts it. Keep the previously displayed background during the delay; foreground cover and track metadata update normally. Playback progress and pause/resume alone do not restart this delay.
+- After the delay, fade the outgoing background away over 500 ms to reveal the prepared new background underneath. Do not insert a separate fade-through-black stage. Keep image darkening consistent through the transition.
+- Missing or unreadable embedded artwork transitions to Default black after the same three-second delay and 500 ms fade. If artwork decoding is still underway after the delay, retain the current background until the result is ready. Discard stale results for tracks no longer selected; failures resolve to the black fallback.
+- Entering Album art mode starts a fresh three-second delay. Returning to the player shows already-prepared eligible artwork immediately when the selected track has been unchanged for at least three seconds; otherwise wait only the remaining interval. Navigation and opening/closing the permitted overlays do not restart track stability timing.
+- Avoid redundant fades when consecutive tracks contain identical embedded artwork. Changing to Solid color or Gradient, including a confirmed reset, cancels pending artwork work/transitions and applies the chosen preset immediately; late results must not override that choice.
+- Keep loading/decoding off the UI thread, use display-sized images and bounded caching, and guard pending work by current track/type identity. Background preparation must not delay startup, transport response, or audio playback. Persist the chosen type through the existing settings path; timer/animation state is transient. Use black when a new player session has no previous artwork background to retain.
+
+
+Implemented on 2026-11-23. The additive `ALBUM_ART` applied preference preserves both
+remembered presets without changing library/checkpoint formats. Preparation is owned outside
+pane navigation; artwork-path/size updates retain the track's stability deadline. See
+[background ownership and preferences](docs/compatibility-and-contracts.md#background-preferences).
+
+Validation: `assembleDebug`, `testDebugUnitTest` (205 passed, one skipped), `lintDebug`,
+`verifyDebugCompatibility`, and `assembleDebugAndroidTest` pass. Four focused instrumentation
+tests pass on API 23 (`headunit_a6`) and API 31 (`clocarmus_splash_api31`), covering enabled
+Album art, disabled Customize, existing settings navigation/reset, sampled decoding, content
+identity, and corrupt-image fallback. Debug-fixture screenshots and local interaction checks
+cover centered fill/darkening, Track info, Manage playlists/naming, solid menu scope, immediate
+player return, retained art during the stability delay, missing-art black, and independent
+remembered Indigo. Captures are under `build/visual-comparison/album-art/`. Physical head-unit
+validation and representative real-library artwork/performance acceptance remain pending.
 
 #### Opt-in autoplay and boot opening
 
@@ -905,6 +937,7 @@ Implementation started 2026-11-12: compatible Media3/Room runtime versions are p
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Background settings redesign implemented: type dropdown, remembered solid/gradient presets, tab-free Customize screens, disabled Album art placeholder, confirmed reset to Solid Default, and compatible saved-selection migration.
+- Album art background implemented: embedded-art loading, centered darkened fill, main-player overlay exceptions, three-second stability delay, 500 ms outgoing fade, black fallback, stale-work cancellation, and selectable persisted type with Customize disabled.
 - Shell integration implemented: persist the first unfinished onboarding step, share real folder/exclusion management with Settings, report settings write failures and restore saved values, keep splash/setup full-screen, suppress demo autoplay on setup completion, and implement confirmed, replayable library/queue/membership removal. The independent off-by-default boot-opening preference is already implemented. Real scanning, imported records, playback-service integration, and invalidation of future workers remain in the library/playback phases. See README’s Shell and onboarding integration section.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues now opens the implemented Queue screen described above.
@@ -1010,10 +1043,20 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 - Match collapsed/expanded and solid-customization references, using updated SVGs and existing shared controls. Verify active-type radio/highlight, unchanged preset swatches, and absence of Normal/Gradient tabs on both customization screens.
 - Start with Solid Default and verify “Solid color (Default)”. Choose Indigo and verify “Solid color”; switch to Gradient, choose a preset, and switch back to restore Indigo. Restart and verify both remembered presets and active type survive.
 - Verify type selection applies immediately and collapses the dropdown without navigating; Customize opens only the active type's choices. Preset selection stays on its choices screen and saves without a Save action.
-- Verify Album art is visible but disabled and cannot change the background.
+- Verify Album art is selectable and persisted while Customize is disabled.
 - Reset confirmation uses exactly “Reset background to default?”; Cancel preserves all state. Reset activates Solid Default, restores its Default label, retains the remembered gradient preset, and leaves other Appearance settings intact.
 - Verify Back, top-line/arrow tap, and outside tap close the dropdown without selection changes or accidental activation underneath. Check ordinary navigation hierarchy and long-press Back to player.
 - Verify upgrade preserves the existing applied solid/gradient choice, missing remembered choices initialize safely, save failure rolls back with an error, and settings interactions preserve playback and avoid automatic return.
+
+### Album art background acceptance
+
+- Match the reference with centered proportional fill across both panes and a 70%-opaque black overlay. Verify portrait, square, and wide covers crop without distortion, including RHD, while foreground controls/artwork retain their normal appearance.
+- Verify only embedded covers qualify; configured overrides, folder images, and placeholders do not supply the background. Missing/corrupt artwork resolves to black even when the remembered solid color is Indigo or another non-default color.
+- Rapidly select A, B, then C while playing and paused: only the latest stable selection becomes eligible after three seconds. Verify the existing background remains during the wait, then the outgoing image fades away over 500 ms without a separate black flash.
+- Delay decoding beyond three seconds; retain the current background until completion and reject stale results after further track/type changes. Verify identical embedded covers do not trigger redundant fades.
+- Verify main-player Track info, Manage playlists/naming, and app drawer retain the artwork; menus, browsers, Settings, and their overlays use the remembered solid color. Returning to the player uses eligible prepared artwork immediately or only the remaining delay.
+- Enable Album art and verify a fresh delay, disabled Customize, saved type, and preserved solid/gradient choices. Switch types or confirm Reset all during waiting/fading and verify immediate preset application with no late artwork override.
+- Verify responsive navigation/transport and uninterrupted playback during preparation, paused behavior, cold startup with black initial fallback, and existing persistence rollback behavior.
 
 ### Launcher mode and app drawer acceptance
 
@@ -1260,7 +1303,7 @@ Actual USB/SD detach/reinsert, real sleep/ignition cycles, steering-wheel/media/
 
 ### Excluded from v1
 
-Streaming, cloud sync, accounts, monetization, online metadata/artwork, portrait layout, metadata editing, background images, and playlist/favorites import/export.
+Streaming, cloud sync, accounts, monetization, online metadata/artwork, portrait layout, metadata editing, arbitrary background images (embedded album-art backgrounds are in scope), and playlist/favorites import/export.
 
 ### Risks to resolve or document
 

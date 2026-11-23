@@ -211,9 +211,11 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                 heading("Background type", cyan = false, inset = 0f)
             }
             BackgroundTypeSelector(grid, settings, backgroundExpanded, { backgroundExpanded = it }, onChange)
+            val customizeEnabled = settings.backgroundType != BackgroundType.ALBUM_ART
             Image(painterResource(R.drawable.settings_customize_button), "Customize",
                 grid.place(250f, 596f, 500f, 95f).clip(RoundedCornerShape((32f * s).dp))
-                    .clickable(role = Role.Button) { page = "Customize background" })
+                    .alpha(if (customizeEnabled) 1f else 0.4f)
+                    .clickable(enabled = customizeEnabled, role = Role.Button) { page = "Customize background" })
             Image(painterResource(R.drawable.settings_reset_all_button), "Reset all",
                 grid.place(250f, 751f, 500f, 95f).clip(RoundedCornerShape((32f * s).dp))
                     .clickable(role = Role.Button) { prompt = "background-reset" })
@@ -228,7 +230,7 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                 Column(Modifier.fillMaxWidth().padding(horizontal = (15f * s).dp).selectableGroup()) {
                     when (shownPage) {
                         "Customize background" -> PlayerBackground.entries.filter {
-                            (it.gradientAsset != null) == (settings.backgroundType == BackgroundType.GRADIENT)
+                            it != PlayerBackground.ALBUM_ART && (it.gradientAsset != null) == (settings.backgroundType == BackgroundType.GRADIENT)
                         }.forEach {
                             choice(it.label, settings.background == it, it.color, 122f, it.gradientAsset) {
                                 onChange(settings.selectBackground(it))

@@ -101,10 +101,15 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var drawerOpening by remember { mutableIntStateOf(0) }
     val drawerApps = if (launcher?.enabled == true) rememberDrawerApps() else null
     LaunchedEffect(launcher?.enabled) { if (launcher?.enabled != true) drawerOpen = false }
+    val albumArtPreview = referencePreview && activity?.intent?.getBooleanExtra("album_art_preview", false) == true
     val settingsPreferences = remember { context.getSharedPreferences("player-settings", Context.MODE_PRIVATE) }
     var settings by remember {
         val initial = if (referencePreview) PlayerSettings(sources = if (settingsPreview == "settings-folders") setOf("music") else setOf("music", "oriental", "mix")) else loadPlayerSettings(settingsPreferences)
-        mutableStateOf((if (settingsPreview == "settings-background-gradient") initial.selectBackground(PlayerBackground.GRADIENT_DEFAULT) else initial).copy(clock = when (settingsPreview) {
+        mutableStateOf((when {
+            albumArtPreview -> initial.selectBackgroundType(BackgroundType.ALBUM_ART)
+            settingsPreview == "settings-background-gradient" -> initial.selectBackground(PlayerBackground.GRADIENT_DEFAULT)
+            else -> initial
+        }).copy(clock = when (settingsPreview) {
             "settings-clock-vertical" -> ClockStyle.VERTICAL
             "settings-clock-lcd" -> ClockStyle.SEGMENTED
             "settings-clock-dotmatrix" -> ClockStyle.DOT_MATRIX
@@ -248,7 +253,14 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     var queue by if (!fixture) playback!!.queueState else remember { mutableStateOf(if (resetPending) TrackQueue() else if (queuePreview) TrackQueue.fromTracks(demoTracks.map { it.id }, "Pebble") else TrackQueue.fromTracks(
         listOf(initialSelectedId) + demoTracks.map { it.id }.filterNot { it == initialSelectedId }, initialSelectedId, shuffle)) }
     val selectedTrackId = queue.current?.trackId
-    val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }
+    val selectedTrack = playlistTracks.firstOrNull { it.id == selectedTrackId }?.let { track ->
+        // Explicit debug fixture, separate from the embedded-only runtime artwork path.
+        if (albumArtPreview && track.id == demoPlayerTrack.id) {
+            track.copy(artworkPath = java.io.File(context.filesDir, "reference-album-art.jpg").absolutePath)
+        } else track
+    }
+    val albumArtBackground = rememberAlbumArtBackground(
+        settings.backgroundType == BackgroundType.ALBUM_ART, selectedTrackId, selectedTrack?.artworkPath)
     LaunchedEffect(librarySnapshot.version, librarySnapshot.ready, selectedTrackId) {
         if (!fixture && librarySnapshot.ready && selectedTrackId != null) {
             if (selectedTrack == null) { playing = false }
@@ -430,10 +442,16 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation,
         LocalBackgroundDropdownHost provides backgroundDropdownHost,
         LocalLibraryTracks provides if (fixture) demoLibraryTracks else playlistTracks) {
-        Box(Modifier.fillMaxSize().background(settings.background.color).observePlayerTouches(inactivity, sliderPointers)
+        Box(Modifier.fillMaxSize().background(
+            if (settings.backgroundType == BackgroundType.ALBUM_ART) settings.solidBackground.color else settings.background.color
+        ).observePlayerTouches(inactivity, sliderPointers)
             .observeBrowsingTouches(browsingReturn).observeBrowsingTouches(drawerTimeout).onPreviewKeyEvent { browsingReturn.interaction(); drawerTimeout.interaction(); false }) {
             settings.background.gradientAsset?.let { asset ->
                 Image(painterResource(asset), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
+            }
+            if (settings.backgroundType == BackgroundType.ALBUM_ART) {
+                AlbumArtBackground(albumArtBackground,
+                    visible = paneDestination.root in setOf(PlayerPaneRoot.PLAYER, PlayerPaneRoot.COLLECTIONS))
             }
             PlayerPaneLayout(settings.rightHandDrive,
                 if (backgroundDropdown != null) Modifier.clearAndSetSemantics {} else Modifier) {

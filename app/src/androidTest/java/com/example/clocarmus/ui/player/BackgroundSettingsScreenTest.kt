@@ -20,7 +20,10 @@ class BackgroundSettingsScreenTest : InstrumentationTestCase() {
         try {
             click("Solid color (Default)")
             val albumArt = awaitNode("Album art")
-            assertFalse(clickable(albumArt).isEnabled)
+            assertTrue(clickable(albumArt).isEnabled)
+            click("Album art")
+            assertFalse(clickable(awaitNode("Customize")).isEnabled)
+            click("Album art")
             click("Gradient")
             awaitNode("Customize")
             assertNull(find("Album art"))
