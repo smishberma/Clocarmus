@@ -61,6 +61,50 @@ class BackgroundSettingsScreenTest : InstrumentationTestCase() {
         }
     }
 
+    fun testQueuesRetainsArtworkAndMenuUsesSolidBackground() {
+        val artworkFile = java.io.File(instrumentation.targetContext.filesDir, "reference-album-art.jpg")
+        val previousArtwork = artworkFile.takeIf { it.exists() }?.readBytes()
+        val bitmap = android.graphics.Bitmap.createBitmap(64, 64, android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.MAGENTA)
+        artworkFile.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+        bitmap.recycle()
+        var activity: MainActivity? = null
+        fun backgroundPixel(): Int {
+            val screenshot = instrumentation.uiAutomation.takeScreenshot()
+            return try { screenshot.getPixel(screenshot.width * 3 / 4, screenshot.height / 10) }
+            finally { screenshot.recycle() }
+        }
+        try {
+            activity = instrumentation.startActivitySync(
+                Intent(instrumentation.targetContext, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    .putExtra("reference_preview", true).putExtra("album_art_preview", true)) as MainActivity
+            awaitNode("Queues")
+            val deadline = SystemClock.uptimeMillis() + 10_000
+            while (android.graphics.Color.red(backgroundPixel()) < 70 && SystemClock.uptimeMillis() < deadline) {
+                SystemClock.sleep(100)
+            }
+            SystemClock.sleep(ALBUM_ART_FADE_MS.toLong() + 100)
+            val prepared = backgroundPixel()
+            assertTrue("Embedded-art fixture must be visible", android.graphics.Color.red(prepared) in 70..80)
+            click("Queues")
+            awaitNode("QUEUE")
+            SystemClock.sleep(PLAYER_PANE_FADE_DURATION_MS.toLong() + 200)
+            assertEquals("Queues must retain the prepared artwork", prepared, backgroundPixel())
+            back()
+            awaitNode("Queues")
+            SystemClock.sleep(PLAYER_PANE_FADE_DURATION_MS.toLong() + 200)
+            assertEquals("Returning must retain the prepared artwork", prepared, backgroundPixel())
+            click("Menu")
+            awaitNode("Settings")
+            SystemClock.sleep(PLAYER_PANE_FADE_DURATION_MS.toLong() + 200)
+            assertEquals("Menus keep the remembered solid preset", android.graphics.Color.BLACK, backgroundPixel())
+        } finally {
+            activity?.let { current -> instrumentation.runOnMainSync { current.finish() } }
+            if (previousArtwork != null) artworkFile.writeBytes(previousArtwork) else artworkFile.delete()
+        }
+    }
+
     fun testDismissalConsumesTouchesAndRetainsLongPressBack() {
         val activity = startBackground()
         try {

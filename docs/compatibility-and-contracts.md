@@ -31,7 +31,7 @@ layers bound image retention; decoding is sampled to the display size. Equal art
 content hashes suppress redundant fades even when different audio files own the covers.
 The outgoing layer (including initial black) fades over 500 ms above the prepared cover;
 one shared 70% black overlay keeps darkening constant. Missing/unreadable art targets black.
-Only the player and its Manage playlists surface use this background; main-player Track
+The player, Queues panel, and Manage playlists surface use this background; main-player Track
 info and the app drawer preserve that originating pane. Browsers/Settings use the remembered
 solid preset. Preparation continues behind navigation, so hidden eligible artwork is ready
 on return. Timing, decoded images, and animation state are transient.

@@ -451,7 +451,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             }
             if (settings.backgroundType == BackgroundType.ALBUM_ART) {
                 AlbumArtBackground(albumArtBackground,
-                    visible = paneDestination.root in setOf(PlayerPaneRoot.PLAYER, PlayerPaneRoot.COLLECTIONS))
+                    visible = paneDestination.root in setOf(PlayerPaneRoot.PLAYER, PlayerPaneRoot.COLLECTIONS, PlayerPaneRoot.QUEUE))
             }
             PlayerPaneLayout(settings.rightHandDrive,
                 if (backgroundDropdown != null) Modifier.clearAndSetSemantics {} else Modifier) {
