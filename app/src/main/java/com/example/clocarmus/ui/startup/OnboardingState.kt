@@ -11,7 +11,8 @@ internal data class OnboardingState(
     val folders: List<OnboardingFolder> = emptyList(),
     val exclusions: Set<String> = emptySet(),
     val step: WelcomePage = WelcomePage.Welcome,
-    val resetPending: Boolean = false
+    val resetPending: Boolean = false,
+    val initialSelectionSkipped: Boolean = false
 ) {
     // Back changes the visible page without undoing completed acknowledgements.
     fun advancingTo(page: WelcomePage) = copy(step = if (page.ordinal > step.ordinal) page else step)
@@ -29,7 +30,8 @@ internal fun loadOnboarding(prefs: SharedPreferences): OnboardingState {
     }.getOrDefault(emptyList())
     return OnboardingState(prefs.getBoolean("completed", false), folders,
         prefs.getStringSet("exclusions", emptySet())!!.toSet(),
-        WelcomePage.entries.firstOrNull { it.name == prefs.getString("step", null) } ?: WelcomePage.Welcome, prefs.getBoolean("resetPending", false))
+        WelcomePage.entries.firstOrNull { it.name == prefs.getString("step", null) } ?: WelcomePage.Welcome, prefs.getBoolean("resetPending", false),
+        prefs.getBoolean("initialSelectionSkipped", false))
 }
 
 /** Called on IO; completion is only published after a successful durable write. */
@@ -37,5 +39,6 @@ internal fun saveOnboarding(prefs: SharedPreferences, state: OnboardingState) {
     val array = JSONArray()
     state.folders.forEach { array.put(JSONObject().put("uri", it.uri).put("name", it.name).put("location", it.location)) }
     check(prefs.edit().putBoolean("completed", state.completed).putString("folders", array.toString())
-        .putStringSet("exclusions", state.exclusions).putString("step", state.step.name).putBoolean("resetPending", state.resetPending).commit()) { "Could not save setup. Please try again." }
+        .putStringSet("exclusions", state.exclusions).putString("step", state.step.name).putBoolean("resetPending", state.resetPending)
+        .putBoolean("initialSelectionSkipped", state.initialSelectionSkipped).commit()) { "Could not save setup. Please try again." }
 }

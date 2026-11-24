@@ -25,7 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onComplete: () -> Unit) {
+internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onComplete: (OnboardingState, Boolean) -> Unit) {
     val context = LocalContext.current
     val sources = rememberSourceManagement(initial, preview != null)
     val state = sources.state
@@ -35,24 +35,33 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
         "warning" -> "Warning"; "permission" -> "Permission"; "folders" -> "Folders"; "loading" -> "Loading"; else -> state.step.name
     }) }
     val page = WelcomePage.valueOf(pageName)
+    var skipped by rememberSaveable { mutableStateOf(state.initialSelectionSkipped) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     fun navigate(page: WelcomePage) {
         if (!busy) sources.save(state.advancingTo(page)) { pageName = page.name }
     }
-    fun finish() { if (!busy) { dialog = null; navigate(WelcomePage.Loading) } }
+    fun finish() {
+        if (!busy) {
+            dialog = null
+            sources.save(state.copy(initialSelectionSkipped = skipped).advancingTo(WelcomePage.Loading)) {
+                pageName = WelcomePage.Loading.name
+            }
+        }
+    }
     LaunchedEffect(page) {
         if (page == WelcomePage.Loading) {
             // Start the three-second animation once the loading screen has drawn.
             // Completion does not depend on selecting any folders.
             withFrameNanos { }
+            if (preview == null) (context.applicationContext as com.example.clocarmus.ClocarmusApplication).library.refresh()
             delay(3_000)
             try {
                 if (preview == null) {
                     withContext(Dispatchers.IO) { saveOnboarding(context.getSharedPreferences("onboarding", 0), state.copy(completed = true)) }
                 }
-                onComplete()
+                onComplete(state.copy(completed = true), skipped)
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (exception: Exception) {
                 pageName = WelcomePage.Folders.name
@@ -94,7 +103,7 @@ internal fun WelcomeFlow(initial: OnboardingState, preview: String? = null, onCo
         text = { Text(if (dialog == "permission-denied") "Allow music access in Android settings, or continue to select individual folders using the system picker."
             else "You can add music folders later in Settings.") },
         confirmButton = { TextButton(onClick = {
-            if (dialog == "permission-denied") { dialog = null; navigate(WelcomePage.Folders) } else finish()
+            if (dialog == "permission-denied") { dialog = null; navigate(WelcomePage.Folders) } else { skipped = dialog == "skip"; finish() }
         }) { Text("Continue") } },
         dismissButton = { TextButton(onClick = {
             if (dialog == "permission-denied") {

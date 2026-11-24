@@ -24,7 +24,11 @@ class ClocarmusApplication : Application() {
     internal var onboarding = OnboardingState()
         private set
 
-    internal fun completeOnboarding() { onboarding = onboarding.copy(completed = true) }
+    internal fun completeOnboarding(state: OnboardingState, skipped: Boolean) {
+        if (onboarding.completed) return
+        onboarding = state
+        if (!skipped && state.folders.isNotEmpty()) playback.initializeAfterOnboarding(state)
+    }
 
     override fun onCreate() {
         super.onCreate()

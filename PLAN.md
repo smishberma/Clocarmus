@@ -431,6 +431,7 @@ Reference: `design/034-queues-screen.png`. Accessible from the main-player Queue
 - Reuse existing Back, volume, transport, and clock components and their shared positions. Implement only the queue-specific list, QUEUE title/icon, and drag handles; do not duplicate shared controls or create unique variants. Preserve the fixed 50/50 split.
 - Show the entire active queue in actual playback order: earlier, current, and upcoming occurrences, including shuffle and explicit Play next scheduling. Queue entries are tracks only; duplicates have distinct stable occurrence IDs.
 - On entry, scroll to the current occurrence. Show title and Artist - Album subtitle, the mockup's white current-entry highlight, existing playback indicators, and existing drag-handle asset. Use “Queue is empty” when there are no entries, retaining shared controls.
+- Hide the queue scrollbar's letter indicator while shuffle is enabled; retain the draggable scrollbar pill.
 - Back returns to the main player under the existing shared navigation rules. Returning from Track Options preserves queue scroll where possible.
 - Unlike other browsers, start the 15-second inactivity return on opening Queue, without requiring song selection. Reset on interaction; suspend throughout dragging and Track Options or nested popup flows. Start a fresh interval after the drag ends or the popup flow returns to Queue. Do not let a stale timer interrupt interaction. This explicitly overrides the normal popup rule that closing does not re-arm a browser timer, for Queue only.
 
@@ -507,6 +508,18 @@ Agreed on 2026-11-11 against implemented references 035–050, including gradien
 - If onboarding is interrupted by process termination or power loss, preserve successfully saved folders/exclusions and resume at the first unfinished step. Show the driving acknowledgement again if unfinished. Persist step completion independently from final onboarding completion; do not treat persisted Android grants alone as a completed setup.
 - Remove all libraries requires confirmation and removes all sources/exclusions, imported track records, and associated playlist/Favorite/recent memberships. Stop playback and clear the queue. Retain empty custom playlists and appearance preferences, never delete music files, and do not restart onboarding. Invalidate pending scans/queue preparation so stale work cannot repopulate removed state.
 
+#### Post-onboarding initial track selection — planned
+
+Agreed on 2026-11-24. This is a one-time initialization after completed onboarding, not a new autoplay or ordinary-startup rule.
+
+- Open the main player after the existing onboarding loading flow while the initial scan continues. Keep the UI usable; do not extend the loading screen to await scanning.
+- Once the initial scan finishes, if no queue or selected track already exists and the user has not taken playback/queue actions, create a queue from all available library tracks in alphabetical song-title order using the existing All Tracks sorting rules. Select its first entry at 0:00 and remain paused, ready for explicit Play. The initial queue uses the default shuffle-off state.
+- Wait for the initial scan's completion rather than selecting from the first progressive import batch. If it has already completed when onboarding finishes, initialize when entering the player. Continue allowing normal browsing and explicit selection while discovery runs.
+- User track selection, playback actions, or queue changes before initialization cancel this automatic selection. Recheck eligibility when committing the queue so a late scan/preparation callback cannot replace a newer user choice, including a deliberately cleared queue.
+- Preserve any existing queue/selection instead of constructing a replacement; onboarding completion itself never requests playback. The resulting initial selection remains paused regardless of the autoplay setting. Ordinary later launches and reconnection to live playback retain their existing restoration/lifecycle rules.
+- Empty completed setup, skipped setup, or a completed initial scan with no available tracks leaves an empty paused player when there is no existing session to preserve. Do not leave a pending selection that activates on unrelated later imports, folder additions, or rescans.
+- Treat initialization as a one-time operation tied to onboarding and its initial scan; duplicate completion notifications must not repeat it. Save the resulting queue/selection through the existing playback snapshot path. Selection/preparation alone must not update Recently played or count as actual playback.
+
 #### Settings and display behavior
 
 - Apply changes immediately without Save and persist across restarts. On saving failure, show an error and restore the last saved value; do not report an unsaved change as durable success. Preserve playback, current screen, and scroll position during display changes.
@@ -558,7 +571,7 @@ checks pass. A recording of repeated real touches on `headunit_a10` shows no bar
 across 271 sampled frames, including header toggles and outside-clock/Android Back dismissal.
 Recording and analysis: `build/visual-comparison/dropdown-immersive/`.
 
-#### Album art background — implemented
+#### Album art background — implemented; transition timing updated
 
 Agreed on 2026-11-23. Reference: `design/screens/main-player-screen/02-main-player-album-art-bkg.png`. Enable Album art in the existing Background type dropdown when this feature is implemented.
 
@@ -567,15 +580,17 @@ Agreed on 2026-11-23. Reference: `design/screens/main-player-screen/02-main-play
 - Render one centered image across the full main-player background behind both panes. Scale proportionally to fill, cropping overflow without stretching or tiling. Apply a 70%-opaque black overlay to the background image only; leave foreground artwork, text, controls, and clock at their existing appearance.
 - Main-player Queues, Track info, Manage playlists (including its nested prompt), and the app drawer retain this background behind their existing surfaces. These are explicit exceptions to the main-player-only scope. When those flows originate from browsing/Settings, their background follows that originating screen instead.
 - Menus, browsers, Settings, and other non-player screens use the remembered solid-color preset while Album art is the selected type. Preserve existing splash/onboarding branding. Main-player missing-art fallback is always Default black, independent of the remembered solid preset.
-- Whenever the selected track changes, start a three-second stability delay regardless of playing/paused state. Every further selection change restarts it. Keep the previously displayed background during the delay; foreground cover and track metadata update normally. Playback progress and pause/resume alone do not restart this delay.
-- After the delay, fade the outgoing background away over 500 ms to reveal the prepared new background underneath. Do not insert a separate fade-through-black stage. Keep image darkening consistent through the transition.
-- Missing or unreadable embedded artwork transitions to Default black after the same three-second delay and 500 ms fade. If artwork decoding is still underway after the delay, retain the current background until the result is ready. Discard stale results for tracks no longer selected; failures resolve to the black fallback.
-- Entering Album art mode starts a fresh three-second delay. Returning to the player shows already-prepared eligible artwork immediately when the selected track has been unchanged for at least three seconds; otherwise wait only the remaining interval. Navigation and opening/closing the permitted overlays do not restart track stability timing.
+- Timing update implemented on 2026-11-24: apply the three-second stability delay only to track changes caused by Previous/Next commands, including on-screen transport, steering-wheel controls, and media commands. Each further Previous/Next track change restarts the delay, whether playing or paused. Keep the existing background during the wait while foreground metadata/artwork update normally.
+- Natural completion and automatic advancement have no artificial delay, including Repeat All wrapping and a scheduled Play next entry reached through natural completion. Browser/Queue selections and other non-Previous/Next selection changes also become eligible as soon as their artwork is ready. Determine timing from the cause of the selection change, not simply from playing/paused state or which view is visible.
+- Fade the outgoing background away over 500 ms to reveal the prepared new background underneath once eligible and ready. “Immediate” removes the three-second wait, not this fade. Do not insert a separate fade-through-black stage; retain consistent darkening.
+- Missing or unreadable embedded artwork transitions to Default black with the same 500 ms fade, subject only to a Previous/Next delay when applicable. If decoding is unfinished, retain the existing background until the result is ready, without adding another wait afterward. Discard stale results for tracks no longer selected.
+- A non-Previous/Next track change cancels any pending transport delay and makes the latest selection eligible immediately; another Previous/Next track change starts a new three-second delay. Seeking, ±10-second controls, pause/resume, and playback progress do not start or restart artwork timing. Previous that only restarts the same track does not require a new artwork transition.
+- Entering Album art mode has no artificial delay; transition as soon as the current embedded art or fallback is ready. Returning to the player shows prepared eligible artwork immediately, waiting only any still-applicable remainder of a Previous/Next delay. Navigation and permitted overlays do not restart timing. Repeat One and identical artwork retain the background without a redundant transition.
 - Avoid redundant fades when consecutive tracks contain identical embedded artwork. Changing to Solid color or Gradient, including a confirmed reset, cancels pending artwork work/transitions and applies the chosen preset immediately; late results must not override that choice.
 - Keep loading/decoding off the UI thread, use display-sized images and bounded caching, and guard pending work by current track/type identity. Background preparation must not delay startup, transport response, or audio playback. Persist the chosen type through the existing settings path; timer/animation state is transient. Use black when a new player session has no previous artwork background to retain.
 
 
-Implemented on 2026-11-23. The additive `ALBUM_ART` applied preference preserves both
+Base feature implemented on 2026-11-23. The 2026-11-24 cause-dependent timing update is implemented; the original validation below predates that update. The additive `ALBUM_ART` applied preference preserves both
 remembered presets without changing library/checkpoint formats. Preparation is owned outside
 pane navigation; artwork-path/size updates retain the track's stability deadline. See
 [background ownership and preferences](docs/compatibility-and-contracts.md#background-preferences).
@@ -589,6 +604,19 @@ cover centered fill/darkening, Track info, Manage playlists/naming, solid menu s
 player return, retained art during the stability delay, missing-art black, and independent
 remembered Indigo. Captures are under `build/visual-comparison/album-art/`. Physical head-unit
 validation and representative real-library artwork/performance acceptance remain pending.
+
+
+Transition timing validation (2026-11-24): debug/instrumentation APK builds, unit tests
+(208 passed, one skipped, including nine artwork-state tests), lint, and compatibility
+checks pass. All 56 playback/background UI/embedded-decoder instrumentation tests pass
+on API 23 (`headunit_a6`) and API 31 (`clocarmus_splash_api31`). Coverage includes
+transport deadlines, explicit reselection, real decoder completion during a pending wait,
+Repeat All, asynchronous shuffle selection while paused, and immediate Play continuation
+after a scheduled stop. The pending-ordering check exposed and fixed paused Next leaving
+shuffle preparation suspended. The API 23 album-art visual comparison is under
+`build/visual-comparison/album-art-timing/`; normal launch was restored afterward.
+These are emulator checks; physical head-unit and representative-library acceptance
+remain pending.
 
 #### Opt-in autoplay and boot opening
 
@@ -937,7 +965,8 @@ Implementation started 2026-11-12: compatible Media3/Room runtime versions are p
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
 - Background settings redesign implemented: type dropdown, remembered solid/gradient presets, tab-free Customize screens, disabled Album art placeholder, confirmed reset to Solid Default, and compatible saved-selection migration.
-- Album art background implemented: embedded-art loading, centered darkened fill, main-player overlay exceptions, three-second stability delay, 500 ms outgoing fade, black fallback, stale-work cancellation, and selectable persisted type with Customize disabled.
+- Album art background implemented: embedded-art loading, centered darkened fill, main-player overlay exceptions, three-second Previous/Next delay, 500 ms outgoing fade, black fallback, stale-work cancellation, and selectable persisted type with Customize disabled.
+- Album art transition timing updated on 2026-11-24: selection deadlines ensure only Previous/Next commands delay artwork by three seconds; automatic advancement, browser/Queue selection, and enabling the type transition as soon as ready. Retain the 500 ms fade and cancel stale waits/results.
 - Shell integration implemented: persist the first unfinished onboarding step, share real folder/exclusion management with Settings, report settings write failures and restore saved values, keep splash/setup full-screen, suppress demo autoplay on setup completion, and implement confirmed, replayable library/queue/membership removal. The independent off-by-default boot-opening preference is already implemented. Real scanning, imported records, playback-service integration, and invalidation of future workers remain in the library/playback phases. See README’s Shell and onboarding integration section.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
 - Implemented reference 033: Queues/Track info buttons, an explicit fixed-target Track info request with its return destination, endpoint-aligned shared transport, and time labels above the existing seek bar. Queues now opens the implemented Queue screen described above.
@@ -969,6 +998,8 @@ Implementation started 2026-11-12. The first scanner/database/browser integratio
 - Implemented the read-only Track info child panel from reference 032 with wrapped values, fixed-target navigation, hidden search, and cached/unavailable states. `TrackTags` retains all ten raw fields separately from browser labels and supports snapshot serialization. Connecting these fields to scanned-file metadata storage remains part of the pending real-library integration.
 
 ### Phase 4 — Playback integration and lifecycle
+
+- Implemented one-time post-onboarding queue initialization after the initial scan: alphabetical available tracks, first entry at 0:00 paused, user-action cancellation, existing-session preservation, and no future-import trigger after empty/skipped setup. See the playback contracts for implementation and validation limits.
 
 Implementation started 2026-11-12. The initial real-audio slice connects the existing collection/queue UI to a process-owned controller and non-exported foreground service, platform MediaPlayer/MediaSession, decoder progress, committed seeking, transport boundaries, bounded decoder-failure traversal, actual-start Recently played, focus duck/pause handling, noisy-output pause, and off-main atomic checkpoints with paused restoration. This is not completion of the full Phase 4 contract. See [current playback contracts and remaining work](docs/compatibility-and-contracts.md#real-playback-and-lifecycle--initial-implementation).
 
@@ -1026,6 +1057,14 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 - Hardware events, clock ticks, playback progress, and track changes do not reset the fading timer; dialog dismissal, navigation back, foreground return, and recreation start fresh without stale countdowns or animations.
 - Verify fading and browsing-return timers remain independent and static reference previews remain fully opaque.
 
+### Post-onboarding initial track selection acceptance
+
+- Complete setup with tracks discovered out of alphabetical order. Verify the player opens while scanning continues, then receives the full available library queue in title order only after initial scan completion, with its first entry selected at 0:00 and paused.
+- Verify the same result when the scan finishes before the player is entered. Autoplay enabled does not start the initial selection; Recently played remains unchanged until an actual qualifying playback start.
+- Select/play a track, modify the queue, or clear it before scan completion; verify delayed initialization cannot override the user's action. Existing queue/selection is preserved.
+- Finish with no folders, skip onboarding, or complete a scan with no available tracks; verify an empty paused state and no delayed selection from subsequent unrelated imports.
+- Verify repeated completion callbacks do not initialize twice and later launches restore the saved session under existing rules instead of rebuilding the alphabetical queue.
+
 ### Settings, onboarding and head-unit behavior acceptance
 
 - Verify Settings displays the installed app version centered below the About button.
@@ -1052,10 +1091,12 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 
 - Match the reference with centered proportional fill across both panes and a 70%-opaque black overlay. Verify portrait, square, and wide covers crop without distortion, including RHD, while foreground controls/artwork retain their normal appearance.
 - Verify only embedded covers qualify; configured overrides, folder images, and placeholders do not supply the background. Missing/corrupt artwork resolves to black even when the remembered solid color is Indigo or another non-default color.
-- Rapidly select A, B, then C while playing and paused: only the latest stable selection becomes eligible after three seconds. Verify the existing background remains during the wait, then the outgoing image fades away over 500 ms without a separate black flash.
+- Use on-screen and hardware/media Previous/Next rapidly through A, B, then C while playing and paused: only the latest selection becomes eligible three seconds after its transport change. Verify retained background during the wait and the subsequent 500 ms outgoing fade without a separate black flash.
+- Verify natural completion, Repeat All wrapping, naturally reached Play next entries, and browser/Queue selections begin their 500 ms fade as soon as artwork is ready, without the transport delay. Repeat One and identical artwork do not cause redundant fades.
+- During a pending Previous/Next delay, select from a browser/Queue or advance automatically and verify the old wait is cancelled. A further Previous/Next change starts a fresh wait. Verify seeks, ±10 seconds, and pause/resume do not restart it.
 - Delay decoding beyond three seconds; retain the current background until completion and reject stale results after further track/type changes. Verify identical embedded covers do not trigger redundant fades.
 - Verify main-player Queues, Track info, Manage playlists/naming, and app drawer retain the artwork; menus, browsers, Settings, and their overlays use the remembered solid color. Returning to the player uses eligible prepared artwork immediately or only the remaining delay.
-- Enable Album art and verify a fresh delay, disabled Customize, saved type, and preserved solid/gradient choices. Switch types or confirm Reset all during waiting/fading and verify immediate preset application with no late artwork override.
+- Enable Album art and verify transition as soon as artwork is ready without an artificial delay, disabled Customize, saved type, and preserved solid/gradient choices. Switch types or confirm Reset all during waiting/fading and verify immediate preset application with no late artwork override.
 - Verify responsive navigation/transport and uninterrupted playback during preparation, paused behavior, cold startup with black initial fallback, and existing persistence rollback behavior.
 
 ### Launcher mode and app drawer acceptance

@@ -103,8 +103,8 @@ class MainActivity : ComponentActivity() {
                         hideSystemBars()
                     }
                     if (!staticSplash && showWelcome && (ready != null || referencePreview)) {
-                        WelcomeFlow(onboarding, welcomePreview) {
-                            if (welcomePreview == null) (application as ClocarmusApplication).completeOnboarding()
+                        WelcomeFlow(onboarding, welcomePreview) { completed, skipped ->
+                            if (welcomePreview == null) (application as ClocarmusApplication).completeOnboarding(completed, skipped)
                             setupComplete = true
                         }
                     }

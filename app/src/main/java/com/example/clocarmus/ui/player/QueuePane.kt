@@ -26,7 +26,7 @@ import kotlinx.coroutines.delay
 /** Drag state is only a preview. Commit against the original identities, never an old queue snapshot. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun QueuePane(grid: PlayerGrid, queue: TrackQueue, tracks: List<TrackMenuEntry>, playing: Boolean,
+internal fun QueuePane(grid: PlayerGrid, queue: TrackQueue, tracks: List<TrackMenuEntry>, playing: Boolean, shuffle: Boolean,
     scroll: LazyListState, inactivity: BrowsingReturnInactivity, interactive: Boolean,
     onBack: () -> Unit, onSelect: (String) -> Unit, onOptions: (QueueOccurrence) -> Unit,
     onReorder: (List<String>, String, Int) -> Unit) {
@@ -131,5 +131,5 @@ internal fun QueuePane(grid: PlayerGrid, queue: TrackQueue, tracks: List<TrackMe
     QueueScrollbar(grid, scroll, rowPx, viewportPx, object : AbstractList<String>() {
         override val size get() = shown.size
         override fun get(index: Int) = tracksById[shown[index].trackId]?.title.orEmpty()
-    })
+    }, showAlphabetIndicator = !shuffle)
 }

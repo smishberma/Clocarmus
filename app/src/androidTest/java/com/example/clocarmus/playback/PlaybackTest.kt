@@ -29,6 +29,9 @@ class PlaybackTest : InstrumentationTestCase() {
     private lateinit var directory: File
     private lateinit var wav: File
     @Volatile private var sourceFailure: Exception? = null
+    @Volatile private var scanGate: java.util.concurrent.CountDownLatch? = null
+    @Volatile private var scanEntered: java.util.concurrent.CountDownLatch? = null
+    @Volatile private var emptySource = false
     private var publications = 0
     private var rejectAudio = false
     private var openedAudio = 0
@@ -61,9 +64,13 @@ class PlaybackTest : InstrumentationTestCase() {
         wav.writeBytes(data.array())
         library = LocalLibrary(context, object : DocumentAccess {
             override fun children(tree: Uri, id: String) = MatrixCursor(arrayOf("id", "name", "mime", "size", "modified")).apply {
+                scanEntered?.countDown()
+                scanGate?.await(15, java.util.concurrent.TimeUnit.SECONDS)
                 sourceFailure?.let { throw it }
-                addRow(arrayOf<Any>("first", "First.wav", "audio/wav", wav.length(), 1))
+                if (emptySource) return@apply
+                // Deliberately differ from title order to exercise initial queue sorting.
                 addRow(arrayOf<Any>("second", "Second.wav", "audio/wav", wav.length(), 1))
+                addRow(arrayOf<Any>("first", "First.wav", "audio/wav", wav.length(), 1))
             }
             override suspend fun audio(document: AudioDocument, id: String) =
                 TrackMenuEntry(document.name, "Test", "Test", id = id, durationSeconds = 8) to document.name
@@ -110,6 +117,7 @@ class PlaybackTest : InstrumentationTestCase() {
         controller.play()
     }
     override fun tearDown() {
+        scanGate?.countDown()
         main { controller.close() }
         runBlocking { library.close() }
         directory.deleteRecursively()
@@ -124,6 +132,140 @@ class PlaybackTest : InstrumentationTestCase() {
             snapshot.version > version && !snapshot.summary.running &&
                 snapshot.records.size == 2 && snapshot.records.all { it.availability == expected }
         }
+    }
+
+    private fun setupConfiguration() = com.example.clocarmus.ui.startup.loadOnboarding(context.getSharedPreferences("onboarding", 0))
+
+    private fun holdInitialScan(): OnboardingState {
+        scanGate = java.util.concurrent.CountDownLatch(1)
+        scanEntered = java.util.concurrent.CountDownLatch(1)
+        val configuration = setupConfiguration().copy(exclusions = setOf("unused-exclusion"))
+        saveOnboarding(context.getSharedPreferences("onboarding", 0), configuration)
+        assertTrue(scanEntered!!.await(10, java.util.concurrent.TimeUnit.SECONDS))
+        return configuration
+    }
+
+    fun testOnboardingCompletedScanSelectsAlphabeticalQueuePausedOnlyOnceAndRestores() {
+        val expected = library.state.value.tracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }).map { it.id }
+        main { controller.initializeAfterOnboarding(setupConfiguration()) }
+        await { controller.queueState.value.entries.size == 2 }
+        val selected = controller.queueState.value
+        assertEquals(expected, selected.entries.map { it.trackId })
+        assertEquals(expected.first(), selected.current!!.trackId)
+        assertEquals(0f, controller.positionState.value)
+        assertFalse(controller.playingState.value)
+        assertEquals(0, openedAudio)
+        assertTrue(library.state.value.playlists.played.isEmpty())
+        main { controller.initializeAfterOnboarding(setupConfiguration()) }
+        assertEquals(selected, controller.queueState.value)
+        await { PlaybackStore(context).load()?.session?.queue == selected }
+        main { controller.close() }
+        createController()
+        main { controller.initializeAfterOnboarding(setupConfiguration()) }
+        assertEquals(selected, controller.queueState.value)
+        assertFalse(controller.playingState.value)
+    }
+
+    fun testOnboardingWaitsForScanThenSelectsPaused() {
+        val configuration = holdInitialScan()
+        main { controller.initializeAfterOnboarding(configuration) }
+        assertTrue(controller.queueState.value.entries.isEmpty())
+        scanGate!!.countDown()
+        await { controller.queueState.value.entries.size == 2 }
+        assertFalse(controller.playingState.value)
+        assertEquals(0f, controller.positionState.value)
+        assertEquals(0, openedAudio)
+    }
+
+    fun testOnboardingPendingSelectionCancelledByEvenAnAlreadyEmptyQueueClear() {
+        val configuration = holdInitialScan()
+        main {
+            controller.initializeAfterOnboarding(configuration)
+            controller.queueState.value = TrackQueue()
+        }
+        scanGate!!.countDown()
+        await { library.completedScan.value?.configuration?.exclusions == configuration.exclusions }
+        main { controller.initializeAfterOnboarding(configuration) }
+        assertTrue(controller.queueState.value.entries.isEmpty())
+    }
+
+    fun testOnboardingPendingSelectionPreservesUserSelection() {
+        val configuration = holdInitialScan()
+        val id = library.state.value.tracks.last().id
+        main {
+            controller.initializeAfterOnboarding(configuration)
+            controller.queueState.value = TrackQueue.fromTracks(listOf(id), id)
+        }
+        val expected = controller.queueState.value
+        scanGate!!.countDown()
+        await { library.completedScan.value?.configuration?.exclusions == configuration.exclusions }
+        assertEquals(expected, controller.queueState.value)
+    }
+
+    fun testOnboardingPendingSelectionCancelledByPlayOnEmptyPlayer() {
+        val configuration = holdInitialScan()
+        main {
+            controller.initializeAfterOnboarding(configuration)
+            controller.play()
+        }
+        scanGate!!.countDown()
+        await { library.completedScan.value?.configuration?.exclusions == configuration.exclusions }
+        assertTrue(controller.queueState.value.entries.isEmpty())
+        assertFalse(controller.playingState.value)
+    }
+
+    fun testOnboardingExistingQueueIsPreserved() {
+        val id = library.state.value.tracks.last().id
+        main {
+            controller.queueState.value = TrackQueue.fromTracks(listOf(id), id)
+            controller.initializeAfterOnboarding(setupConfiguration())
+        }
+        assertEquals(listOf(id), controller.queueState.value.entries.map { it.trackId })
+    }
+
+    fun testOnboardingEmptyScanNeverSelectsFromLaterImport() {
+        emptySource = true
+        val configuration = holdInitialScan()
+        main { controller.initializeAfterOnboarding(configuration) }
+        scanGate!!.countDown()
+        await { library.completedScan.value?.configuration?.exclusions == configuration.exclusions }
+        // Let the controller consume the terminal empty result before importing again.
+        instrumentation.waitForIdleSync()
+        emptySource = false
+        library.refresh()
+        await { library.state.value.tracks.all { it.available } && !library.state.value.summary.running }
+        main { controller.initializeAfterOnboarding(configuration) }
+        assertTrue(controller.queueState.value.entries.isEmpty())
+        assertTrue(library.completedScan.value!!.records.none { it.availability == com.example.clocarmus.library.Availability.AVAILABLE })
+    }
+
+    fun testOnboardingSourceChangeCancelsPendingSelection() {
+        val configuration = holdInitialScan()
+        main { controller.initializeAfterOnboarding(configuration) }
+        saveOnboarding(context.getSharedPreferences("onboarding", 0), configuration.copy(folders = emptyList()))
+        await { library.sourceConfiguration.value?.folders?.isEmpty() == true }
+        scanGate!!.countDown()
+        await { library.completedScan.value?.configuration?.folders?.isEmpty() == true }
+        saveOnboarding(context.getSharedPreferences("onboarding", 0), configuration)
+        await { library.completedScan.value?.configuration?.folders == configuration.folders }
+        assertTrue(controller.queueState.value.entries.isEmpty())
+    }
+
+    fun testOnboardingSkipDecisionSurvivesInterruptedLoading() {
+        val configuration = setupConfiguration().copy(
+            step = com.example.clocarmus.ui.startup.WelcomePage.Loading, initialSelectionSkipped = true)
+        saveOnboarding(context.getSharedPreferences("onboarding", 0), configuration)
+        assertTrue(setupConfiguration().initialSelectionSkipped)
+        main { controller.initializeAfterOnboarding(setupConfiguration()) }
+        assertTrue(controller.queueState.value.entries.isEmpty())
+    }
+
+    fun testOnboardingNoFoldersCannotBeArmedByLaterCompletion() {
+        main {
+            controller.initializeAfterOnboarding(setupConfiguration().copy(folders = emptyList()))
+            controller.initializeAfterOnboarding(setupConfiguration())
+        }
+        assertTrue(controller.queueState.value.entries.isEmpty())
     }
 
     fun testSimulatedDriveDisconnectionRestoresShufflePausedAndReconnectNeedsPlay() =
@@ -249,6 +391,77 @@ class PlaybackTest : InstrumentationTestCase() {
         Thread.sleep(400)
         main { assertFalse(controller.playingState.value) }
     }
+    fun testArtworkTimingTracksTransportAndExplicitSelectionWhilePaused() {
+        select()
+        await { controller.positionState.value > .25f }
+        main {
+            assertEquals(0L, controller.artworkSelection.eligibleAtMs)
+            controller.pause()
+            controller.step(1)
+            val timing = controller.artworkSelection
+            assertTrue(timing.eligibleAtMs > android.os.SystemClock.elapsedRealtime())
+            controller.positionState.value = 4f
+            controller.step(-1) // Restarts this track without a new selection.
+            assertEquals(timing, controller.artworkSelection)
+            controller.play()
+            controller.pause()
+            assertEquals(timing, controller.artworkSelection)
+            controller.selectOccurrence(controller.queueState.value.currentId!!)
+            assertEquals(0L, controller.artworkSelection.eligibleAtMs)
+            controller.pause()
+            controller.step(-1)
+            assertTrue(controller.artworkSelection.eligibleAtMs > android.os.SystemClock.elapsedRealtime())
+            val ids = library.state.value.tracks.map { it.id }
+            controller.selectCollection(ids, ids.last())
+            assertEquals(0L, controller.artworkSelection.eligibleAtMs)
+        }
+    }
+
+    fun testArtworkTimingPreservesCauseAcrossPendingShuffleOrdering() {
+        val gate = CompletableDeferred<Unit>()
+        shuffleGate = gate
+        main {
+            val ids = library.state.value.tracks.map { it.id }
+            controller.shuffleState.value = true
+            controller.selectCollection(ids, ids.first())
+        }
+        await { controller.preparingShuffle && controller.positionState.value > .25f }
+        var first: String? = null
+        main {
+            first = controller.queueState.value.currentId
+            controller.pause()
+            controller.step(1)
+            gate.complete(Unit)
+        }
+        await { controller.queueState.value.currentId != first }
+        main {
+            assertFalse(controller.playingState.value)
+            assertTrue(controller.artworkSelection.eligibleAtMs > android.os.SystemClock.elapsedRealtime())
+            controller.repeatState.value = 2
+            controller.play()
+        }
+        await { controller.positionState.value > .25f }
+        var last: String? = null
+        main { last = controller.queueState.value.currentId; controller.positionState.value = 8f }
+        await { controller.queueState.value.currentId != last && controller.queueState.value.currentIndex == 0 }
+        main { assertEquals(0L, controller.artworkSelection.eligibleAtMs) }
+    }
+
+    fun testNaturalCompletionCancelsTransportArtworkWaitIncludingRepeatAllWrap() {
+        select()
+        await { controller.positionState.value > .25f }
+        main {
+            controller.repeatState.value = 2
+            controller.step(1)
+            assertTrue(controller.artworkSelection.eligibleAtMs > android.os.SystemClock.elapsedRealtime())
+        }
+        await { controller.queueState.value.currentIndex == 1 && controller.positionState.value > .25f }
+        main { controller.positionState.value = 6.5f }
+        // Let the decoder finish within the pending three-second artwork wait.
+        await { controller.queueState.value.currentIndex == 0 }
+        main { assertEquals(0L, controller.artworkSelection.eligibleAtMs) }
+    }
+
     fun testPreviousThresholdAndRepeatAllTransportBoundary() {
         select()
         await { controller.positionState.value > .25f }
@@ -512,7 +725,11 @@ class PlaybackTest : InstrumentationTestCase() {
             controller.step(1)
         }
         await { controller.queueState.value.currentIndex == 0 && !controller.preparingShuffle }
-        main { assertFalse(controller.playingState.value); assertEquals(0f, controller.positionState.value) }
+        main {
+            assertFalse(controller.playingState.value)
+            assertEquals(0f, controller.positionState.value)
+            assertTrue(controller.artworkSelection.eligibleAtMs > android.os.SystemClock.elapsedRealtime())
+        }
         assertEquals(opens, openedAudio)
     }
 
@@ -790,6 +1007,7 @@ class PlaybackTest : InstrumentationTestCase() {
             gate.complete(Unit)
         }
         await { controller.queueState.value.currentId != first && controller.positionState.value > .25f }
+        main { assertEquals(0L, controller.artworkSelection.eligibleAtMs) }
     }
 
     fun testCollectionHistoryChecksumsRecoveryAndRevisionOrdering() {

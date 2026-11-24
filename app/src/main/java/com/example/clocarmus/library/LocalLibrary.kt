@@ -33,6 +33,13 @@ internal class LocalLibrary(private val context: Context, private val documents:
     private var configuration = OnboardingState()
     private val mutable = MutableStateFlow(LibrarySnapshot())
     val state = mutable.asStateFlow()
+    // Retain the first terminal snapshot per configuration, even if later refreshes finish
+    // before the startup consumer runs. Cached readiness and incremental records are not completion.
+    internal data class CompletedScan(val configuration: OnboardingState, val records: List<LibraryRecord>)
+    private val mutableCompletedScan = MutableStateFlow<CompletedScan?>(null)
+    val completedScan = mutableCompletedScan.asStateFlow()
+    private val mutableSourceConfiguration = MutableStateFlow<OnboardingState?>(null)
+    val sourceConfiguration = mutableSourceConfiguration.asStateFlow()
     private val observers = mutableListOf<ContentObserver>()
     private val metadataPrefs = context.getSharedPreferences("library-metadata", 0)
     private val metadataRefreshIds = mutableSetOf<String>()
@@ -41,7 +48,9 @@ internal class LocalLibrary(private val context: Context, private val documents:
         if (key in setOf("folders", "exclusions", "resetPending")) scope.launch {
             mutex.withLock {
                 val next = loadOnboarding(prefs)
+                mutableSourceConfiguration.value = next
                 if (configuration.folders != next.folders || configuration.exclusions != next.exclusions || next.resetPending) {
+                    mutableCompletedScan.value = null
                     generation++
                     scanJob?.cancel()
                 }
@@ -63,6 +72,7 @@ internal class LocalLibrary(private val context: Context, private val documents:
             try {
                 mutex.withLock {
                     configuration = loadOnboarding(prefs)
+                    mutableSourceConfiguration.value = configuration
                     directoryCache = db.directories()
                     val records = db.records()
                     if (metadataPrefs.getInt("readerVersion", 0) < 2) {
@@ -193,6 +203,7 @@ internal class LocalLibrary(private val context: Context, private val documents:
     }
     private suspend fun scan(wanted: Set<String>) {
         var summary = ScanSummary(running = true)
+        var cancelled = false
         val startedGeneration: Long
         val config = loadOnboarding(prefs)
         val configChanged = configuration.folders != config.folders || configuration.exclusions != config.exclusions
@@ -355,7 +366,7 @@ internal class LocalLibrary(private val context: Context, private val documents:
                 val version = db.commit(reconciled, emptyList(), before.playlists, directoryCache)
                 publish(reconciled, before.playlists, version)
             }
-        } catch (cancelled: CancellationException) { summary = summary.copy(incomplete = true) }
+        } catch (exception: CancellationException) { cancelled = true; summary = summary.copy(incomplete = true) }
         catch (exception: Exception) { summary = summary.copy(incomplete = true, failures = summary.failures + (exception.message ?: "Scan failed")) }
         finally {
             withContext(NonCancellable) { mutex.withLock {
@@ -363,6 +374,11 @@ internal class LocalLibrary(private val context: Context, private val documents:
                     metadataRefreshIds.retainAll(mutable.value.records.map { it.id }.toSet())
                     if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", 2).commit()
                     mutable.value = mutable.value.copy(summary = summary.copy(running = false))
+                    val previous = mutableCompletedScan.value?.configuration
+                    if (!cancelled && (previous == null || previous.folders != config.folders ||
+                            previous.exclusions != config.exclusions)) {
+                        mutableCompletedScan.value = CompletedScan(config, mutable.value.records)
+                    }
                 }
             } }
         }

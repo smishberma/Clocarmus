@@ -24,10 +24,20 @@ Customize is disabled for this type and uses the shared disabled-control appeara
 Album art uses only the local JPEGs extracted from embedded pictures by `readAudio`;
 no folder images, placeholders, or artwork overrides supply the runtime background.
 The Activity-level preparation owner survives pane navigation. Track/type changes cancel
-pending work, a generation guard rejects stale completion, and a track-keyed three-second delay runs
-concurrently with IO hashing/decoding. Artwork-path/display-size updates reuse the remaining
-track stability interval rather than restarting it. A single decoded cache entry and two transition
-layers bound image retention; decoding is sampled to the display size. Equal artwork
+pending work, and a generation guard rejects stale completion. Playback publishes a transient
+selection revision and elapsed-realtime deadline: only Previous/Next selection changes wait
+three seconds, including media commands and asynchronous shuffle boundaries. Automatic
+completion (including Repeat All and scheduled entries), browser/Queue selection, explicit
+Play continuation after a scheduled stop, restoration, and enabling Album art are eligible
+immediately; every eligible change still uses the 500 ms fade.
+A new non-transport selection cancels any previous wait, including explicit reselection of the
+same occurrence. A Previous command that only restarts the same occurrence, seeking,
+pause/resume, and progress leave the deadline unchanged. IO hashing/decoding runs concurrently
+with the wait; artwork-path/display-size updates reuse its remaining interval. Enabling the
+type ignores any earlier transport deadline. Navigation and player return do not restart it.
+A paused Next command releases suspended shuffle preparation while retaining paused intent;
+its eventual selection still receives the transport deadline. A single decoded cache entry
+and two transition layers bound image retention; decoding is sampled to the display size. Equal artwork
 content hashes suppress redundant fades even when different audio files own the covers.
 The outgoing layer (including initial black) fades over 500 ms above the prepared cover;
 one shared 70% black overlay keeps darkening constant. Missing/unreadable art targets black.
@@ -166,3 +176,36 @@ access loss, paused checkpoint restoration, reconnection without autoplay and fi
 Next traversal. Five of those checks are new. Failures are injected at the document
 access boundary; physical USB/SD events, actual URI-grant revocation and OEM detection
 remain unvalidated. See [Genuine Shuffle](genuine-shuffle.md).
+
+
+## Post-onboarding initial selection (2026-11-24)
+
+Successful, non-skipped setup with selected folders arms one process-owned initial
+selection. Discovery starts during the loading animation and does not delay player
+entry. Cached database readiness and incremental scan records do not count as a
+finished scan. A terminal scan for the setup folders/exclusions supplies the full
+available-track snapshot, sorted by title using the existing case-insensitive
+browser ordering. The first occurrence is selected at 0:00 with Shuffle off and
+playback paused. This does not open the decoder or update Recently played, and the
+autoplay preference does not change it.
+
+Restoration finishes first; any saved session (including a saved empty queue),
+recovery failure, existing queue, or playback/queue command takes precedence.
+Even clearing an already-empty queue or pressing Play with no selection cancels
+pending initialization. Configuration changes and reset invalidate the handoff.
+Repeated setup callbacks do not rebuild the queue. Skipped/no-folder setup and a
+finished scan with no available tracks consume the opportunity; subsequent
+imports never initialize it. The handoff is process-only: after process loss,
+normal paused checkpoint restoration applies rather than arming a new selection.
+The optional onboarding preference `initialSelectionSkipped` defaults to false for
+older installs and preserves an accepted skip across interruption of the loading
+step. Playback checkpoint formats are unchanged.
+
+
+Validation: debug and instrumentation APK builds, all 206 host tests,
+`verifyDebugCompatibility`, and lint pass. All 48 playback tests (including ten
+new onboarding regressions) pass on API 23 and API 31. All 14 library tests pass
+on API 23; API 31's existing cleanup-return test initially observed MISSING after
+refresh, then passed in isolation and in a complete 14-test rerun. No production
+cleanup behavior or test timing was changed. These are emulator observations;
+physical head-unit/provider acceptance remains unverified.

@@ -64,7 +64,12 @@ internal class EmbeddedBackgroundLoader {
 }
 
 @Composable
-internal fun rememberAlbumArtBackground(enabled: Boolean, trackId: String?, embeddedPath: String?): AlbumArtBackgroundState<ImageBitmap> {
+internal fun rememberAlbumArtBackground(
+    enabled: Boolean,
+    trackId: String?,
+    embeddedPath: String?,
+    timing: ArtworkSelectionTiming = ArtworkSelectionTiming()
+): AlbumArtBackgroundState<ImageBitmap> {
     val scope = rememberCoroutineScope()
     val state = remember { AlbumArtBackgroundState<ImageBitmap>(scope) }
     val loader = remember { EmbeddedBackgroundLoader() }
@@ -72,8 +77,11 @@ internal fun rememberAlbumArtBackground(enabled: Boolean, trackId: String?, embe
     val density = LocalDensity.current.density
     val width = (configuration.screenWidthDp * density).toInt().coerceAtLeast(1)
     val height = (configuration.screenHeightDp * density).toInt().coerceAtLeast(1)
-    LaunchedEffect(enabled, trackId, embeddedPath, width, height) {
-        state.select(enabled, trackId) { loader.load(embeddedPath, width, height) }
+    LaunchedEffect(enabled, trackId, embeddedPath, width, height, timing) {
+        val remainingDelay = timing.eligibleAtMs - android.os.SystemClock.elapsedRealtime()
+        state.select(enabled, trackId, timing.revision, remainingDelay) {
+            loader.load(embeddedPath, width, height)
+        }
     }
     DisposableEffect(state) { onDispose { state.close() } }
     return state

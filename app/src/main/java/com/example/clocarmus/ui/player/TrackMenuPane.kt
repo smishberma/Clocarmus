@@ -230,12 +230,12 @@ internal fun TrackScrollbar(grid: PlayerGrid, scroll: ScrollState, titles: List<
 
 @Composable
 internal fun QueueScrollbar(grid: PlayerGrid, scroll: LazyListState, rowPx: Float, viewportPx: Float,
-    titles: List<String>) {
+    titles: List<String>, showAlphabetIndicator: Boolean = true) {
     val maximum = (titles.size * rowPx - viewportPx).roundToInt().coerceAtLeast(0)
     val pixels = (scroll.firstVisibleItemIndex * rowPx + scroll.firstVisibleItemScrollOffset).roundToInt().coerceAtMost(maximum)
     Scrollbar(grid, pixels, maximum, scroll.isScrollInProgress, { value ->
         scroll.scrollToItem((value / rowPx).toInt(), (value % rowPx).roundToInt())
-    }, titles, "queue", true, 294f, true)
+    }, titles, "queue", true, 294f, showAlphabetIndicator)
 }
 
 @Composable

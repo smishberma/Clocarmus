@@ -13,6 +13,9 @@ import kotlinx.coroutines.launch
 internal const val ALBUM_ART_STABILITY_MS = 3_000L
 internal const val ALBUM_ART_FADE_MS = 500
 
+/** Process-only selection deadline, measured on the elapsed realtime clock. */
+internal data class ArtworkSelectionTiming(val revision: Long = 0, val eligibleAtMs: Long = 0)
+
 internal data class BackgroundArtwork<T>(val identity: String, val image: T)
 internal data class AlbumArtFrame<T>(
     val current: BackgroundArtwork<T>? = null,
@@ -30,8 +33,15 @@ internal class AlbumArtBackgroundState<T>(private val scope: CoroutineScope) {
     private var enabled = false
     private var selectedTrackId: String? = null
     private var stability: Deferred<Unit>? = null
+    private var selectionRevision = 0L
 
-    fun select(enabled: Boolean, trackId: String?, load: suspend () -> BackgroundArtwork<T>?) {
+    fun select(
+        enabled: Boolean,
+        trackId: String?,
+        selectionRevision: Long = 0,
+        delayMillis: Long = 0,
+        load: suspend () -> BackgroundArtwork<T>?
+    ) {
         pending?.cancel()
         val request = ++generation
         if (!enabled) {
@@ -41,12 +51,14 @@ internal class AlbumArtBackgroundState<T>(private val scope: CoroutineScope) {
             mutableFrame.value = AlbumArtFrame(revision = request)
             return
         }
-        if (!this.enabled || selectedTrackId != trackId) {
+        if (!this.enabled || selectedTrackId != trackId || this.selectionRevision != selectionRevision) {
             stability?.cancel()
-            stability = scope.async { delay(ALBUM_ART_STABILITY_MS) }
+            val wait = if (this.enabled) delayMillis.coerceAtLeast(0) else 0
+            stability = scope.async { delay(wait) }
         }
         this.enabled = true
         selectedTrackId = trackId
+        this.selectionRevision = selectionRevision
         val stable = checkNotNull(stability)
         pending = scope.launch {
             val decoded = async {

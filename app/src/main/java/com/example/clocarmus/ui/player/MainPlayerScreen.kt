@@ -260,7 +260,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         } else track
     }
     val albumArtBackground = rememberAlbumArtBackground(
-        settings.backgroundType == BackgroundType.ALBUM_ART, selectedTrackId, selectedTrack?.artworkPath)
+        settings.backgroundType == BackgroundType.ALBUM_ART, selectedTrackId, selectedTrack?.artworkPath,
+        if (fixture) ArtworkSelectionTiming() else playback!!.artworkSelection)
     LaunchedEffect(librarySnapshot.version, librarySnapshot.ready, selectedTrackId) {
         if (!fixture && librarySnapshot.ready && selectedTrackId != null) {
             if (selectedTrack == null) { playing = false }
@@ -475,7 +476,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                             }
                             Box(Modifier.fillMaxSize()) {
                                 if (displayed.root == PlayerPaneRoot.QUEUE) {
-                                    QueuePane(grid, queue, playlistTracks, playing, queueScroll, browsingReturn,
+                                    QueuePane(grid, queue, playlistTracks, playing, shuffle, queueScroll, browsingReturn,
                                         interactive = optionsTarget == null && infoRequest == null, onBack = goBack,
                                         onSelect = { id ->
                                             val occurrence = queue.entries.firstOrNull { it.id == id }
