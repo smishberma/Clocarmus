@@ -39,6 +39,7 @@ Use the checked-in Gradle wrapper, an Android SDK with Platform 35 and a JDK com
 ```
 
 - Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. Connected tests require an emulator/device.
+- Place each new release APK in a new directory under `/home/ismail/Projects/vibe-coded-projects/Clocarmus/build/releases/`, named for its version (for example, `build/releases/1.0.4/`). Put the signed APK and its SHA-256 checksum there; use a unique suffix if that version's directory already exists so previous releases are preserved.
 - Add focused regression tests for behavioral fixes. JVM tests in `app/src/test/` use JUnit 4 and coroutine test utilities. Android-dependent tests in `app/src/androidTest/` use platform `InstrumentationTestCase` and `android.test.InstrumentationTestRunner`; follow their isolated database/preferences/files setup.
 - For storage, decoder, service or compatibility changes, exercise API 23 and an appropriate newer Android runtime. Run relevant checks, report failures/skips and distinguish emulator observations from physical head-unit validation.
 - For visual changes, build first, start `headunit_a6`, then run `python3 scripts/compare-main-player.py --screen player --install` (choose the affected screen). Requires `adb` and Pillow. Comparisons are visual aids, not pixel acceptance thresholds. Relaunch without preview extras afterward.

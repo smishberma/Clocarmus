@@ -70,7 +70,7 @@ class PlaybackService : Service(), PlaybackHost {
         fun action(command: String) = PendingIntent.getService(this, command.hashCode(), Intent(this, PlaybackService::class.java).setAction(command), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val launch = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "playback") else Notification.Builder(this)
-        val notification = builder.setSmallIcon(R.drawable.player_play).setContentTitle(track?.title ?: "Clocarmus")
+        val notification = builder.setSmallIcon(R.drawable.ic_notification_playback).setContentTitle(track?.title ?: "Clocarmus")
             .setContentText(track?.artist).setContentIntent(launch).setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true).setOngoing(playing)
             .addAction(Notification.Action.Builder(R.drawable.player_skip_back, "Previous", action("previous")).build())

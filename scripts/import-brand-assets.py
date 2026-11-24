@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Import the supplied brand SVGs. Requires Inkscape, a JDK, and resolved Gradle dependencies."""
 from copy import deepcopy
+import argparse
 from pathlib import Path
 import re
 import math
@@ -15,6 +16,9 @@ SVG = 'http://www.w3.org/2000/svg'
 ANDROID = 'http://schemas.android.com/apk/res/android'
 ET.register_namespace('', SVG)
 ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--notification-only', action='store_true', help='Import only the monochrome playback small icon')
+args = parser.parse_args()
 WORK.mkdir(parents=True, exist_ok=True)
 
 cache = Path.home() / '.gradle/caches/modules-2/files-2.1'
@@ -47,6 +51,35 @@ def convert(root, name, dp):
     target.write_text(xml)
     print(target.relative_to(ROOT))
 
+
+def import_notification_icon():
+    root = clean(SOURCE / 'logo-monochrome.svg')
+    prepared = WORK / 'notification-silhouette.svg'
+    ET.ElementTree(root).write(prepared, encoding='utf-8', xml_declaration=True)
+    # Union the white artwork, then subtract the source's black tonearm detail.
+    # Black paint would be opaque in Android's alpha-only small-icon mask.
+    subprocess.run(['inkscape', str(prepared), '--export-plain-svg', '--export-type=svg',
+                    f'--export-filename={prepared}',
+                    '--actions=select-by-id:path11,path12,path13,path14,path17,path19;path-union;'
+                    'select-clear;select-by-id:path18;selection-top;select-all;path-difference;export-do'], check=True)
+    silhouette = clean(prepared)
+    # Fit the source proportionally into a 22dp square, centered on a 24dp canvas.
+    width, height = map(float, root.get('viewBox').split()[2:])
+    scale = 22 / max(width, height)
+    icon = ET.Element(f'{{{SVG}}}svg', width='24', height='24', viewBox='0 0 24 24')
+    group = ET.SubElement(icon, f'{{{SVG}}}g', transform=
+                          f'translate({(24 - width * scale) / 2},{(24 - height * scale) / 2}) scale({scale})')
+    for child in silhouette:
+        if child.tag == f'{{{SVG}}}g':
+            group.append(deepcopy(child))
+    for path in icon.iter(f'{{{SVG}}}path'):
+        path.set('style', 'fill:#ffffff;fill-opacity:1;stroke:none')
+    convert(icon, 'ic_notification_playback', 24)
+
+
+import_notification_icon()
+if args.notification_only:
+    raise SystemExit(0)
 
 convert(clean(SOURCE / 'logo-no-background.svg'), 'brand_logo', 200)
 icon = clean(SOURCE / 'logo.svg')

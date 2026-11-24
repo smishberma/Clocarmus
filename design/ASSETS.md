@@ -17,6 +17,25 @@ python3 scripts/import-brand-assets.py
 
 Source artwork stays unchanged. Generated resources are checked in; normal builds need no SVG conversion tools. The player importer skips `logo-brand` because branding uses this dedicated pipeline.
 
+### Playback notification small icon
+
+`logo-brand/logo-monochrome.svg` supplies `drawable/ic_notification_playback.xml`.
+The brand importer unions its white shapes and subtracts the black tonearm detail
+as a transparent cutout. This preserves the supplied silhouette without opaque
+black paint in Android's alpha mask. No path simplification is applied. The mark
+fits proportionally within 22dp, centered on a 24dp transparent vector canvas.
+Its only fill is white; Android supplies the notification/status-bar tint.
+It uses no gradients, background plate, or attributes requiring API 24.
+
+```sh
+python3 scripts/import-brand-assets.py --notification-only
+./gradlew :app:assembleDebug
+```
+
+The full brand import also regenerates this icon. `PlaybackService.publish()`
+uses it for every initial notification and playing/paused update; launcher
+resources, artwork and transport action resources are separate and unchanged.
+
 The main player uses the supplied SVGs in [assets/main-player/](assets/main-player/) and [assets/shared/](assets/shared/), converted into Android vector resources under `app/src/main/res/drawable/player_*.xml`. Original SVGs remain unchanged. Icons use `ContentScale.Fit` and square display boxes; artwork uses the square `no-album-art.svg` placeholder. All placement and icon dimensions share one uniform scale within each screen half. Text uses Inter directly, with no geometric scaling.
 
 Menu normal/pressed, play/pause, shuffle on/off, and repeat off/one/all each use their provided asset. Menu and repeat-one SVG text is outlined during import so the vectors retain its original lettering. The volume slider background is derived from `volume-slider.svg`; its changing fill and seek-bar track/thumb are rendered by Compose. The volume icon is imported separately. No additional main-screen assets are required.

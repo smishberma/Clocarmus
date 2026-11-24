@@ -997,7 +997,36 @@ Implementation started 2026-11-12. The first scanner/database/browser integratio
 - Add shared Track Options entry to eligible track lists, preserving Favorites/custom-playlist context menus. Reuse track collections with an explicit fixed target and return destination; keep deferred actions disabled and cancel automatic return throughout the popup stack.
 - Implemented the read-only Track info child panel from reference 032 with wrapped values, fixed-target navigation, hidden search, and cached/unavailable states. `TrackTags` retains all ten raw fields separately from browser labels and supports snapshot serialization. Connecting these fields to scanned-file metadata storage remains part of the pending real-library integration.
 
+### Monochrome playback notification icon — implemented
+
+Agreed on 2026-11-24. Source asset: `design/assets/shared/logo-brand/logo-monochrome.svg`.
+
+Implemented on 2026-11-24 as `drawable/ic_notification_playback.xml` through the
+brand importer (`--notification-only`). White source paths are unioned and the
+black tonearm detail is subtracted into transparency; no path simplification is
+applied. The 24dp vector is used by the shared `PlaybackService.publish()` builder
+for initial, playing and paused notifications. See [asset provenance and regeneration](design/ASSETS.md#playback-notification-small-icon).
+
+Validation: debug/test APK builds, compatibility verification and lint pass
+(0 errors, 60 warnings); host tests report 208 passed and 1 skipped. The API 23
+emulator shows the transparent brand mark in its MediaStyle notification and
+retains the resource after real playback, Next, Pause and service recreation.
+Android 15 shows the tinted mark in its media card with light/dark system themes;
+notification dumps confirm the same resource after recreation/update. The modern
+emulator had no configured music source, so real playback transitions were
+exercised on API 23 only. The required player visual comparison also completed,
+followed by a normal launch without preview extras. Physical head-unit acceptance
+remains pending; API 23 provides no standard system-wide dark-theme toggle.
+
+- Use a dedicated monochrome small icon for Clocarmus playback notifications and their status-bar representation. Apply the same icon whenever the playback notification is shown, including playing and paused states.
+- Derive the icon from the supplied monochrome brand logo. Simplifying fine details is authorized where needed for readability at notification/status-bar sizes; retain the recognizable brand silhouette.
+- Prepare a single-color silhouette with a transparent background and let Android apply its notification/theme tint. Avoid baked-in background plates, gradients, or fixed theme-specific colors.
+- Keep the launcher icon, notification album artwork, and playback action icons unchanged. Reuse the existing playback notification/service owner; this change does not alter notification visibility, lifecycle, media-session behavior, or playback.
+- Import the dedicated resource through the existing asset workflow and document its source/simplification when implemented. Validate appearance on API 23 and a newer Android version, including available light/dark notification surfaces; system presentation may vary by Android version and device.
+
 ### Phase 4 — Playback integration and lifecycle
+
+- Implemented the dedicated monochrome brand small icon in the shared playback-notification creation/update path, following the specification above.
 
 - Implemented one-time post-onboarding queue initialization after the initial scan: alphabetical available tracks, first entry at 0:00 paused, user-action cancellation, existing-session preservation, and no future-import trigger after empty/skipped setup. See the playback contracts for implementation and validation limits.
 
@@ -1313,6 +1342,13 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 - Verify exact-occurrence Play next/Stop actions, disabled Play next on current, current Stop without duplication, marker retention on drag, clearing on removal, repeat override at completion, and explicit Play continuing after the marked entry.
 - Verify the 15-second timer starts on entry, resets on interaction, cannot interrupt dragging/popups, and restarts after returning to Queue. Check scroll restoration after actions and normal Back to player.
 - Restart after queue edits and verify occurrence order and marker persist with playback restored paused by default; separately test qualifying opt-in autoplay.
+
+### Monochrome playback notification icon acceptance
+
+- Verify the supplied brand-derived silhouette is recognizable at actual status-bar and notification sizes, with a transparent background and no opaque rectangular plate.
+- Verify Android theme tinting on available light/dark surfaces on API 23 and a newer Android version.
+- Play, pause, change tracks, and recreate/update the notification; verify all playback notification paths retain the same small icon.
+- Verify launcher branding, notification album artwork, transport action icons, notification lifecycle, and playback behavior remain unchanged.
 
 ### AVD acceptance
 
