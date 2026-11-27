@@ -25,7 +25,7 @@ Use `design/01-main-player.png` as the primary reference, the remaining screen m
 - Right side by default: persistent day, digital clock, and date during normal app use, including browsing/settings. Settings > Display > Change to right-hand drive (RHD) swaps the clock to the left and the player/browsers/settings/panels to the right, preserving the split and centered divider styles. Splash and onboarding follow their separate full-screen mockups.
 - Retain previous, play/pause, and next controls across browsing/settings, as shown.
 - Keep the screen awake while the app UI is visible, even when paused; do not hold the display awake from the background.
-- Background choices: Solid colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Potion, Lava (updated reference 038). Preserve readable white controls/text. Embedded album-art backgrounds are specified below; arbitrary background images remain out of scope.
+- Background choices: Solid colors Default (black), Indigo, Coffee, Grey, and Gradients Default, Modern, Law, Potion, Lava (updated reference 038). Preserve readable white controls/text. Embedded album-art backgrounds are specified below; arbitrary background images remain out of scope.
 - Configurable 12/24-hour time, default 12-hour. Date remains fixed at DD-MM-YYYY; additional date formats are deferred.
 - English-only interface; preserve music metadata in its original language.
 
@@ -527,22 +527,38 @@ Agreed on 2026-11-24. This is a one-time initialization after completed onboardi
 - Disable buttons fade out in main player defaults off. When enabled, keep the affected controls fully visible; when disabled, use the existing inactivity-fading rules.
 - Change to right-hand drive (RHD) defaults off. Swap clock and content panes by placement, retaining control orientation/actions, screen state, and scrolling. Background/divider selections remain independent.
 - Keep 12-hour time as the default, with the existing 24-hour switch and Default, Vertical, LCD, and Dot matrix clock styles. Date is fixed at DD-MM-YYYY for this release; other date formats are deferred.
-- Solid backgrounds: Default (black), Indigo, Coffee, Grey. Gradients: Default, Modern, Potion, Lava. Divider choices: Default, Hidden, Dotted, Squiggly, Beam. Initial selections are solid Default, Default clock, and Default divider.
+- Solid backgrounds: Default (black), Indigo, Coffee, Grey. Gradients: Default, Modern, Law, Potion, Lava. The Divider redesign offers None (Default), Static, and Animated, as specified below. New-install initial selections are solid Default, Default clock, and no divider; preserve existing divider appearance on upgrade.
 - The Background settings redesign below replaces Normal/Gradients tabs with a background-type dropdown and separate customization screens. Selecting a type applies its remembered preset immediately; selecting a preset also applies immediately.
 - Keep the display awake while Clocarmus is visible, including paused playback and Settings, and release that request in the background. This must not prevent actual head-unit sleep; display-off alone is not a sleep signal.
+
+#### Divider settings redesign and animated dividers — implemented
+
+Agreed on 2026-11-27. Animation asset: `design/assets/animated-dividers/equalizer.json`. Main-player reference: `design/assets/animated-dividers/visualizer-animated-divider.png`. This replaces the previous flat Default/Hidden/Dotted/Squiggly/Beam selector.
+
+- Appearance > Divider opens a screen following the Background selector pattern: type dropdown, Customize, and Reset all. Dropdown options are None (Default), Static, and Animated. Indicate the active type with a radio button and slight row highlight.
+- None renders no divider and disables Customize. Static contains only Line, Dotted, Squiggly, and Beam; do not include another no-divider choice within Static. Animated contains Vertical visualizer (`equalizer.json`) and Color line (`Color-Line.json`) using the supplied Lottie assets.
+- Selecting a type applies and saves it immediately, collapses the dropdown, and remains on the Divider screen. Static restores its remembered choice, initially Line. Animated restores its remembered choice, initially Vertical visualizer. Customize opens the active type's choices for Static or Animated; choosing a row saves immediately and remains on that screen without a Save button.
+- Persist the selected type and remembered Static and Animated choices independently. New installations default to None. Preserve existing users' visible divider selection on upgrade: map a hidden/no-divider value to None, a straight-line value to Static > Line, and Dotted/Squiggly/Beam to their corresponding Static choice. Resolve legacy identifiers by their existing rendered meaning rather than their old Default label.
+- Reset all shows “Reset divider to default?” with Cancel and Reset. Cancel changes nothing; Reset activates None, stays on the Divider screen, and retains the remembered Static and Animated choices. Do not reset backgrounds or other Appearance preferences.
+- Reuse Background's dropdown behavior: top line/arrow toggles expansion; Back first closes an expanded dropdown; outside taps dismiss and consume that tap without activating controls underneath. With the dropdown closed, normal app/system Back follows Customize > Divider > Settings. Long-press Back returns to the main player under existing rules.
+- Apply the chosen divider wherever the existing central divider appears, including browsers, Settings, and overlays. Reuse the shared divider owner; preserve the fixed 50/50 layout and RHD placement. This does not change horizontal separators within lists or popups.
+- Rotate both Animated assets 90 degrees clockwise and center them on the pane boundary. Keep Vertical visualizer white and preserve Color line’s original colors. Scale each asset proportionally to the shared reference height, retaining its own aspect ratio without changing pane sizes. It is decorative, not driven by audio amplitude or frequency data.
+- Loop the supplied animation at its original speed while playback is playing. Freeze its current frame while paused or stopped, and resume from that frame when playback starts again. When no track is selected, display its first frame. Do not introduce audio-analysis permissions or microphone capture.
+- Suspend animation when the app is backgrounded or the divider is not rendered. When visible again, follow the current playback state without initiating playback. Preserve animation continuity through normal screen changes using the shared owner; no process-persistent animation frame is required.
+- Reuse existing shared controls, settings persistence/error rollback, and layout scaling. Settings remains exempt from automatic browsing return. Existing playback and queue state remain independent of divider edits.
 
 #### Background settings redesign — implemented
 
 Agreed on 2026-11-23. References under `design/screens/settings-screen/`: `01-settings-redesigned-drop-down-collapsed.png`, `02-settings-redesigned-drop-down-expanded.png`, and `03-settings-customize-solid-colors.png`. Use updated assets under `design/assets/settings-screen/`, including `drop-down.svg`, `customize-button.svg`, and `reset-all-button.svg`. This specification supersedes the previous tab-based background selector.
 
 - Appearance > Background opens the new Background screen with Background type dropdown, Customize, and Reset all. Reuse existing shared Back, volume, transport, clock, split layout, RHD placement, and Settings interaction rules.
-- The dropdown contains Solid color, Gradient, and Album art. Indicate the active type with both its radio button and slight row highlight. Album art remains disabled until the planned embedded-art background feature below is implemented; then it becomes selectable with Customize disabled.
+- The dropdown contains Solid color, Gradient, and Album art. Indicate the active type with both its radio button and slight row highlight. Album art is selectable. Customize opens the Blur album art toggle.
 - Choosing an enabled type applies and saves its remembered preset immediately, collapses the dropdown, and stays on the Background screen. Selecting Gradient does not automatically navigate to its choices; Customize opens those choices.
 - Remember the last chosen solid preset and gradient preset independently across restarts. Each initially defaults to its own Default preset. Switching from Indigo to Gradient and back to Solid color restores Indigo; a type switch does not reset its remembered preset.
 - Show “Solid color (Default)” in the collapsed dropdown and its solid-type option when the remembered solid preset is Default. Show “Solid color” when that preset is Indigo, Coffee, or Grey. Keep Gradient and Album art labels unchanged.
-- Customize opens the choices for the active type. Retain the existing Solid presets Default (black), Indigo, Coffee, Grey and Gradient presets Default, Modern, Potion, Lava, with existing swatches/selection indicators. Remove both Normal and Gradient tabs from these choice screens.
+- Customize opens the choices for the active type. Retain the existing Solid presets Default (black), Indigo, Coffee, Grey and Gradient presets Default, Modern, Law, Potion, Lava, with existing swatches/selection indicators. Remove both Normal and Gradient tabs from these choice screens.
 - Selecting a preset applies and saves it immediately and leaves the user on the customization screen. There is no Save button. Existing persistence failure rollback/error behavior applies to both type and preset changes.
-- Reset all opens a confirmation with the exact message “Reset background to default?” and Cancel/Reset actions. Cancel changes nothing. Confirming activates Solid color and sets its remembered preset to Default, updates the label to “Solid color (Default)”, and stays on the Background screen. Preserve the remembered gradient preset and all other Appearance settings.
+- Reset all opens a confirmation with the exact message “Reset background to default?” and Cancel/Reset actions. Cancel changes nothing. Confirming activates Solid color and sets its remembered preset to Default, updates the label to “Solid color (Default)”, turns Blur album art off, and stays on the Background screen. Preserve the remembered gradient preset and all other Appearance settings.
 - Back first closes an expanded dropdown without changing selection. Tapping its top line/arrow toggles it closed; tapping outside also dismisses it and consumes that dismissal tap so controls underneath do not activate.
 - With the dropdown closed, ordinary app Back and Android Back follow Customize > Background > Settings. Long-pressing the shared Back button returns to the main player under the existing rules. Settings remains exempt from automatic browsing return.
 - Preserve existing saved background choices on upgrade: derive active type and its remembered preset from the saved selection, and initialize any previously unrecorded other-type preset to Default. Do not reset the user's applied background merely because the selector UI changes.
@@ -575,7 +591,7 @@ Recording and analysis: `build/visual-comparison/dropdown-immersive/`.
 
 Agreed on 2026-11-23. Reference: `design/screens/main-player-screen/02-main-player-album-art-bkg.png`. Enable Album art in the existing Background type dropdown when this feature is implemented.
 
-- Selecting Album art saves the type, collapses the dropdown, and retains the independent remembered solid/gradient presets. Disable Customize for this type: cropping, darkening, delay, and fade duration are fixed. Existing save-failure rollback and confirmed Reset all behavior still apply.
+- Selecting Album art saves the type, collapses the dropdown, and retains the independent remembered solid/gradient presets. Customize exposes the Blur album art toggle below; cropping, darkening, delay, and fade duration remain fixed. Existing save-failure rollback and confirmed Reset all behavior still apply.
 - Use only artwork embedded in the selected audio track. Do not use configured overrides, folder images, online art, or the generic missing-art placeholder. No new artwork picker is included.
 - Render one centered image across the full main-player background behind both panes. Scale proportionally to fill, cropping overflow without stretching or tiling. Apply a 70%-opaque black overlay to the background image only; leave foreground artwork, text, controls, and clock at their existing appearance.
 - Main-player Queues, Track info, Manage playlists (including its nested prompt), and the app drawer retain this background behind their existing surfaces. These are explicit exceptions to the main-player-only scope. When those flows originate from browsing/Settings, their background follows that originating screen instead.
@@ -617,6 +633,19 @@ shuffle preparation suspended. The API 23 album-art visual comparison is under
 `build/visual-comparison/album-art-timing/`; normal launch was restored afterward.
 These are emulator checks; physical head-unit and representative-library acceptance
 remain pending.
+
+#### Album art background blur toggle — implemented
+
+Agreed on 2026-11-27. Extend Background > Album art > Customize with a single toggle labeled “Blur album art”, reusing existing Settings layout and toggle controls.
+
+- Enable Customize for Album art. Blur defaults off for both new installations and existing preferences without this setting. Persist it independently across restarts and switches between background types.
+- Use one fixed, moderate blur strength with no strength slider. The implementation uses three edge-clamped box passes with radius 2.5% of the viewport long edge, on a cropped copy capped at 256 pixels; perceived strength scales with the display.
+- Blur only the embedded-art background image, before applying the existing 70%-opaque black overlay. Keep foreground album artwork, text, clock, controls, and popup surfaces sharp.
+- Follow the existing Album art background scope, including its permitted main-player overlays. Solid/gradient backgrounds and black missing-art fallback are unaffected. Preserve centered proportional cropping, artwork source rules, and current selection-cause timing/500 ms transition behavior.
+- Toggle changes apply and save immediately without a Save button or the three-second Previous/Next delay. Update the currently displayed background as soon as processing is ready; do not restart or bypass a pending track-change delay. The latest blur preference must also apply to incoming artwork when it becomes eligible.
+- Do image processing off the UI thread using bounded, display-sized resources. Prevent outdated blur/track results from replacing newer state when toggling rapidly or changing tracks/types. Preserve API 23 support; use the compatible CPU implementation rather than newer platform blur APIs.
+- Preserve existing settings save-failure rollback/error behavior. Background Reset all retains its exact confirmation “Reset background to default?”; Cancel changes nothing, while Reset activates Solid Default and turns blur off, preserving the remembered gradient preset and unrelated settings. Divider reset does not change blur.
+- Normal app/system Back returns from Album art Customize to Background. Long-press Back returns to the main player. Reuse Settings' exemption from automatic browsing return and preserve playback/queue state throughout.
 
 #### Opt-in autoplay and boot opening
 
@@ -960,12 +989,16 @@ Implementation started 2026-11-12: compatible Media3/Room runtime versions are p
 
 ### Phase 2 — Visual shell and onboarding
 
+- Album art Customize implemented with the persisted Blur album art toggle, fixed moderate background-only blur, API 23 CPU processing off-main, and Background-reset integration.
+
+- Divider redesign implemented: shared type dropdown, remembered Static presets, rotated animated Vertical visualizer, playback/lifecycle-aware looping and freezing, confirmed reset, and legacy appearance migration. See Divider acceptance below for device checks.
+
 - Complete broader platform acceptance for the implemented app drawer redesign (references 03–05 under `design/screens/app-drawer/`), especially package-change edge cases and physical head-unit keyboard/audio-focus behavior.
 - Implement optional Launcher mode and references 051–052: Advanced setting and system Home workflow, actual default-status tracking/safe disable, app discovery and drawer, RHD, fading/inactivity integration, and Home-versus-boot launch handling. Keep normal app entry available and validate compatibility without making launcher mode the default.
 
 - Implement design tokens, supplied branding, responsive fixed-split shell, clock/date formatting, background presets, and persistent controls.
-- Background settings redesign implemented: type dropdown, remembered solid/gradient presets, tab-free Customize screens, disabled Album art placeholder, confirmed reset to Solid Default, and compatible saved-selection migration.
-- Album art background implemented: embedded-art loading, centered darkened fill, main-player overlay exceptions, three-second Previous/Next delay, 500 ms outgoing fade, black fallback, stale-work cancellation, and selectable persisted type with Customize disabled.
+- Background settings redesign implemented: type dropdown, remembered solid/gradient presets, tab-free Customize screens, Album art blur customization, confirmed reset to Solid Default, and compatible saved-selection migration.
+- Album art background implemented: embedded-art loading, centered darkened fill, main-player overlay exceptions, three-second Previous/Next delay, 500 ms outgoing fade, black fallback, stale-work cancellation, and selectable persisted type with Customize exposing the blur toggle.
 - Album art transition timing updated on 2026-11-24: selection deadlines ensure only Previous/Next commands delay artwork by three seconds; automatic advancement, browser/Queue selection, and enabling the type transition as soon as ready. Retain the 500 ms fade and cancel stale waits/results.
 - Shell integration implemented: persist the first unfinished onboarding step, share real folder/exclusion management with Settings, report settings write failures and restore saved values, keep splash/setup full-screen, suppress demo autoplay on setup completion, and implement confirmed, replayable library/queue/membership removal. The independent off-by-default boot-opening preference is already implemented. Real scanning, imported records, playback-service integration, and invalidation of future workers remain in the library/playback phases. See README’s Shell and onboarding integration section.
 - Implement fresh-start-only splash branding from reference 029, readiness-gated routing, and a 300 ms exit fade. Coordinate Android launch themes with the single-activity UI, preserving paused restoration and allowing scanning to continue after entry.
@@ -1106,15 +1139,40 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 - Test Open app after boot independently from autoplay with all four switch combinations. Defaults are both off. Validate unsupported boot opening and manual-launch fallback without claiming Android/OEM restrictions are bypassed.
 - Verify screen-awake request while visible, including paused and Settings, and its release in background. Display-off is not a head-unit sleep signal. Test sleep/boot/output behavior on representative head units; emulator results alone do not establish platform guarantees.
 
+### Divider settings redesign acceptance
+
+Color line checks (2026-11-27): both Animated presets and preset memory pass JVM regression tests; all four divider UI/animation tests pass on API 23 and API 29. Debug/test APKs, compatibility and lint pass. Color line retains its colors, 90-degree rotation, original aspect ratio and playback/lifecycle behavior; captures are under `build/visual-comparison/color-line/`. Its source starts with zero-width shapes and includes a blank tail in each loop.
+
+Implementation checks (2026-11-27): debug/test APKs, lint and offline/API compatibility passed; 212 JVM tests passed with the opt-in shuffle measurement skipped. Divider UI/animation tests and shared Background UI tests passed on API 23 and API 29 emulators. API 23 captures cover the selector and rotated Vertical visualizer; physical head-unit acceptance remains outstanding.
+
+- Verify None (Default), Static, and Animated dropdown options, active radio/highlight, immediate persistence, and disabled Customize for None. Static Customize shows only Line/Dotted/Squiggly/Beam; Animated Customize shows Vertical visualizer and Color line.
+- Switch types and restart to verify retained Static choice and saved type. Verify new installs show no divider and upgrades preserve existing visible styles, including legacy hidden and straight-line values.
+- Confirm exact reset message “Reset divider to default?”; Cancel changes nothing, Reset activates None while retaining Static and Animated memory and other appearance settings.
+- Check dropdown toggle, Back priority, consumed outside dismissal taps, Customize > Divider > Settings navigation, long-press Back, and persistence failure rollback.
+- Compare the rotated white Vertical visualizer with the reference on small/wide landscapes and RHD. Verify proportional scaling, centered placement, unchanged 50/50 split, and consistency wherever the central divider appears.
+- Verify decorative looping at source speed during playback, frame freezing on pause/stop, resumption from that frame, and first frame with no selected track. Confirm backgrounding/hidden divider suspends animation and foreground return follows playback state without starting audio.
+- Verify divider changes and screen navigation preserve playback/queue state and other separators, with responsive controls during animation.
+
 ### Background settings redesign acceptance
 
 - Match collapsed/expanded and solid-customization references, using updated SVGs and existing shared controls. Verify active-type radio/highlight, unchanged preset swatches, and absence of Normal/Gradient tabs on both customization screens.
 - Start with Solid Default and verify “Solid color (Default)”. Choose Indigo and verify “Solid color”; switch to Gradient, choose a preset, and switch back to restore Indigo. Restart and verify both remembered presets and active type survive.
 - Verify type selection applies immediately and collapses the dropdown without navigating; Customize opens only the active type's choices. Preset selection stays on its choices screen and saves without a Save action.
-- Verify Album art is selectable and persisted while Customize is disabled.
+- Verify Album art is selectable and persisted; Customize opens its toggle screen.
 - Reset confirmation uses exactly “Reset background to default?”; Cancel preserves all state. Reset activates Solid Default, restores its Default label, retains the remembered gradient preset, and leaves other Appearance settings intact.
 - Verify Back, top-line/arrow tap, and outside tap close the dropdown without selection changes or accidental activation underneath. Check ordinary navigation hierarchy and long-press Back to player.
 - Verify upgrade preserves the existing applied solid/gradient choice, missing remembered choices initialize safely, save failure rolls back with an error, and settings interactions preserve playback and avoid automatic return.
+
+### Album art background blur acceptance
+
+Implementation checks (2026-11-27): debug/test APK builds, lint and offline/API compatibility passed. JVM suite: 220 passed, one opt-in shuffle measurement skipped. All 12 focused Background UI and image-processing tests passed across API 23 and API 29. API 23 off/on captures confirm softened background with sharp foreground cover and controls; CPU image tests cover detailed and low-resolution sources at 800×480 and 1920×1080. Physical head-unit acceptance remains outstanding.
+
+- Verify Album art Customize exposes only the Blur album art toggle, initially off for new and upgraded preferences, and saves its state across restart and background-type changes.
+- Compare off/on with detailed and low-resolution embedded covers at supported screen sizes: moderate blur affects only the background, with existing darkening/crop preserved and foreground cover/text/controls sharp.
+- Verify scope across the main player and permitted overlays; non-art backgrounds and missing-art black remain unchanged.
+- Toggle on/off while paused and playing without the transport delay. Test rapid toggles, track/type changes, pending Previous/Next delays, and active fades; the final image must use the latest eligible track and blur preference without stale updates.
+- Verify Background reset confirmation, cancellation, and confirmed Solid Default plus blur-off behavior; preserve gradient memory and unrelated settings. Verify Divider reset leaves blur untouched.
+- Verify Back/long-press Back, saving-error rollback, responsive controls, and uninterrupted playback. Validate visual output and processing behavior on API 23 and a newer Android version.
 
 ### Album art background acceptance
 
@@ -1125,7 +1183,7 @@ Implementation started 2026-11-12. The initial real-audio slice connects the exi
 - During a pending Previous/Next delay, select from a browser/Queue or advance automatically and verify the old wait is cancelled. A further Previous/Next change starts a fresh wait. Verify seeks, ±10 seconds, and pause/resume do not restart it.
 - Delay decoding beyond three seconds; retain the current background until completion and reject stale results after further track/type changes. Verify identical embedded covers do not trigger redundant fades.
 - Verify main-player Queues, Track info, Manage playlists/naming, and app drawer retain the artwork; menus, browsers, Settings, and their overlays use the remembered solid color. Returning to the player uses eligible prepared artwork immediately or only the remaining delay.
-- Enable Album art and verify transition as soon as artwork is ready without an artificial delay, disabled Customize, saved type, and preserved solid/gradient choices. Switch types or confirm Reset all during waiting/fading and verify immediate preset application with no late artwork override.
+- Enable Album art and verify transition as soon as artwork is ready without an artificial delay, access to the blur Customize screen, saved type, and preserved solid/gradient choices. Switch types or confirm Reset all during waiting/fading and verify immediate preset application with no late artwork override.
 - Verify responsive navigation/transport and uninterrupted playback during preparation, paused behavior, cold startup with black initial fallback, and existing persistence rollback behavior.
 
 ### Launcher mode and app drawer acceptance

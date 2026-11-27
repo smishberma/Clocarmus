@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Convert the supplied SVGs to Android vectors. Requires Inkscape, a JDK, and resolved Gradle dependencies."""
 import argparse
+import shutil
 from pathlib import Path
 import subprocess
 import xml.etree.ElementTree as ET
@@ -9,11 +10,20 @@ ET.register_namespace('', 'http://www.w3.org/2000/svg')
 ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--group', choices=('main-player', 'menu-page', 'track-menu', 'shared', 'playlists-screen', 'track-collections', 'folders-screen', 'long-press', 'queue-screen', 'settings-screen', 'welcome-onboarding', 'app-drawer', 'about-sreen'), help='Import only one asset directory')
+parser.add_argument('--group', choices=('main-player', 'menu-page', 'track-menu', 'shared', 'playlists-screen', 'track-collections', 'folders-screen', 'long-press', 'queue-screen', 'settings-screen', 'welcome-onboarding', 'app-drawer', 'about-sreen', 'animated-dividers'), help='Import only one asset directory')
 parser.add_argument('--asset', help='Import only this SVG stem, for example no-album-art')
 args = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[1]
+if args.group in (None, 'animated-dividers'):
+    raw = ROOT / 'app/src/main/res/raw'
+    raw.mkdir(parents=True, exist_ok=True)
+    for source, target in [('equalizer', 'divider_equalizer'), ('Color-Line', 'divider_color_line')]:
+        if args.asset in (None, source):
+            shutil.copyfile(ROOT / f'design/assets/animated-dividers/{source}.json', raw / f'{target}.json')
+if args.group == 'animated-dividers':
+    raise SystemExit(0)
+
 WORK = ROOT / 'build/svg-import'
 DEST = ROOT / 'app/src/main/res/drawable'
 WORK.mkdir(parents=True, exist_ok=True)
@@ -31,6 +41,14 @@ for source in sorted((ROOT / 'design/assets').rglob('*.svg')):
     if args.group and source.parent.name != args.group:
         continue
     if args.asset and source.stem != args.asset:
+        continue
+    if source.parent.name == 'settings-screen' and source.stem == 'Law-gradient':
+        # Android vectors cannot preserve the transformed elliptical radial gradients.
+        target = DEST.parent / 'drawable-nodpi/settings_law_gradient.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['inkscape', str(source), '--export-type=png',
+                        '--export-width=1644', f'--export-filename={target}'], check=True)
+        print(target.relative_to(ROOT))
         continue
     name = source.stem.replace('-', '_')
     prefix = {'menu-page': 'menu', 'track-menu': 'track', 'playlists-screen': '', 'track-collections': 'collections', 'folders-screen': 'folder', 'long-press': 'options', 'queue-screen': 'queue', 'settings-screen': 'settings', 'welcome-onboarding': 'welcome', 'app-drawer': 'drawer', 'about-sreen': ''}.get(source.parent.name, 'player')

@@ -10,6 +10,7 @@ internal enum class PlayerBackground(val label: String, val color: Color, @Drawa
     COFFEE("Coffee", Color(0xff502c14)), GREY("Grey", Color(0xff4d4d4d)),
     GRADIENT_DEFAULT("Default", Color.Black, R.drawable.settings_default_gradient),
     GRADIENT_MODERN("Modern", Color.Black, R.drawable.settings_modern_gradient),
+    GRADIENT_LAW("Law", Color.Black, R.drawable.settings_law_gradient),
     GRADIENT_POTION("Potion", Color.Black, R.drawable.settings_potion_gradient),
     GRADIENT_LAVA("Lava", Color.Black, R.drawable.settings_lava_gradient),
     ALBUM_ART("Album art", Color.Black)
@@ -19,7 +20,12 @@ internal enum class BackgroundType { SOLID, GRADIENT, ALBUM_ART }
 // Keep SEGMENTED as the stored key so existing LCD selections survive the font redesign.
 internal enum class ClockStyle(val label: String) { DEFAULT("Default"), VERTICAL("Vertical"), SEGMENTED("LCD"), DOT_MATRIX("Dot matrix") }
 // Preserve stored keys so existing divider selections keep their appearance.
-internal enum class DividerStyle(val label: String) { HIDDEN("Default"), DEFAULT("Line"), DOTTED("Dotted"), SQUIGGLY("Squiggly"), BEAM("Beam") }
+internal enum class DividerStyle(val label: String) { HIDDEN("None (Default)"), DEFAULT("Line"), DOTTED("Dotted"), SQUIGGLY("Squiggly"), BEAM("Beam"), EQUALIZER("Vertical visualizer"), COLOR_LINE("Color line") }
+
+internal enum class DividerType(val label: String) { NONE("None (Default)"), STATIC("Static"), ANIMATED("Animated") }
+internal val staticDividerStyles = listOf(DividerStyle.DEFAULT, DividerStyle.DOTTED, DividerStyle.SQUIGGLY, DividerStyle.BEAM)
+
+internal val animatedDividerStyles = listOf(DividerStyle.EQUALIZER, DividerStyle.COLOR_LINE)
 
 /** These source IDs belong to the existing demo tree, not Android storage grants. */
 internal data class PlayerSettings(
@@ -30,8 +36,36 @@ internal data class PlayerSettings(
     val sources: Set<String> = setOf("music", "oriental", "mix"), val exclusions: Set<String> = emptySet(),
     val rightHandDrive: Boolean = false, val openAfterBoot: Boolean = false,
     val solidBackground: PlayerBackground = background.takeIf { it.gradientAsset == null && it != PlayerBackground.ALBUM_ART } ?: PlayerBackground.DEFAULT,
-    val gradientBackground: PlayerBackground = background.takeIf { it.gradientAsset != null } ?: PlayerBackground.GRADIENT_DEFAULT
+    val gradientBackground: PlayerBackground = background.takeIf { it.gradientAsset != null } ?: PlayerBackground.GRADIENT_DEFAULT,
+    val staticDivider: DividerStyle = divider.takeIf { it in staticDividerStyles } ?: DividerStyle.DEFAULT,
+    val animatedDivider: DividerStyle = divider.takeIf { it in animatedDividerStyles } ?: DividerStyle.EQUALIZER,
+    val blurAlbumArt: Boolean = false
 ) {
+    val dividerType: DividerType
+        get() = when (divider) {
+            DividerStyle.HIDDEN -> DividerType.NONE
+            DividerStyle.EQUALIZER, DividerStyle.COLOR_LINE -> DividerType.ANIMATED
+            else -> DividerType.STATIC
+        }
+
+    fun selectStaticDivider(style: DividerStyle): PlayerSettings {
+        require(style in staticDividerStyles)
+        return copy(divider = style, staticDivider = style)
+    }
+
+    fun selectAnimatedDivider(style: DividerStyle): PlayerSettings {
+        require(style in animatedDividerStyles)
+        return copy(divider = style, animatedDivider = style)
+    }
+
+    fun selectDividerType(type: DividerType): PlayerSettings = copy(divider = when (type) {
+        DividerType.NONE -> DividerStyle.HIDDEN
+        DividerType.STATIC -> staticDivider
+        DividerType.ANIMATED -> animatedDivider
+    })
+
+    fun resetDivider(): PlayerSettings = selectDividerType(DividerType.NONE)
+
     val backgroundType: BackgroundType
         get() = when {
             background == PlayerBackground.ALBUM_ART -> BackgroundType.ALBUM_ART
@@ -56,7 +90,7 @@ internal data class PlayerSettings(
             BackgroundType.ALBUM_ART -> PlayerBackground.ALBUM_ART
         })
 
-    fun resetBackground(): PlayerSettings = selectBackground(PlayerBackground.DEFAULT)
+    fun resetBackground(): PlayerSettings = selectBackground(PlayerBackground.DEFAULT).copy(blurAlbumArt = false)
 
     fun folderTree(tree: FolderTree): FolderTree = FolderTree(tree.entries.filter { entry ->
         tree.source(entry.id)?.id in sources && generateSequence(entry) { tree.get(it.parent) }.none { it.id in exclusions }
@@ -66,23 +100,38 @@ internal data class PlayerSettings(
 internal fun loadPlayerSettings(prefs: SharedPreferences): PlayerSettings {
     fun <T : Enum<T>> choice(key: String, values: Array<T>, default: T) = values.firstOrNull { it.name == prefs.getString(key, null) } ?: default
     val background = choice("background", PlayerBackground.entries.toTypedArray(), PlayerBackground.DEFAULT)
+    // Legacy DEFAULT rendered a line; HIDDEN rendered nothing, regardless of labels.
+    val legacyDivider = choice("divider", DividerStyle.entries.toTypedArray(), DividerStyle.HIDDEN)
+    val rememberedDivider = choice("staticDivider", staticDividerStyles.toTypedArray(),
+        legacyDivider.takeIf { it in staticDividerStyles } ?: DividerStyle.DEFAULT)
+    val rememberedAnimation = choice("animatedDivider", animatedDividerStyles.toTypedArray(),
+        legacyDivider.takeIf { it in animatedDividerStyles } ?: DividerStyle.EQUALIZER)
+    val type = choice("dividerType", DividerType.entries.toTypedArray(), when (legacyDivider) {
+        DividerStyle.HIDDEN -> DividerType.NONE
+        DividerStyle.EQUALIZER, DividerStyle.COLOR_LINE -> DividerType.ANIMATED
+        else -> DividerType.STATIC
+    })
     return PlayerSettings(prefs.getBoolean("autoplay", false), prefs.getBoolean("statusBar", false),
         prefs.getBoolean("disableFade", false), background,
         choice("clock", ClockStyle.entries.toTypedArray(), ClockStyle.DEFAULT), prefs.getBoolean("twentyFourHour", false),
-        choice("divider", DividerStyle.entries.toTypedArray(), DividerStyle.HIDDEN),
+        when (type) { DividerType.NONE -> DividerStyle.HIDDEN; DividerType.STATIC -> rememberedDivider; DividerType.ANIMATED -> rememberedAnimation },
         prefs.getStringSet("sources", setOf("music", "oriental", "mix"))!!.toSet(), prefs.getStringSet("exclusions", emptySet())!!.toSet(),
         prefs.getBoolean("rightHandDrive", false), prefs.getBoolean("openAfterBoot", false),
         // The legacy applied selection remains authoritative, including on upgrade.
         if (background.gradientAsset == null && background != PlayerBackground.ALBUM_ART) background else
             choice("solidBackground", PlayerBackground.entries.filter { it.gradientAsset == null && it != PlayerBackground.ALBUM_ART }.toTypedArray(), PlayerBackground.DEFAULT),
         if (background.gradientAsset != null) background else
-            choice("gradientBackground", PlayerBackground.entries.filter { it.gradientAsset != null }.toTypedArray(), PlayerBackground.GRADIENT_DEFAULT))
+            choice("gradientBackground", PlayerBackground.entries.filter { it.gradientAsset != null }.toTypedArray(), PlayerBackground.GRADIENT_DEFAULT), rememberedDivider, rememberedAnimation,
+        prefs.getBoolean("blurAlbumArt", false))
 }
 internal fun savePlayerSettings(prefs: SharedPreferences, settings: PlayerSettings) {
     prefs.edit().putBoolean("autoplay", settings.autoplay).putBoolean("statusBar", settings.statusBar)
         .putBoolean("disableFade", settings.disableFade).putString("background", settings.background.name)
         .putString("solidBackground", settings.solidBackground.name).putString("gradientBackground", settings.gradientBackground.name)
         .putString("clock", settings.clock.name).putBoolean("twentyFourHour", settings.twentyFourHour)
+        .putString("dividerType", settings.dividerType.name).putString("staticDivider", settings.staticDivider.name)
+        .putString("animatedDivider", settings.animatedDivider.name)
+        .putBoolean("blurAlbumArt", settings.blurAlbumArt)
         .putString("divider", settings.divider.name).putStringSet("sources", settings.sources)
         .putStringSet("exclusions", settings.exclusions).putBoolean("rightHandDrive", settings.rightHandDrive).putBoolean("openAfterBoot", settings.openAfterBoot).commit().also { check(it) { "Could not save settings. Please try again." } }
 }

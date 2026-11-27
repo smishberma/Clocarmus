@@ -29,30 +29,32 @@ import androidx.compose.ui.unit.dp
 import com.example.clocarmus.R
 import kotlin.math.roundToInt
 
-internal data class BackgroundDropdown(
+internal data class AppearanceDropdown(
     val grid: PlayerGrid,
     val settings: PlayerSettings,
     val anchor: IntOffset,
     val onDismiss: () -> Unit,
-    val onChange: (PlayerSettings) -> Unit
+    val onChange: (PlayerSettings) -> Unit,
+    val divider: Boolean = false
 )
 
-internal val LocalBackgroundDropdownHost = staticCompositionLocalOf<(BackgroundDropdown?) -> Unit> { {} }
+internal val LocalAppearanceDropdownHost = staticCompositionLocalOf<(AppearanceDropdown?) -> Unit> { {} }
 
 @Composable
-internal fun BackgroundTypeSelector(
+internal fun AppearanceTypeSelector(
     grid: PlayerGrid,
     settings: PlayerSettings,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
-    onChange: (PlayerSettings) -> Unit
+    onChange: (PlayerSettings) -> Unit,
+    divider: Boolean = false
 ) {
     var anchor by remember { mutableStateOf(IntOffset.Zero) }
-    val host = LocalBackgroundDropdownHost.current
+    val host = LocalAppearanceDropdownHost.current
     val change by rememberUpdatedState(onChange)
     val expand by rememberUpdatedState(onExpandedChange)
-    DisposableEffect(expanded, anchor, grid.scale, settings, host) {
-        host(if (expanded) BackgroundDropdown(grid, settings, anchor, { expand(false) }, { change(it) }) else null)
+    DisposableEffect(expanded, anchor, grid.scale, settings, host, divider) {
+        host(if (expanded) AppearanceDropdown(grid, settings, anchor, { expand(false) }, { change(it) }, divider) else null)
         onDispose { host(null) }
     }
     val shape = RoundedCornerShape((61f * grid.scale).dp)
@@ -60,20 +62,20 @@ internal fun BackgroundTypeSelector(
         val position = it.positionInRoot()
         anchor = IntOffset(position.x.roundToInt(), position.y.roundToInt())
     }.clip(shape).border((2.5f * grid.scale).dp, Color.White, shape)) {
-        BackgroundTypeHeader(grid.scale, settings, expanded) { onExpandedChange(!expanded) }
+        AppearanceTypeHeader(grid.scale, settings, expanded, divider) { onExpandedChange(!expanded) }
     }
 }
 
 /** Render above both panes in the Activity window, retaining its focus and immersive mode. */
 @Composable
-internal fun BackgroundDropdownOverlay(dropdown: BackgroundDropdown) {
+internal fun AppearanceDropdownOverlay(dropdown: AppearanceDropdown) {
     val s = dropdown.grid.scale
     val settings = dropdown.settings
     val anchor = dropdown.anchor
     val density = LocalDensity.current
     val shape = RoundedCornerShape((61f * s).dp)
     BackHandler(onBack = dropdown.onDismiss)
-    Box(Modifier.fillMaxSize().semantics { paneTitle = "Background type" }.pointerInput(dropdown.onDismiss) {
+    Box(Modifier.fillMaxSize().semantics { paneTitle = if (dropdown.divider) "Divider type" else "Background type" }.pointerInput(dropdown.onDismiss) {
         detectTapGestures { dropdown.onDismiss() }
     }) {
         // Keep the shared Back control above the touch shield for long-press return.
@@ -87,17 +89,16 @@ internal fun BackgroundDropdownOverlay(dropdown: BackgroundDropdown) {
         Column(Modifier.offset { anchor }.size((780f * s).dp, (620f * s).dp).clip(shape)
             .background(Color.Black).border((2.5f * s).dp, Color.White, shape)
             .pointerInput(Unit) { detectTapGestures {} }) {
-            BackgroundTypeHeader(s, settings, true, dropdown.onDismiss)
+            AppearanceTypeHeader(s, settings, true, dropdown.divider, dropdown.onDismiss)
             Spacer(Modifier.height((8f * s).dp))
             Column(Modifier.fillMaxWidth().selectableGroup()) {
-                listOf(settings.solidBackgroundLabel, "Gradient", "Album art").forEachIndexed { index, label ->
-                    val type = BackgroundType.entries[index]
-                    val selected = type == settings.backgroundType
+                (if (dropdown.divider) DividerType.entries.map { it.label } else listOf(settings.solidBackgroundLabel, "Gradient", "Album art")).forEachIndexed { index, label ->
+                    val selected = if (dropdown.divider) index == settings.dividerType.ordinal else index == settings.backgroundType.ordinal
                     Row(Modifier.fillMaxWidth().height((97f * s).dp)
                         .clip(RoundedCornerShape((8f * s).dp))
                         .background(if (selected) Color(0xff333333) else Color.Transparent)
                         .selectable(selected, role = Role.RadioButton) {
-                            dropdown.onChange(settings.selectBackgroundType(type))
+                            dropdown.onChange(if (dropdown.divider) settings.selectDividerType(DividerType.entries[index]) else settings.selectBackgroundType(BackgroundType.entries[index]))
                             dropdown.onDismiss()
                         }.padding(horizontal = (55f * s).dp), verticalAlignment = Alignment.CenterVertically) {
                         PlayerLabel(label, Modifier.weight(1f).fillMaxHeight(), 40f * s, Alignment.CenterStart)
@@ -111,12 +112,12 @@ internal fun BackgroundDropdownOverlay(dropdown: BackgroundDropdown) {
 }
 
 @Composable
-private fun BackgroundTypeHeader(s: Float, settings: PlayerSettings, expanded: Boolean, onToggle: () -> Unit) {
+private fun AppearanceTypeHeader(s: Float, settings: PlayerSettings, expanded: Boolean, divider: Boolean, onToggle: () -> Unit) {
     Row(Modifier.fillMaxWidth().height((122f * s).dp)
         .clickable(role = Role.Button, onClick = onToggle)
         .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
         .padding(horizontal = (55f * s).dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayerLabel(when (settings.backgroundType) {
+        PlayerLabel(if (divider) settings.dividerType.label else when (settings.backgroundType) {
             BackgroundType.SOLID -> settings.solidBackgroundLabel
             BackgroundType.GRADIENT -> "Gradient"
             BackgroundType.ALBUM_ART -> "Album art"

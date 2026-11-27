@@ -44,9 +44,10 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
         "settings-about" -> "About"; "settings-developer" -> "Developer"; "settings-donate" -> "Donate";
         "settings-background-solid", "settings-background-gradient" -> "Customize background";
         "settings-folders" -> "Manage folders"; "settings-background", "settings-background-expanded" -> "Background"; "settings-clock", "settings-clock-vertical", "settings-clock-lcd", "settings-clock-dotmatrix" -> "Clock";
-        "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam" -> "Divider"; else -> "Settings"
+        "settings-divider-dotted", "settings-divider-squiggly", "settings-divider-beam", "settings-divider", "settings-divider-animated" -> "Divider"; else -> "Settings"
     }) }
     var backgroundExpanded by rememberSaveable { mutableStateOf(preview == "settings-background-expanded") }
+    var dividerExpanded by rememberSaveable { mutableStateOf(false) }
     var prompt by rememberSaveable { mutableStateOf<String?>(null) }
     val home = LocalPlayerHome.current
     var homeExitPage by remember { mutableStateOf<String?>(null) }
@@ -57,10 +58,13 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             page = "Settings"
             prompt = null
             backgroundExpanded = false
+            dividerExpanded = false
         }
         onDispose { unregister?.invoke() }
     }
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val solidPresetScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val gradientPresetScroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val privacyScroll = rememberLazyListState()
     val licensesScroll = rememberLazyListState()
     val context = LocalContext.current
@@ -92,8 +96,10 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
     }
     val launcher = (context as? com.example.clocarmus.MainActivity)?.launcher
     val back = {
-        if (backgroundExpanded) backgroundExpanded = false
+        if (dividerExpanded) dividerExpanded = false
+        else if (backgroundExpanded) backgroundExpanded = false
         else if (page == "Settings") onExit() else page = when (page) {
+            "Customize divider" -> "Divider"
             "Customize background" -> "Background"
             "Exclusions" -> "Manage folders"
             "Privacy policy", "Open source licenses", "Developer" -> "About"
@@ -204,33 +210,42 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             AboutDocumentPane(grid, shownPage,
                 if (shownPage == "Privacy policy") "about/privacy_policy.txt" else "about/open_source_licenses.txt",
                 if (shownPage == "Privacy policy") privacyScroll else licensesScroll)
-        } else if (shownPage == "Background") {
+        } else if (shownPage == "Background" || shownPage == "Divider") {
+            val dividerPage = shownPage == "Divider"
             Column(grid.place(95f, 264f, 800f, 100f)) {
-                heading("Background", inset = 0f)
+                heading(shownPage, inset = 0f)
                 gap(8f)
-                heading("Background type", cyan = false, inset = 0f)
+                heading(if (dividerPage) "Divider type" else "Background type", cyan = false, inset = 0f)
             }
-            BackgroundTypeSelector(grid, settings, backgroundExpanded, { backgroundExpanded = it }, onChange)
-            val customizeEnabled = settings.backgroundType != BackgroundType.ALBUM_ART
+            AppearanceTypeSelector(grid, settings, if (dividerPage) dividerExpanded else backgroundExpanded,
+                { if (dividerPage) dividerExpanded = it else backgroundExpanded = it }, onChange, divider = dividerPage)
+            val customizeEnabled = if (dividerPage) settings.dividerType != DividerType.NONE else true
             Image(painterResource(R.drawable.settings_customize_button), "Customize",
                 grid.place(250f, 596f, 500f, 95f).clip(RoundedCornerShape((32f * s).dp))
                     .alpha(if (customizeEnabled) 1f else 0.4f)
-                    .clickable(enabled = customizeEnabled, role = Role.Button) { page = "Customize background" })
+                    .clickable(enabled = customizeEnabled, role = Role.Button) { page = if (dividerPage) "Customize divider" else "Customize background" })
             Image(painterResource(R.drawable.settings_reset_all_button), "Reset all",
                 grid.place(250f, 751f, 500f, 95f).clip(RoundedCornerShape((32f * s).dp))
-                    .clickable(role = Role.Button) { prompt = "background-reset" })
-        } else if (shownPage in setOf("Customize background", "Clock", "Divider")) {
-            Column(grid.place(95f, 264f, 800f, if (shownPage == "Divider") 732f else 800f)) {
-                heading(if (shownPage == "Customize background") "Background" else shownPage, inset = 0f)
+                    .clickable(role = Role.Button) { prompt = if (dividerPage) "divider-reset" else "background-reset" })
+        } else if (shownPage in setOf("Customize background", "Clock", "Customize divider")) {
+            val backgroundPresets = shownPage == "Customize background" && settings.backgroundType != BackgroundType.ALBUM_ART
+            val presetScroll = if (settings.backgroundType == BackgroundType.GRADIENT) gradientPresetScroll else solidPresetScroll
+            Column(grid.place(95f, 264f, 800f, 800f)) {
+                heading(if (shownPage == "Customize background") "Background" else if (shownPage == "Customize divider") settings.dividerType.label else shownPage, inset = 0f)
                 gap(if (shownPage == "Customize background") 28f else 18f)
+                if (shownPage == "Customize background" && settings.backgroundType == BackgroundType.ALBUM_ART) {
+                    toggle("Blur album art", settings.blurAlbumArt, inset = 12f) { onChange(settings.copy(blurAlbumArt = it)) }
+                }
                 if (shownPage == "Clock") {
                     toggle("24-hour clock", settings.twentyFourHour, inset = 12f) { onChange(settings.copy(twentyFourHour = it)) }
                     gap(29f)
                 }
-                Column(Modifier.fillMaxWidth().padding(horizontal = (15f * s).dp).selectableGroup()) {
+                Column(Modifier.fillMaxWidth()
+                    .then(if (backgroundPresets) Modifier.weight(1f).verticalScroll(presetScroll) else Modifier)
+                    .padding(horizontal = (15f * s).dp).selectableGroup()) {
                     when (shownPage) {
                         "Customize background" -> PlayerBackground.entries.filter {
-                            it != PlayerBackground.ALBUM_ART && (it.gradientAsset != null) == (settings.backgroundType == BackgroundType.GRADIENT)
+                            settings.backgroundType != BackgroundType.ALBUM_ART && it != PlayerBackground.ALBUM_ART && (it.gradientAsset != null) == (settings.backgroundType == BackgroundType.GRADIENT)
                         }.forEach {
                             choice(it.label, settings.background == it, it.color, 122f, it.gradientAsset) {
                                 onChange(settings.selectBackground(it))
@@ -240,11 +255,17 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
                         "Clock" -> ClockStyle.entries.forEach {
                             choice(it.label, settings.clock == it, height = 122f) { onChange(settings.copy(clock = it)) }; gap(35f)
                         }
-                        else -> DividerStyle.entries.forEach {
-                            choice(it.label, settings.divider == it) { onChange(settings.copy(divider = it)) }; gap(39f)
+                        else -> (if (settings.dividerType == DividerType.ANIMATED) animatedDividerStyles else staticDividerStyles).forEach {
+                            choice(it.label, settings.divider == it, height = 122f) {
+                                onChange(if (it in animatedDividerStyles) settings.selectAnimatedDivider(it) else settings.selectStaticDivider(it))
+                            }; gap(35f)
                         }
                     }
                 }
+            }
+            if (backgroundPresets && presetScroll.maxValue > 0) {
+                TrackScrollbar(grid, presetScroll, emptyList(), "Background presets", proportional = true,
+                    top = 342f, showAlphabetIndicator = false)
             }
         } else {
             val folderScroll = rememberSaveable(shownPage, saver = ScrollState.Saver) { ScrollState(0) }
@@ -303,16 +324,16 @@ internal fun SettingsPane(grid: PlayerGrid, settings: PlayerSettings, onChange: 
             }
         }
     }
-    if (prompt == "background-reset") {
+    if (prompt == "background-reset" || prompt == "divider-reset") {
         AlertDialog(onDismissRequest = { prompt = null },
-            text = { Text("Reset background to default?") },
+            text = { Text(if (prompt == "divider-reset") "Reset divider to default?" else "Reset background to default?") },
             confirmButton = { TextButton(onClick = {
-                onChange(settings.resetBackground())
+                onChange(if (prompt == "divider-reset") settings.resetDivider() else settings.resetBackground())
                 prompt = null
             }) { Text("Reset") } },
             dismissButton = { TextButton(onClick = { prompt = null }) { Text("Cancel") } })
     }
-    prompt?.takeUnless { it == "background-reset" }?.takeIf { preview != null }?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
+    prompt?.takeUnless { it == "background-reset" || it == "divider-reset" }?.takeIf { preview != null }?.takeUnless { it.startsWith("real-") || it.startsWith("content:") }?.let { target ->
         val available = demoFolderTree.contents(null).filter { it.id !in settings.sources }
         AlertDialog(onDismissRequest = { prompt = null }, title = { Text(when (target) { "add" -> "Add demo folder"; "reset" -> "Remove all libraries?"; else -> "Remove folder?" }) },
             text = {

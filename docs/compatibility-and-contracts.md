@@ -17,9 +17,21 @@ all eight legacy selections and defaults only the unrecorded other type. Invalid
 wrong-type remembered values fall back to that type's Default; the applied selection
 remains authoritative. All three keys share the existing off-main-thread committed save
 and UI rollback/error path. Reset background activates Solid Default and clears only the
-solid memory, retaining the gradient memory and other settings. `ALBUM_ART` is an additive
+solid memory and blur preference, retaining the gradient memory and other settings. `ALBUM_ART` is an additive
 applied selection in the same `background` key; it leaves both preset memories intact.
-Customize is disabled for this type and uses the shared disabled-control appearance (40% opacity).
+Customize exposes only “Blur album art”. The additive `blurAlbumArt` boolean defaults
+false for new and older preferences, persists across type changes, and uses the same
+committed save/rollback path. Background reset clears it; Divider reset preserves it.
+
+Blur uses a background-only copy cropped to the display aspect ratio, with a maximum
+256-pixel long edge. Three separable, edge-clamped CPU box passes use a radius of 2.5%
+of that edge (rounded to pixels), producing a fixed moderate strength proportional to
+the viewport. Canvas sampling and blur run on Dispatchers.Default, work checks cancellation
+between rows, and only the current/outgoing processed layers are cached. This works on
+API 23 without platform RenderEffect or new dependencies. It precedes the unchanged 70%
+black overlay; foreground covers and controls remain sharp. Presentation generations
+reject stale work independently of track eligibility. Toggling updates the displayed layers
+without changing the pending selection deadline or restarting the fade revision.
 
 Album art uses only the local JPEGs extracted from embedded pictures by `readAudio`;
 no folder images, placeholders, or artwork overrides supply the runtime background.
@@ -209,3 +221,25 @@ on API 23; API 31's existing cleanup-return test initially observed MISSING afte
 refresh, then passed in isolation and in a complete 14-test rerun. No production
 cleanup behavior or test timing was changed. These are emulator observations;
 physical head-unit/provider acceptance remains unverified.
+
+## Divider preferences and animation
+
+`dividerType` stores NONE/STATIC/ANIMATED, while `staticDivider` independently remembers
+DEFAULT (Line), DOTTED, SQUIGGLY or BEAM. The existing `divider` key is still written
+with the applied style. When the new keys are absent, legacy HIDDEN means None and
+legacy DEFAULT means Static > Line; the other static values retain their appearance.
+Fresh preferences select None and remember Line. Reset only activates None and retains
+both preset memories. `animatedDivider` independently remembers EQUALIZER (Vertical
+visualizer) or COLOR_LINE (Color line); absent/invalid values default to Vertical
+visualizer, preserving the previous single-animation selection. Writes use the existing background persistence and rollback owner.
+
+The shared shell owns each animation's in-memory frame across screen changes.
+Vertical visualizer uses the supplied 24 fps, 52-frame Lottie; Color line uses
+`Color-Line.json` (400 × 4, approximately 29.97 fps, 60 frames), preserving its
+source colors. Both loop at speed 1 while a track is selected, playback is playing,
+and the Activity is resumed. Pause/stop, backgrounding, and switching away suspend it;
+no selected track displays frame zero (Color line starts with zero-width shapes).
+Returning never starts audio. Each asset rotates 90 degrees clockwise and scales proportionally within the full height of the
+2000 × 1236 reference canvas (including the source’s end padding), independently of pane placement or RHD. It performs no
+audio analysis and adds no permissions or dependencies. Physical head-unit validation
+remains separate from emulator UI checks.

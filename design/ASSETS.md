@@ -155,5 +155,32 @@ and `reset-all-button.svg` are imported as `settings_drop_down.xml`,
 `settings_customize_button.xml` and `settings_reset_all_button.xml`, preserving outlined
 Inter labels. Regenerate with `python3 scripts/import-player-assets.py --group settings-screen --asset STEM`
 for each of those three stems. Existing radio and preset-gradient assets remain in use.
+The Law preset appears directly below Modern and uses `assets/settings-screen/Law-gradient.svg`.
+Regenerate it with `python3 scripts/import-player-assets.py --group settings-screen --asset Law-gradient`.
+It exports to `drawable-nodpi/settings_law_gradient.png` at 1644 pixels wide to preserve
+the SVG's transformed elliptical radial gradients, which Android vectors cannot represent.
+Background preset lists scroll within the customization pane and show the shared
+draggable scrollbar when their content overflows. Solid and gradient scroll positions
+are remembered independently while navigating settings.
 Capture the three references using `scripts/compare-main-player.py --screen settings-background`,
 `--screen settings-background-expanded` and `--screen settings-background-solid`.
+
+## Animated divider
+
+`assets/animated-dividers/equalizer.json` is the supplied Lottie source, copied unchanged
+to `app/src/main/res/raw/divider_equalizer.json`. Regenerate it with
+`python3 scripts/import-player-assets.py --group animated-dividers` (no Inkscape needed).
+The source is 312 × 40, 24 fps, 52 frames. Runtime applies a white color filter and
+90-degree clockwise rotation without changing its timing or geometry. The reference is
+`assets/animated-dividers/visualizer-animated-divider.png`. Use debug
+`settings_preview=settings-divider-animated` to inspect the shared divider, then
+long-press Back to inspect it on the player. The existing static-divider captures now
+open the redesigned type selector; Customize opens the static preset rows.
+
+Color line uses `assets/animated-dividers/Color-Line.json`, copied unchanged to
+`app/src/main/res/raw/divider_color_line.json` by the same animated-dividers import
+group (or `--asset Color-Line`). Its 400 × 4 canvas, original gradient colors, and
+approximately 29.97 fps/60-frame timing are preserved. The shared renderer rotates
+it 90 degrees clockwise at the pane boundary and uses its own 100:1 aspect ratio.
+Its first frame has zero-width shapes, so it becomes visible as playback animates.
+Animated customization remembers either preset independently of the selected type.

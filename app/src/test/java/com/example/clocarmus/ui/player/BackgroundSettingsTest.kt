@@ -29,6 +29,23 @@ class BackgroundSettingsTest {
         } as SharedPreferences
     }
 
+    @Test fun blurDefaultsOffAndPersistsIndependentlyOfBackgroundType() {
+        val prefs = preferences(mutableMapOf("background" to PlayerBackground.ALBUM_ART.name))
+        assertFalse(loadPlayerSettings(prefs).blurAlbumArt)
+        var settings = loadPlayerSettings(prefs).copy(blurAlbumArt = true)
+        BackgroundType.entries.forEach { type ->
+            settings = settings.selectBackgroundType(type)
+            savePlayerSettings(prefs, settings)
+            settings = loadPlayerSettings(prefs)
+            assertTrue(settings.blurAlbumArt)
+            assertEquals(type, settings.backgroundType)
+        }
+        assertTrue(settings.resetDivider().blurAlbumArt)
+        assertFalse(settings.resetBackground().blurAlbumArt)
+        assertEquals(settings.copy(background = PlayerBackground.DEFAULT,
+            solidBackground = PlayerBackground.DEFAULT, blurAlbumArt = false), settings.resetBackground())
+    }
+
     @Test fun everyLegacySelectionSurvivesUpgradeWithOtherTypeDefaulted() {
         PlayerBackground.entries.filter { it != PlayerBackground.ALBUM_ART }.forEach { preset ->
             val settings = loadPlayerSettings(preferences(mutableMapOf("background" to preset.name)))
@@ -76,10 +93,10 @@ class BackgroundSettingsTest {
 
     @Test fun resetOnlyChangesAppliedBackgroundAndSolidMemory() {
         val original = PlayerSettings(clock = ClockStyle.VERTICAL, divider = DividerStyle.BEAM,
-            rightHandDrive = true, statusBar = true, sources = setOf("mix"))
+            rightHandDrive = true, statusBar = true, sources = setOf("mix"), blurAlbumArt = true)
             .selectBackground(PlayerBackground.COFFEE).selectBackground(PlayerBackground.GRADIENT_LAVA)
         val reset = original.resetBackground()
-        assertEquals(original.copy(background = PlayerBackground.DEFAULT, solidBackground = PlayerBackground.DEFAULT), reset)
+        assertEquals(original.copy(background = PlayerBackground.DEFAULT, solidBackground = PlayerBackground.DEFAULT, blurAlbumArt = false), reset)
         assertEquals("Solid color (Default)", reset.solidBackgroundLabel)
         val prefs = preferences()
         savePlayerSettings(prefs, reset)

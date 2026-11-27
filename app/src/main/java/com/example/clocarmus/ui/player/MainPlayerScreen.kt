@@ -118,8 +118,11 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
             "settings-divider-dotted" -> DividerStyle.DOTTED
             "settings-divider-squiggly" -> DividerStyle.SQUIGGLY
             "settings-divider-beam" -> DividerStyle.BEAM
+            "settings-divider-animated" -> DividerStyle.EQUALIZER
             else -> initial.divider
-        }))
+        }).let { selected ->
+            if (selected.divider in staticDividerStyles) selected.selectStaticDivider(selected.divider) else selected
+        })
     }
     val settingsScope = rememberCoroutineScope()
     var settingsBusy by remember { mutableStateOf(false) }
@@ -438,10 +441,10 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     LaunchedEffect(activity?.homeActivation) {
         if ((activity?.homeActivation ?: 0) > 0) homeNavigation.returnToPlayer()
     }
-    var backgroundDropdown by remember { mutableStateOf<BackgroundDropdown?>(null) }
-    val backgroundDropdownHost = remember { { next: BackgroundDropdown? -> backgroundDropdown = next } }
+    var appearanceDropdown by remember { mutableStateOf<AppearanceDropdown?>(null) }
+    val appearanceDropdownHost = remember { { next: AppearanceDropdown? -> appearanceDropdown = next } }
     CompositionLocalProvider(LocalTrackOptions provides trackOptionsEntry, LocalPlayerHome provides homeNavigation,
-        LocalBackgroundDropdownHost provides backgroundDropdownHost,
+        LocalAppearanceDropdownHost provides appearanceDropdownHost,
         LocalLibraryTracks provides if (fixture) demoLibraryTracks else playlistTracks) {
         Box(Modifier.fillMaxSize().background(
             if (settings.backgroundType == BackgroundType.ALBUM_ART) settings.solidBackground.color else settings.background.color
@@ -451,11 +454,11 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                 Image(painterResource(asset), null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
             }
             if (settings.backgroundType == BackgroundType.ALBUM_ART) {
-                AlbumArtBackground(albumArtBackground,
+                AlbumArtBackground(albumArtBackground, blur = settings.blurAlbumArt,
                     visible = paneDestination.root in setOf(PlayerPaneRoot.PLAYER, PlayerPaneRoot.COLLECTIONS, PlayerPaneRoot.QUEUE))
             }
             PlayerPaneLayout(settings.rightHandDrive,
-                if (backgroundDropdown != null) Modifier.clearAndSetSemantics {} else Modifier) {
+                if (appearanceDropdown != null) Modifier.clearAndSetSemantics {} else Modifier) {
                 BoxWithConstraints(Modifier.fillMaxHeight()) {
                     val grid = PlayerGrid(maxWidth.value, maxHeight.value)
                     PlayerSlider(volume, {
@@ -736,8 +739,8 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                     }
                 }
             }
-            PlayerDivider(settings.divider, Modifier.align(Alignment.Center))
-            backgroundDropdown?.let { BackgroundDropdownOverlay(it) }
+            PlayerDivider(settings.divider, Modifier.align(Alignment.Center), playing, selectedTrackId != null)
+            appearanceDropdown?.let { AppearanceDropdownOverlay(it) }
         }
         BackHandler(enabled = optionsTarget != null || infoRequest != null, onBack = closeOptions)
     }

@@ -12,9 +12,35 @@ import java.util.concurrent.atomic.AtomicInteger
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.clocarmus.MainActivity
 
-/** Real Compose navigation, disabled rows and touch shielding on API 23+. */
+/** Real Compose navigation, toggle/reset behavior and touch shielding on API 23+. */
 @Suppress("DEPRECATION")
 class BackgroundSettingsScreenTest : InstrumentationTestCase() {
+    fun testLawIsVisibleBelowModernAndGradientListScrolls() {
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                .putExtra("reference_preview", true).putExtra("settings_preview", "settings-background-gradient"))
+        try {
+            val modern = Rect().also { awaitNode("Modern").getBoundsInScreen(it) }
+            val law = Rect().also { awaitNode("Law").getBoundsInScreen(it) }
+            assertTrue("Law must be visible below Modern", !law.isEmpty && law.top >= modern.bottom)
+            click("Law")
+            assertSelected("Law")
+            awaitNode("Background presets scrollbar")
+            var list = awaitNode("Law")
+            while (!list.isScrollable && list.parent != null) list = list.parent
+            assertTrue("Preset list must scroll", list.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+            instrumentation.waitForIdleSync()
+            click("Lava")
+            assertSelected("Lava")
+            back()
+            click("Customize")
+            assertSelected("Lava")
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
     fun testTypeCustomizationResetAndBackHierarchy() {
         val activity = startBackground()
         try {
@@ -22,7 +48,27 @@ class BackgroundSettingsScreenTest : InstrumentationTestCase() {
             val albumArt = awaitNode("Album art")
             assertTrue(clickable(albumArt).isEnabled)
             click("Album art")
-            assertFalse(clickable(awaitNode("Customize")).isEnabled)
+            assertTrue(clickable(awaitNode("Customize")).isEnabled)
+            click("Customize")
+            assertChecked("Blur album art", false)
+            click("Blur album art")
+            assertChecked("Blur album art", true)
+            back()
+            click("Customize")
+            assertChecked("Blur album art", true)
+            back()
+            click("Reset all")
+            click("Cancel")
+            click("Customize")
+            assertChecked("Blur album art", true)
+            back()
+            click("Reset all")
+            click("Reset")
+            click("Solid color (Default)")
+            click("Album art")
+            click("Customize")
+            assertChecked("Blur album art", false)
+            back()
             click("Album art")
             click("Gradient")
             awaitNode("Customize")
@@ -183,6 +229,14 @@ class BackgroundSettingsScreenTest : InstrumentationTestCase() {
         Intent(instrumentation.targetContext, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             .putExtra("reference_preview", true).putExtra("settings_preview", "settings-background"))
+
+    private fun assertChecked(text: String, expected: Boolean) {
+        repeat(50) {
+            find(text)?.let { if (clickable(it).isChecked == expected) return }
+            Thread.sleep(100)
+        }
+        throw AssertionError("$text did not become checked=$expected")
+    }
 
     private fun assertSelected(text: String) {
         repeat(50) {

@@ -24,6 +24,43 @@ internal data class AlbumArtFrame<T>(
     val transitioning: Boolean = false
 )
 
+/** Presentation work never changes selection eligibility or restarts an in-flight fade. */
+internal class AlbumArtBackgroundPresentation<T>(private val scope: CoroutineScope) {
+    private val mutableFrame = MutableStateFlow(AlbumArtFrame<T>())
+    val frame = mutableFrame.asStateFlow()
+    private var pending: Job? = null
+    private var generation = 0L
+    private var cache = emptyMap<BackgroundArtwork<T>, BackgroundArtwork<T>>()
+
+    fun update(frame: AlbumArtFrame<T>, blur: Boolean, transform: suspend (T) -> T) {
+        pending?.cancel()
+        val request = ++generation
+        if (!blur || (frame.current == null && frame.outgoing == null)) {
+            cache = emptyMap()
+            mutableFrame.value = frame
+            return
+        }
+        pending = scope.launch {
+            val prepared = mutableMapOf<BackgroundArtwork<T>, BackgroundArtwork<T>>()
+            suspend fun prepare(art: BackgroundArtwork<T>?): BackgroundArtwork<T>? = art?.let {
+                prepared[it] ?: (cache[it] ?: it.copy(image = transform(it.image))).also { result -> prepared[it] = result }
+            }
+            val next = frame.copy(current = prepare(frame.current), outgoing = prepare(frame.outgoing))
+            if (request == generation) {
+                // Retain at most the two visible layers, and reject even uncooperative old work.
+                cache = prepared
+                mutableFrame.value = next
+            }
+        }
+    }
+
+    fun close() {
+        pending?.cancel()
+        cache = emptyMap()
+        generation++
+    }
+}
+
 /** Owned outside navigation: selection and mode changes alone invalidate preparation. */
 internal class AlbumArtBackgroundState<T>(private val scope: CoroutineScope) {
     private val mutableFrame = MutableStateFlow(AlbumArtFrame<T>())

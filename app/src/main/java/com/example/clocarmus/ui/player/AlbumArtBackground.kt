@@ -88,8 +88,20 @@ internal fun rememberAlbumArtBackground(
 }
 
 @Composable
-internal fun AlbumArtBackground(state: AlbumArtBackgroundState<ImageBitmap>, visible: Boolean) {
-    val frame by state.frame.collectAsState()
+internal fun AlbumArtBackground(state: AlbumArtBackgroundState<ImageBitmap>, visible: Boolean, blur: Boolean = false) {
+    val sourceFrame by state.frame.collectAsState()
+    val scope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current.density
+    val width = (configuration.screenWidthDp * density).toInt().coerceAtLeast(1)
+    val height = (configuration.screenHeightDp * density).toInt().coerceAtLeast(1)
+    // Recreate on display-size changes so cached crops always match the viewport.
+    val sizedPresentation = remember(width, height) { AlbumArtBackgroundPresentation<ImageBitmap>(scope) }
+    LaunchedEffect(sourceFrame, blur, sizedPresentation) {
+        sizedPresentation.update(sourceFrame, blur) { blurAlbumArtwork(it, width, height) }
+    }
+    DisposableEffect(sizedPresentation) { onDispose { sizedPresentation.close() } }
+    val frame by sizedPresentation.frame.collectAsState()
     val alpha = remember(frame.revision) { Animatable(1f) }
     LaunchedEffect(frame.revision, visible) {
         if (!visible) {
