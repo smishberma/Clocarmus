@@ -10,6 +10,7 @@ import com.example.clocarmus.ui.player.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 
 internal data class AudioDocument(val uri: Uri, val location: String, val name: String, val mime: String, val size: Long, val modified: Long)
@@ -32,8 +33,18 @@ internal suspend fun readAudio(context: Context, document: AudioDocument, id: St
         val mp4 = tag(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) in setOf("audio/mp4", "video/mp4") ||
             document.name.substringAfterLast('.').lowercase(java.util.Locale.ROOT) in setOf("m4a", "mp4", "3gp")
         val taggedDate = if (mp4) null else tag(MediaMetadataRetriever.METADATA_KEY_DATE)
-        val year = releaseYear(taggedYear, taggedDate)
-        val date = taggedYear?.takeIf { releaseYear(it, null) != null } ?: taggedDate
+        val platformYear = releaseYear(taggedYear, taggedDate)
+        val fallbackDate = if (platformYear == null && !mp4) {
+            val coroutineContext = currentCoroutineContext()
+            try {
+                context.contentResolver.openInputStream(document.uri)?.use { stream ->
+                    readId3Date(stream) { coroutineContext.ensureActive() }
+                }
+            } catch (_: IOException) { null }
+            catch (_: SecurityException) { null }
+        } else null
+        val year = platformYear ?: releaseYear(null, fallbackDate)
+        val date = fallbackDate ?: taggedYear?.takeIf { releaseYear(it, null) != null } ?: taggedDate
         val number = tag(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
         val hash = MessageDigest.getInstance("SHA-256")
         context.contentResolver.openInputStream(document.uri)?.use { stream ->

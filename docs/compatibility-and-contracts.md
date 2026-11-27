@@ -164,6 +164,18 @@ Metadata reader version 2 refreshes existing cached records during scanning whil
 
 Validation: debug and instrumented-test APK builds, all 125 host tests, all 12 library instrumentation tests on API 23, and lint pass. Generated silent FLAC/M4A fixtures cover a full `date` value and a creation timestamp without release tags; the existing release-year fixture continues to verify release-date precedence over creation time.
 
+### ID3 date fallback (2026-11-27)
+
+When Android supplies no usable year/date, the reader now checks a leading ID3v2.3/v2.4 tag through the document's read-only stream. It prefers recording time (`TDRC`, or legacy `TYER`) and then release time (`TDRL`), regardless of frame order. This follows the agreed recording-date preference; existing usable Android values retain precedence. The selected raw date is saved in `TrackTags.releaseDate`, and both the main player and Track info display its year. Encoding/tagging timestamps are not release dates, and MP4 container-creation dates remain excluded.
+
+The fallback supports the four ID3 text encodings, version-specific sizes and extended headers, unsynchronisation, grouping and data-length prefixes. Reads/allocations are capped at a 16 MiB tag body and 1 KiB date frame, with cancellation checks. Unsupported versions, compressed/encrypted frames, oversized tags and unusable/truncated values supply no fallback; ID3v1 and non-leading tags are outside this fallback's scope. It does not rewrite music files or change the persisted record schema. Format references: [ID3v2.4 structure](https://id3.org/id3v2.4.0-structure), [ID3v2.3 structure](https://id3.org/id3v2.3.0), and [date frame semantics](https://id3.org/id3v2.4.0-frames).
+
+Metadata reader version 3 uses the existing refresh mechanism to reread cached records even when size/mtime are unchanged. Track IDs, import timestamps and playlist membership survive. Unavailable or cancelled refreshes remain pending across restart; playback and queue order are not restarted by the refresh.
+
+Regression fixtures are generated silent MP3s, reproducible with `python3 scripts/create-id3-date-fixtures.py` (requires ffmpeg with libmp3lame). They cover the reported `TDRC=2007` / `TDRL=2007-08-21` pair, conflicting years, release-only tags, and encoding/tagging timestamps without a date. Parser tests additionally cover encodings, frame boundaries, malformed/oversized data and cancellation. Library tests verify persistence refresh and source recovery.
+
+Validation: debug/test APK builds, compatibility verification and lint pass (0 errors, 61 warnings); 232 JVM tests pass, with the opt-in shuffle scalability measurement skipped. All 17 library instrumentation tests pass on API 23 (`headunit_a6`) and API 29 (`headunit_a10`). The first API 29 run exposed a pre-existing permission-recovery test race between cached readiness and startup scan completion; its wait now requires scan completion, and both suites pass after that correction. The actual “09 - Keep It All Inside.mp3” in the API 29 library shows 2007 in both main player and Track info after refresh. Its SHA-256 is unchanged; all 20 existing track identities/locations and serialized playlist state are preserved. These are emulator observations, not physical head-unit validation.
+
 
 ## Track info file type (2026-11-12)
 

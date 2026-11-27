@@ -16,6 +16,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
+internal const val METADATA_READER_VERSION = 3
+
 /** Process-owned, single scanner. All database/provider work runs on IO.
  * Requests arriving during traversal remain queued for a follow-up pass.
  */
@@ -75,9 +77,9 @@ internal class LocalLibrary(private val context: Context, private val documents:
                     mutableSourceConfiguration.value = configuration
                     directoryCache = db.directories()
                     val records = db.records()
-                    if (metadataPrefs.getInt("readerVersion", 0) < 2) {
+                    if (metadataPrefs.getInt("readerVersion", 0) < METADATA_READER_VERSION) {
                         metadataRefreshIds.addAll(records.map { it.id })
-                        if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", 2).commit()
+                        if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", METADATA_READER_VERSION).commit()
                     }
                     val playlists = db.playlists() ?: loadPlaylists(context.getSharedPreferences("demo-playlists", 0))
                         .withoutMusic() // Preserve custom names; demo IDs never become real identities.
@@ -372,7 +374,7 @@ internal class LocalLibrary(private val context: Context, private val documents:
             withContext(NonCancellable) { mutex.withLock {
                 if (generation == startedGeneration) {
                     metadataRefreshIds.retainAll(mutable.value.records.map { it.id }.toSet())
-                    if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", 2).commit()
+                    if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", METADATA_READER_VERSION).commit()
                     mutable.value = mutable.value.copy(summary = summary.copy(running = false))
                     val previous = mutableCompletedScan.value?.configuration
                     if (!cancelled && (previous == null || previous.folders != config.folders ||

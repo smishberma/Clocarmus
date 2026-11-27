@@ -31,6 +31,7 @@ class LocalLibraryTest : InstrumentationTestCase() {
         }
         context.getDatabasePath("local-library.db").delete()
         context.getSharedPreferences("onboarding", 0).edit().clear().commit()
+        context.getSharedPreferences("library-metadata", 0).edit().clear().commit()
         access = FakeDocuments()
         saveOnboarding(context.getSharedPreferences("onboarding", 0), OnboardingState(completed = true,
             folders = listOf(OnboardingFolder(source, "Music", "Test music"))))
@@ -106,7 +107,9 @@ class LocalLibraryTest : InstrumentationTestCase() {
         assertEquals(original.id, repository.state.value.records.single().id)
         runBlocking { repository.close() }
         repository = LocalLibrary(context, access)
-        awaitIdle { it.records.singleOrNull()?.availability == expected }
+        // Cached readiness can precede the startup scan; finish that scan before
+        // simulating a regrant, otherwise its failure can race the recovery pass.
+        awaitIdle { it.records.singleOrNull()?.availability == expected && repository.completedScan.value != null }
         assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
         assertTrue(repository.state.value.playlists.contains(playlist, original.id))
         access.fail = false
@@ -256,15 +259,80 @@ class LocalLibraryTest : InstrumentationTestCase() {
     }
     fun testMetadataReaderUpdateRefreshesCachedTracksWithoutChangingIdentity() {
         val original = repository.state.value.records.single()
+        runBlocking { repository.editPlaylists { it.add(FAVORITES, original.id, 10) } }
         val reads = access.reads
         runBlocking { repository.close() }
-        context.getSharedPreferences("library-metadata", 0).edit().putInt("readerVersion", 1).commit()
+        context.getSharedPreferences("library-metadata", 0).edit().putInt("readerVersion", 2).commit()
+        access.year = "2007"
         repository = LocalLibrary(context, access)
-        awaitIdle { it.records.singleOrNull()?.id == original.id && access.reads > reads }
+        awaitIdle { it.records.singleOrNull()?.track?.year == "2007" && access.reads > reads }
+        assertEquals(original.id, repository.state.value.records.single().id)
         assertEquals(original.importedAt, repository.state.value.records.single().importedAt)
+        assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
+        assertEquals(METADATA_READER_VERSION, context.getSharedPreferences("library-metadata", 0).getInt("readerVersion", 0))
         val updatedReads = access.reads
         refresh()
         assertEquals(updatedReads, access.reads)
+    }
+    fun testId3DatesReachBothPlayerYearAndTrackInfo() = runBlocking {
+        for ((asset, date) in listOf(
+            "id3-recording-release.mp3" to "2007",
+            "id3-conflicting-dates.mp3" to "2007",
+            "id3-release-only.mp3" to "2007-08-21",
+            "id3-no-date.mp3" to null
+        )) {
+            val file = File(context.cacheDir, asset)
+            try {
+                instrumentation.context.assets.open(asset).use { input -> file.outputStream().use { input.copyTo(it) } }
+                val before = file.readBytes()
+                val (track, fingerprint) = readAudio(context, AudioDocument(Uri.fromFile(file), asset, asset,
+                    "audio/mpeg", file.length(), file.lastModified()), asset)
+                assertEquals(asset, date?.take(4), track.year)
+                assertEquals(asset, date, track.tags!!.releaseDate)
+                assertEquals(asset, date?.take(4), track.tags.fields().toMap()["Year"])
+                assertEquals(asset, date?.take(4), releaseYear(track.year, track.tags.releaseDate))
+                assertEquals(java.security.MessageDigest.getInstance("SHA-256").digest(before)
+                    .joinToString("") { "%02x".format(it) }, fingerprint)
+                assertTrue(before.contentEquals(file.readBytes()))
+            } finally { file.delete() }
+        }
+        Unit
+    }
+    fun testMetadataRefreshStaysPendingAcrossUnavailableSourceAndRestart() {
+        val original = repository.state.value.records.single()
+        runBlocking { repository.close() }
+        val prefs = context.getSharedPreferences("library-metadata", 0)
+        prefs.edit().putInt("readerVersion", 2).commit()
+        access.fail = true
+        repository = LocalLibrary(context, access)
+        awaitIdle { it.records.singleOrNull()?.availability == Availability.DISCONNECTED }
+        assertEquals(2, prefs.getInt("readerVersion", 0))
+        runBlocking { repository.close() }
+        access.fail = false
+        access.year = "2007"
+        repository = LocalLibrary(context, access)
+        awaitIdle { it.records.singleOrNull()?.track?.year == "2007" }
+        assertEquals(original.id, repository.state.value.records.single().id)
+        assertEquals(original.importedAt, repository.state.value.records.single().importedAt)
+        assertEquals(METADATA_READER_VERSION, prefs.getInt("readerVersion", 0))
+    }
+    fun testCancelledMetadataRefreshRetriesAfterRestart() {
+        val original = repository.state.value.records.single()
+        runBlocking { repository.close() }
+        val prefs = context.getSharedPreferences("library-metadata", 0)
+        prefs.edit().putInt("readerVersion", 2).commit()
+        access.slow = true
+        access.started = false
+        repository = LocalLibrary(context, access)
+        runBlocking { withTimeout(5000) { while (!access.started) delay(10) } }
+        runBlocking { repository.close() }
+        assertEquals(2, prefs.getInt("readerVersion", 0))
+        access.slow = false
+        access.year = "2007"
+        repository = LocalLibrary(context, access)
+        awaitIdle { it.records.singleOrNull()?.track?.year == "2007" }
+        assertEquals(original.id, repository.state.value.records.single().id)
+        assertEquals(METADATA_READER_VERSION, prefs.getInt("readerVersion", 0))
     }
     private class FakeDocuments : DocumentAccess {
         @Volatile var file: String? = "song"
@@ -274,6 +342,7 @@ class LocalLibraryTest : InstrumentationTestCase() {
         @Volatile var started = false
         @Volatile var reads = 0
         @Volatile var nested = false
+        @Volatile var year: String? = null
         override fun children(tree: Uri, id: String): MatrixCursor {
             if (accessLost) throw SecurityException("Simulated persisted grant loss")
             if (fail) error("Drive disconnected")
@@ -288,7 +357,8 @@ class LocalLibraryTest : InstrumentationTestCase() {
             reads++
             started = true
             while (slow) delay(10)
-            return TrackMenuEntry(document.name, "Unknown artist", "Unknown album", id = id, tags = TrackTags()) to "unique-content"
+            return TrackMenuEntry(document.name, "Unknown artist", "Unknown album", year = year, id = id,
+                tags = TrackTags(releaseDate = year)) to "unique-content"
         }
     }
 }

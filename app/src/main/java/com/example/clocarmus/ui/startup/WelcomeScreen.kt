@@ -93,11 +93,14 @@ internal fun WelcomeScreen(page: WelcomePage, folders: List<OnboardingFolder>, o
                     label("Select folder to scan",200f,226f,1500f,112f,102f)
                     label("Select folders that contain\nyour music files.",200f,371f,1500f,190f,72f)
                     line(191f,617f)
-                    Column(place(210f,652f,930f,450f).verticalScroll(rememberScrollState())) {
+                    Column(place(210f,652f,930f,500f).verticalScroll(rememberScrollState())) {
                         if (folders.isEmpty()) Text("No folders added", color = Color.White, fontFamily = InterFontFamily,
                             fontSize = with(LocalDensity.current) { (40*s).dp.toSp() })
                         folders.forEach { folder ->
-                            Row(Modifier.fillMaxWidth().height((116*s).dp), verticalAlignment = Alignment.CenterVertically) {
+                            // Text line metrics can exceed the reference row height on some devices.
+                            // Let both lines determine the row height inside the scrolling viewport.
+                            Row(Modifier.fillMaxWidth().heightIn(min = (116*s).dp)
+                                .padding(vertical = (8*s).dp), verticalAlignment = Alignment.CenterVertically) {
                                 Image(painterResource(R.drawable.folder_folder_icon), null, Modifier.size((86*s).dp))
                                 Column(Modifier.weight(1f).padding(start = (30*s).dp)) {
                                     Text(folder.name, color = Color.White, fontFamily = InterFontFamily, fontWeight = FontWeight.Bold,

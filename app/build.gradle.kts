@@ -52,8 +52,8 @@ android {
         applicationId = "com.smishberma.clocarmus"
         minSdk = 23
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0.4.1"
+        versionCode = 8
+        versionName = "1.0.4.2"
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
         // Compose renders vectors directly on API 23, including gradients.
         vectorDrawables.useSupportLibrary = true
