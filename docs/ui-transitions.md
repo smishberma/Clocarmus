@@ -17,6 +17,26 @@ use an inactive lifecycle owner so their Back handlers cannot intercept the
 incoming destination. Browser saveable state and the source behind track panels
 remain available, preserving searches and scroll positions.
 
+Shared library browsers render rows with `LazyColumn`, keyed by the existing row
+identities. Each destination saves its first visible item and pixel offset; opening
+track panels or returning through Menu retains that position. A changed search
+resets its results to the top. The supplied scrollbar uses rounded row heights and
+gaps, including the shorter folder rows, so dragging can jump across a large list
+without composing intermediate rows. All Tracks sorts and filters on Default when
+the library or query changes, retaining the query with its displayed results for
+playback scope. Transport and navigation recompositions reuse those results.
+
+Browser validation on 2026-11-27: debug build, compatibility verification, lint
+(0 errors), Android test APK assembly and 235 JVM tests pass; the existing mixed
+duplicate scalability benchmark remains skipped. Three browser instrumentation
+tests pass on both API 23 (`headunit_a6`) and API 29 (`headunit_a10`): a generated
+10,000-track list accesses fewer than 300 track entries on opening and fewer than
+1,000 through an end jump, retains selection/long-press actions and scroll position,
+and preserves search through Menu return. These entry-access bounds detect eager
+row construction; they are not frame-time measurements. Visual captures and test
+logs are under `build/visual-comparison/browser-performance/`. Physical head-unit
+timing remains unmeasured.
+
 Long-press Back still clears unfinished local work before saving browser state.
 Settings retains its outgoing Appearance page visually while saving its root page
 for the next entry.

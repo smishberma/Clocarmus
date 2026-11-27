@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -277,10 +276,24 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val displayedPosition = seekPreview?.let { it * (duration ?: 0f) } ?: position
     val seekable = selectedTrack?.available == true && duration != null
     var trackQuery by rememberSaveable { mutableStateOf("") }
-    val trackScroll = rememberScrollState()
-    val allTracks = if (fixture) demoTracks else playlistTracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
-    val visibleTracks = remember(trackQuery, allTracks) { allTracks.filter { it.title.contains(trackQuery, ignoreCase = true) } }
-    LaunchedEffect(trackQuery) { trackScroll.scrollTo(0) }
+    val trackScroll = rememberLazyListState()
+    val allTracks by produceState<List<TrackMenuEntry>>(if (fixture) demoTracks else emptyList(), playlistTracks, fixture) {
+        value = if (fixture) demoTracks else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            playlistTracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+        }
+    }
+    val trackResults by produceState<TrackBrowserResults?>(null, allTracks, trackQuery) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            TrackBrowserResults(allTracks.filter { it.title.contains(trackQuery, ignoreCase = true) }, trackQuery)
+        }
+    }
+    val visibleTracks = trackResults?.tracks.orEmpty()
+    var previousTrackQuery by rememberSaveable { mutableStateOf(trackQuery) }
+    LaunchedEffect(trackResults?.query) {
+        val completedQuery = trackResults?.query ?: return@LaunchedEffect
+        if (previousTrackQuery != completedQuery) trackScroll.scrollToItem(0)
+        previousTrackQuery = completedQuery
+    }
     val available: (String) -> Boolean = { id -> playlistTracks.any { it.id == id && it.available } }
     LaunchedEffect(Unit) {
         // A fresh process follows autoplay (off by default); recreation retains transport state.
@@ -360,7 +373,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
         snapshotFlow { tracksOpen && browserStack.isEmpty() && trackScroll.isScrollInProgress }.collect { browsingReturn.setScrolling(it) }
     }
     LaunchedEffect(trackScroll, browsingReturn) {
-        snapshotFlow { trackScroll.value }.collect { browsingReturn.interaction() }
+        snapshotFlow { trackScroll.firstVisibleItemIndex to trackScroll.firstVisibleItemScrollOffset }.collect { browsingReturn.interaction() }
     }
     val goBack: () -> Unit = {
         browsingReturn.interaction()
@@ -559,7 +572,7 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
                                         onQuery = { trackQuery = it },
                                         onSearchVisibilityChanged = reportSearch,
                                         onSearchEdited = { browsingReturn.cancel() },
-                                        onBack = goBack, onSelect = { selectTrack(it, visibleTracks, ShuffleCollection(kind = "all", query = trackQuery)) },
+                                        onBack = goBack, onSelect = { selectTrack(it, visibleTracks, ShuffleCollection(kind = "all", query = trackResults?.query.orEmpty())) },
                                         emptyMessage = if (!fixture && librarySnapshot.summary.running) "Scanning music…" else if (!fixture && allTracks.isEmpty()) "Add music folders in Settings" else "No matching tracks")
                                 }
                                 if (displayed.root == PlayerPaneRoot.MENU) {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -13,7 +14,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -82,13 +82,19 @@ internal fun fastScrollLetter(titles: List<String>, fraction: Float): String =
 
 internal data class BrowserRow(val id: String, val title: String, val subtitle: String, val rowIcon: Int? = null, val audio: Boolean = false)
 
+/** Keep displayed results and playback search scope together during background filtering. */
+internal data class TrackBrowserResults(val tracks: List<TrackMenuEntry>, val query: String)
+
 @Composable
 internal fun TrackMenuPane(
     grid: PlayerGrid, tracks: List<TrackMenuEntry>, selectedId: String?, playing: Boolean,
-    scroll: ScrollState, query: String, onQuery: (String) -> Unit,
+    scroll: LazyListState, query: String, onQuery: (String) -> Unit,
     onSearchVisibilityChanged: (Boolean) -> Unit, onSearchEdited: () -> Unit,
     onBack: () -> Unit, onSelect: (String) -> Unit, artist: String? = null, emptyMessage: String = "No matching tracks"
-) = BrowserPane(grid, tracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") },
+) = BrowserPane(grid, remember(tracks) { object : AbstractList<BrowserRow>() {
+    override val size get() = tracks.size
+    override fun get(index: Int) = tracks[index].let { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") }
+} },
     selectedId, playing, scroll, query, onQuery, onSearchVisibilityChanged, onSearchEdited,
     onBack, onSelect, subtitle = artist?.uppercase(java.util.Locale.ROOT), trackRows = true, emptyMessage = emptyMessage)
 
@@ -99,7 +105,7 @@ internal fun BrowserPane(
     rows: List<BrowserRow>,
     selectedId: String?,
     playing: Boolean,
-    scroll: ScrollState,
+    scroll: LazyListState,
     query: String,
     onQuery: (String) -> Unit,
     onSearchVisibilityChanged: (Boolean) -> Unit,
@@ -128,7 +134,10 @@ internal fun BrowserPane(
     listTop: Float = if (showSearch) 293f else 303f
 ) {
     val trackOptions = LocalTrackOptions.current
-    val titles = remember(rows) { rows.map { it.title } }
+    val titles = remember(rows) { object : AbstractList<String>() {
+        override val size get() = rows.size
+        override fun get(index: Int) = rows[index].title
+    } }
     var searching by remember { mutableStateOf(searchInitiallyOpen) }
     var draft by remember { mutableStateOf(query) }
     DisposableEffect(searching) {
@@ -146,10 +155,21 @@ internal fun BrowserPane(
 
     val latestRows by rememberUpdatedState(rows)
     val latestMove by rememberUpdatedState(onMove)
-    val rowHeightPx = with(LocalDensity.current) { (140f * grid.scale).dp.toPx() }
-    Column(grid.place(if (showSearch) 53f else 42f, listTop, 827f, 700f).verticalScroll(scroll)) {
-        rows.forEachIndexed { index, row ->
-            key(row.id) {
+    val density = LocalDensity.current
+    val rowHeight = with(density) { (126f * grid.scale).dp.roundToPx() }
+    val compactHeight = with(density) { (98f * grid.scale).dp.roundToPx() }
+    val gap = with(density) { ((if (folderRows) folderRowGap else 14f) * grid.scale).dp.roundToPx() }
+    val viewport = with(density) { (700f * grid.scale).dp.roundToPx() }
+    val geometry = remember(rows, folderRows, rowHeight, compactHeight, gap) {
+        BrowserListGeometry(IntArray(rows.size) { index ->
+            if (folderRows && rows[index].subtitle.isEmpty()) compactHeight else rowHeight
+        }, gap)
+    }
+    val rowHeightPx = (rowHeight + gap).toFloat()
+    LazyColumn(grid.place(if (showSearch) 53f else 42f, listTop, 827f, 700f), state = scroll) {
+        items(rows.size, key = { rows[it].id }) { index ->
+            val row = rows[index]
+            Column {
                 val title = row.title
                 val selected = row.id == selectedId
                 Box(Modifier.fillMaxWidth().height(((if (folderRows && row.subtitle.isEmpty()) 98f else 126f) * grid.scale).dp)
@@ -212,12 +232,25 @@ internal fun BrowserPane(
     }
     if (titles.isEmpty() && emptyMessage.isNotEmpty()) PlayerLabel(emptyMessage, grid.place(83f, 312f, 760f, 88f), 46f * grid.scale,
         alignment = Alignment.CenterStart)
-    if (showScrollbar) TrackScrollbar(grid, scroll, titles, searchName, proportional = proportionalScrollbar || heading == "ALBUM TRACKS" || !showSearch, top = scrollbarTop ?: (listTop + if (showSearch) 19f else 16f))
+    if (showScrollbar) BrowserScrollbar(grid, scroll, geometry, viewport, titles, searchName,
+        proportional = proportionalScrollbar || heading == "ALBUM TRACKS" || !showSearch,
+        top = scrollbarTop ?: (listTop + if (showSearch) 19f else 16f))
 
     if (searching) AlertDialog(onDismissRequest = { searching = false }, title = { Text("Search $searchName") },
         text = { OutlinedTextField(draft, onValueChange = { onSearchEdited(); draft = it }, singleLine = true, label = { Text("Search $searchName") }) },
         confirmButton = { TextButton(onClick = { onQuery(draft.trim()); searching = false }) { Text("Search") } },
         dismissButton = { TextButton(onClick = { onQuery(""); searching = false }) { Text("Show all") } })
+}
+
+@Composable
+private fun BrowserScrollbar(grid: PlayerGrid, scroll: LazyListState, geometry: BrowserListGeometry,
+    viewport: Int, titles: List<String>, searchName: String, proportional: Boolean, top: Float) {
+    val maximum = geometry.maximum(viewport)
+    val pixels = geometry.pixels(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset).coerceIn(0, maximum)
+    Scrollbar(grid, pixels, maximum, scroll.isScrollInProgress, { value ->
+        val target = geometry.position(value.coerceIn(0, maximum))
+        scroll.scrollToItem(target.index, target.offset)
+    }, titles, searchName, proportional, top, true)
 }
 
 private val ColorScrollRail = Color(0xff494949)

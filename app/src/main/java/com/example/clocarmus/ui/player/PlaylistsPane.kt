@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -45,7 +46,8 @@ internal fun PlaylistsPane(
 ) {
     val trackOptions = LocalTrackOptions.current
     val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
-    ObserveBrowserScroll(scroll, inactivity)
+    val trackScroll = rememberLazyListState()
+    if (playlistId == null) ObserveBrowserScroll(scroll, inactivity) else ObserveBrowserScroll(trackScroll, inactivity)
     var action by rememberSaveable { mutableStateOf<String?>(null) }
     var target by rememberSaveable { mutableStateOf<String?>(null) }
     var lastCompletion by rememberSaveable { mutableIntStateOf(trackOptions.completed) }
@@ -74,7 +76,13 @@ internal fun PlaylistsPane(
     BackHandler(enabled = editing && !trackOptions.active, onBack = finishEditing)
     val custom = library.custom.firstOrNull { it.id == playlistId }
     val title = builtInPlaylists[playlistId] ?: custom?.name.orEmpty()
-    val shownTracks = library.trackIds(playlistId.orEmpty()).mapNotNull { id -> tracks.firstOrNull { it.id == id } }
+    val tracksById = remember(tracks) { tracks.associateBy { it.id } }
+    val shownTracks = remember(library, playlistId, tracksById) {
+        library.trackIds(playlistId.orEmpty()).mapNotNull(tracksById::get)
+    }
+    val trackRows = remember(shownTracks) {
+        shownTracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") }
+    }
     if (playlistId == null) {
         MenuAssetButton("Back", R.drawable.menu_back_button, R.drawable.menu_back_button_pressed, grid, 55f, 20f, 172f, 172f, onBack)
         val interaction = remember { MutableInteractionSource() }
@@ -108,8 +116,8 @@ internal fun PlaylistsPane(
         }
         if (scroll.maxValue > 0) TrackScrollbar(grid, scroll, (builtInPlaylists.values + library.sortedCustom.map { it.name }).toList(), "playlists", proportional = true, top = 319f)
     } else {
-        BrowserPane(grid, shownTracks.map { BrowserRow(it.id, it.title, "${it.artist} - ${it.album}") }, selectedTrackId, playing,
-            scroll, "", {}, {}, {}, { if (editing) finishEditing() else onBack() }, { onSelect(it, shownTracks.toList(), ShuffleCollection(kind = "playlist", token = playlistId!!)) },
+        BrowserPane(grid, trackRows, selectedTrackId, playing,
+            trackScroll, "", {}, {}, {}, { if (editing) finishEditing() else onBack() }, { onSelect(it, shownTracks.toList(), ShuffleCollection(kind = "playlist", token = playlistId!!)) },
             trackRows = true, showSearch = false, showHeading = false, emptyMessage = "", onLongClick = if (custom != null || playlistId == FAVORITES) { id ->
                 inactivity.cancel(); target = id; action = "track"
             } else null, reordering = editing,

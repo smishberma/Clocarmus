@@ -2,11 +2,9 @@ package com.example.clocarmus.ui.player
 
 import com.example.clocarmus.playback.shuffle.ShuffleCollection
 
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import com.example.clocarmus.R
 import java.util.Locale
 
@@ -32,16 +30,12 @@ internal fun AlbumsPane(
     var query by rememberSaveable { mutableStateOf("") }
     var selectedAlbum by rememberSaveable { mutableStateOf<String?>(
         if (preview == "albums") AlbumIdentity("Saffron", "Artist").key else null) }
-    val density = LocalDensity.current
-    val initialScroll = if (preview == "albums") with(density) {
-        val index = albums.indexOfFirst { it.identity == AlbumIdentity("Pebble", "Artist") }
-        index.coerceAtLeast(0) * ((126f * grid.scale).dp.roundToPx() + (14f * grid.scale).dp.roundToPx())
-    } else 0
-    val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(initialScroll) }
-    LaunchedEffect(initialScroll) { if (preview == "albums" && query.isEmpty()) scroll.scrollTo(initialScroll) }
+    val initialIndex = if (preview == "albums")
+        albums.indexOfFirst { it.identity == AlbumIdentity("Pebble", "Artist") }.coerceAtLeast(0) else 0
+    val scroll = rememberLazyListState(initialIndex)
     ObserveBrowserScroll(scroll, inactivity)
     var previousQuery by rememberSaveable { mutableStateOf(query) }
-    LaunchedEffect(query) { if (previousQuery != query) scroll.scrollTo(0); previousQuery = query }
+    LaunchedEffect(query) { if (previousQuery != query) scroll.scrollToItem(0); previousQuery = query }
     val tracksPage = destination.page == "album-tracks"
     val tracks = album?.tracks.orEmpty().filter { it.title.contains(query, true) }
     val rows = if (tracksPage) tracks.map(::albumTrackRow) else albums

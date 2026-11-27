@@ -4,7 +4,7 @@ import com.example.clocarmus.playback.shuffle.ShuffleCollection
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -29,10 +29,10 @@ internal fun FoldersPane(
     var query by rememberSaveable { mutableStateOf("") }
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(if (preview == "folders") "music" else null) }
     var reconnect by remember { mutableStateOf<String?>(null) }
-    val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val scroll = rememberLazyListState()
     ObserveBrowserScroll(scroll, inactivity)
     var previousQuery by rememberSaveable { mutableStateOf(query) }
-    LaunchedEffect(query) { if (query != previousQuery) scroll.scrollTo(0); previousQuery = query }
+    LaunchedEffect(query) { if (query != previousQuery) scroll.scrollToItem(0); previousQuery = query }
     val sourceId = remember(directory) { directory?.let { tree.source(it)?.id } }
     LaunchedEffect(tree, directory) {
         if (directory != null && tree.get(directory)?.let { tree.accessible(it) } != true) {
@@ -77,7 +77,7 @@ internal fun FoldersPane(
         folderRows = true, folderTextInset = if (directory == null) 115f else 130f,
         folderRowGap = if (directory == null) 42f else 44f, scrollbarTop = 312f,
         listTop = if (directory == null) 284f else 303f,
-        emptyMessage = "", showScrollbar = directory == null || scroll.maxValue > 0)
+        emptyMessage = "", showScrollbar = directory == null || scroll.canScrollForward || scroll.canScrollBackward)
     Row(grid.place(60f, 161f, 880f, 48f), horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically) {
         Image(painterResource(R.drawable.folder_folder_icon), null, Modifier.size((44f * grid.scale).dp))

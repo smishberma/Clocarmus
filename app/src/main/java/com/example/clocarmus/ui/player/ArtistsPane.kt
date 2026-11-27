@@ -3,7 +3,8 @@ package com.example.clocarmus.ui.player
 import com.example.clocarmus.playback.shuffle.ShuffleCollection
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.annotation.DrawableRes
@@ -105,21 +106,14 @@ internal fun ArtistsPane(
         var query by rememberSaveable { mutableStateOf("") }
         var selectedArtist by rememberSaveable { mutableStateOf(artistName) }
         var selectedAlbum by rememberSaveable { mutableStateOf<String?>(if (preview == "artist-albums") "Ripple" else null) }
-        val density = LocalDensity.current
-        val initialScroll = if (preview != null) with(density) {
-            16 * ((126f * grid.scale).dp.roundToPx() + (14f * grid.scale).dp.roundToPx())
-        } else 0
-        val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(initialScroll) }
-        // Immersive mode can resize the first composition; settle the fixture on the final grid.
-        LaunchedEffect(initialScroll) {
-            if (preview != null && query.isEmpty()) scroll.scrollTo(initialScroll)
-        }
+        val initialIndex = if (preview != null) 16 else 0
+        val scroll = rememberLazyListState(initialIndex)
         ObserveBrowserScroll(scroll, inactivity)
         val changeQuery: (String) -> Unit = { query = it }
         // Reset only when a query changes, keeping restored offsets on Back.
         var previousQuery by rememberSaveable { mutableStateOf(query) }
         LaunchedEffect(query) {
-            if (previousQuery != query) scroll.scrollTo(0)
+            if (previousQuery != query) scroll.scrollToItem(0)
             previousQuery = query
         }
         val tracks = artist?.tracks.orEmpty().filter { it.title.contains(query, true) }
@@ -156,7 +150,18 @@ internal fun ArtistsPane(
 }
 
 @Composable
-internal fun ObserveBrowserScroll(scroll: ScrollState, inactivity: BrowsingReturnInactivity) {
+internal fun ObserveBrowserScroll(scroll: LazyListState, inactivity: BrowsingReturnInactivity) {
+    LaunchedEffect(scroll, inactivity) {
+        snapshotFlow { scroll.isScrollInProgress }.collect { inactivity.setScrolling(it) }
+    }
+    LaunchedEffect(scroll, inactivity) {
+        snapshotFlow { scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset }.collect { inactivity.interaction() }
+    }
+    DisposableEffect(inactivity) { onDispose { inactivity.setScrolling(false) } }
+}
+
+@Composable
+internal fun ObserveBrowserScroll(scroll: androidx.compose.foundation.ScrollState, inactivity: BrowsingReturnInactivity) {
     LaunchedEffect(scroll, inactivity) {
         snapshotFlow { scroll.isScrollInProgress }.collect { inactivity.setScrolling(it) }
     }

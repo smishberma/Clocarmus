@@ -3,7 +3,7 @@ package com.example.clocarmus.ui.player
 import com.example.clocarmus.playback.shuffle.ShuffleCollection
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -57,10 +57,10 @@ internal fun GenresPane(
         "genres" -> "alternative rock"; "genre-artists" -> "Ripple"; "genre-albums" -> AlbumIdentity("Saffron", "Artist").key
         else -> null
     }) }
-    val scroll = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val scroll = rememberLazyListState()
     ObserveBrowserScroll(scroll, inactivity)
     var previousQuery by rememberSaveable { mutableStateOf(query) }
-    LaunchedEffect(query) { if (previousQuery != query) scroll.scrollTo(0); previousQuery = query }
+    LaunchedEffect(query) { if (previousQuery != query) scroll.scrollToItem(0); previousQuery = query }
     val tracks = (if (preview == "genre-tracks") genreReferenceTracks else genre?.tracks.orEmpty())
         .filter { it.title.contains(query, true) }
     val artists = groupArtists(genre?.tracks.orEmpty())
