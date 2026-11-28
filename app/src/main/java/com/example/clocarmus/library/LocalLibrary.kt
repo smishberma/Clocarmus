@@ -5,6 +5,7 @@ import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import com.example.clocarmus.ui.player.*
 import com.example.clocarmus.ui.startup.*
@@ -17,6 +18,8 @@ import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 internal const val METADATA_READER_VERSION = 3
+private const val SCAN_BATCH_SIZE = 32
+private const val SCAN_PUBLISH_INTERVAL_MS = 250L
 
 /** Process-owned, single scanner. All database/provider work runs on IO.
  * Requests arriving during traversal remain queued for a follow-up pass.
@@ -114,7 +117,8 @@ internal class LocalLibrary(private val context: Context, private val documents:
         }
     }
     suspend fun close() = withContext(Dispatchers.IO) {
-        scope.cancel()
+        // Let the scanner flush completed work before closing its database.
+        scope.coroutineContext[Job]?.cancelAndJoin()
         mutex.withLock {
             prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
             context.unregisterReceiver(storageReceiver)
@@ -232,8 +236,8 @@ internal class LocalLibrary(private val context: Context, private val documents:
                 }
                 allowed
             }
-            val version = db.commit(retained, removed, playlists, directoryCache)
-            publish(retained, playlists, version)
+            val version = db.commit(retained.filter { before.byId[it.id] != it }, removed, playlists, directoryCache)
+            if (version != before.version || configChanged) publish(retained, playlists, version)
             mutable.value = mutable.value.copy(summary = summary)
         }
         context.contentResolver.let { resolver -> observers.forEach { runCatching { resolver.unregisterContentObserver(it) } }; observers.clear() }
@@ -245,30 +249,70 @@ internal class LocalLibrary(private val context: Context, private val documents:
         }
         val original = mutable.value.records
         val originalsByLocation = original.associateBy { it.location }
-        val pending = mutableListOf<LibraryRecord>()
+        val originalsById = original.associateBy { it.id }
+        val originalFingerprints = original.mapTo(hashSetOf()) { it.fingerprint }
+        val recordsById = original.associateByTo(linkedMapOf()) { it.id }
+        val recordsByLocation = original.associateByTo(hashMapOf()) { it.location }
+        val directoriesById = directoryCache.associateByTo(linkedMapOf()) { it.id }
+        val staged = linkedMapOf<String, LibraryRecord>()
+        val refreshedMetadata = mutableSetOf<String>()
+        var directoriesChanged = false
+        var lastPublish = SystemClock.elapsedRealtime()
+        var publishedTrack = false
+        val pending = linkedMapOf<String, LibraryRecord>()
+        val availableLocations = mutableSetOf<String>()
         val seen = mutableMapOf<String, MutableSet<String>>()
         val directoriesSeen = mutableSetOf<String>()
         val completed = mutableSetOf<String>()
         val failedSources = mutableMapOf<String, Availability>()
         val requested = config.folders.filter { configChanged || wanted.isEmpty() || it.uri in wanted }
-        suspend fun save(record: LibraryRecord) {
+        suspend fun flush() {
             mutex.withLock {
-                check(generation == startedGeneration) { "Scan invalidated" }
-                currentCoroutineContext().ensureActive()
+                if (generation != startedGeneration) return
+                if (staged.isEmpty() && !directoriesChanged) return
                 val before = mutable.value
-                val previous = before.records.firstOrNull { it.id == record.id }
-                summary = when {
-                    previous == null -> summary.copy(added = summary.added + 1)
-                    previous.track != record.track || previous.fingerprint != record.fingerprint || previous.location != record.location -> summary.copy(updated = summary.updated + 1)
-                    else -> summary
-                }
-                val merged = record.copy(paths = (previous?.paths.orEmpty().filterNot { old -> record.paths.any { it.source == old.source } } + record.paths).distinct())
-                val records = before.records.filterNot { it.id == merged.id } + merged
-                val playlists = before.playlists.imported(merged.id, merged.importedAt)
-                val version = db.commit(listOf(merged), emptyList(), playlists)
-                publish(records, playlists, version)
+                // Playlist edits may have arrived during provider work. Extend the current
+                // memberships once per batch rather than sorting/serializing per file.
+                val importedIds = before.playlists.imported.mapTo(hashSetOf()) { it.id }
+                val added = staged.values.filter { it.id !in importedIds }.map { TimedTrack(it.id, it.importedAt) }
+                val playlists = if (added.isEmpty()) before.playlists else before.playlists.copy(
+                    imported = (before.playlists.imported + added).sortedByDescending { it.timestamp })
+                val directories = if (directoriesChanged) directoriesById.values.toList() else null
+                val version = db.commit(staged.values, emptyList(), playlists, directories)
+                if (directories != null) directoryCache = directories
+                metadataRefreshIds.removeAll(refreshedMetadata)
+                refreshedMetadata.clear()
+                staged.clear()
+                directoriesChanged = false
+                if (version != before.version) publish(recordsById.values.toList(), playlists, version)
                 mutable.value = mutable.value.copy(summary = summary)
+                lastPublish = SystemClock.elapsedRealtime()
             }
+        }
+        suspend fun flushIfDue() {
+            if (staged.size >= SCAN_BATCH_SIZE || SystemClock.elapsedRealtime() - lastPublish >= SCAN_PUBLISH_INTERVAL_MS) flush()
+        }
+        suspend fun save(record: LibraryRecord) {
+            currentCoroutineContext().ensureActive()
+            val previous = recordsById[record.id]
+            val paths = previous?.paths.orEmpty().groupBy { it.source }.toMutableMap()
+            paths.putAll(record.paths.groupBy { it.source })
+            // Keep the first usable access handle in this pass. Overlapping grants
+            // must not alternate URI payloads (and rewrite every track) on each visit.
+            val uri = if (previous?.location == record.location && record.location in availableLocations) previous.uri else record.uri
+            val merged = record.copy(uri = uri, paths = paths.values.flatten().distinct())
+            if (record.availability == Availability.AVAILABLE) availableLocations.add(record.location)
+            if (merged == previous) return
+            summary = when {
+                previous == null -> summary.copy(added = summary.added + 1)
+                previous.track != record.track || previous.fingerprint != record.fingerprint || previous.location != record.location -> summary.copy(updated = summary.updated + 1)
+                else -> summary
+            }
+            if (previous != null) recordsByLocation.remove(previous.location)
+            recordsById[merged.id] = merged
+            recordsByLocation[merged.location] = merged
+            staged[merged.id] = merged
+            if (!publishedTrack) { flush(); publishedTrack = true } else flushIfDue()
         }
         try {
             for (source in requested) {
@@ -278,23 +322,18 @@ internal class LocalLibrary(private val context: Context, private val documents:
                 val visited = mutableSetOf<String>()
                 suspend fun walk(id: String, directories: List<String>, names: List<String>) {
                     currentCoroutineContext().ensureActive()
+                    flushIfDue()
                     if (!visited.add(id)) { complete = false; return }
                     val cursor = documents.children(tree, id)
                     val directoryId = directories.lastOrNull() ?: source.uri
                     directoriesSeen.add(directoryId)
                     cursor.use {
-                    mutex.withLock {
-                        currentCoroutineContext().ensureActive()
-                        check(generation == startedGeneration) { "Scan invalidated" }
                         val directory = LibraryDirectory(source.uri, directoryId, names.lastOrNull() ?: source.name,
                             if (directories.isEmpty()) null else directories.dropLast(1).lastOrNull() ?: source.uri)
-                        directoryCache = directoryCache.filterNot { it.id == directoryId } + directory
-                        val before = mutable.value
-                        val version = db.commit(emptyList(), emptyList(), before.playlists, directoryCache)
-                        publish(before.records, before.playlists, version)
-                    }
+                        if (directoriesById.put(directoryId, directory) != directory) directoriesChanged = true
                         while (it.moveToNext()) {
                             currentCoroutineContext().ensureActive()
+                            flushIfDue()
                             val docId = it.getString(0)
                             val uri = DocumentsContract.buildDocumentUriUsingTree(tree, docId)
                             val name = it.getString(1) ?: docId
@@ -305,21 +344,29 @@ internal class LocalLibrary(private val context: Context, private val documents:
                                 val location = documentLocation(tree, docId)
                                 sourceSeen.add(location)
                                 val path = LibraryPath(source.uri, directories, names)
-                                val known = mutable.value.records.firstOrNull { record -> record.location == location }
+                                val known = recordsByLocation[location]
                                 val document = AudioDocument(uri, location, name, mime, if (it.isNull(3)) -1 else it.getLong(3), if (it.isNull(4)) 0 else it.getLong(4))
                                 try {
-                                    if (known != null && known.id !in metadataRefreshIds && document.size >= 0 && document.modified > 0 && known.size == document.size && known.modified == document.modified && known.availability != Availability.UNREADABLE) {
+                                    if (known != null && (known.id !in metadataRefreshIds || known.id in refreshedMetadata) && document.size >= 0 && document.modified > 0 && known.size == document.size && known.modified == document.modified && known.availability != Availability.UNREADABLE) {
                                         save(known.copy(uri = uri.toString(), filename = name, paths = listOf(path), availability = Availability.AVAILABLE))
                                     } else {
-                                        val trackId = known?.id ?: "local:${UUID.randomUUID()}"
+                                        val pendingRecord = pending[location]
+                                        val trackId = known?.id ?: pendingRecord?.id ?: "local:${UUID.randomUUID()}"
+                                        if (pendingRecord != null) {
+                                            pending[location] = pendingRecord.copy(paths = (pendingRecord.paths + path).distinct())
+                                            continue
+                                        }
                                         val (metadata, fingerprint) = documents.audio(document, trackId)
                                         val record = LibraryRecord(trackId, location, uri.toString(), name, document.size, document.modified,
                                             fingerprint, metadata, known?.importedAt ?: System.currentTimeMillis(), listOf(path))
-                                        if (known == null && original.any { old -> old.fingerprint == fingerprint }) {
-                                            val pendingIndex = pending.indexOfFirst { candidate -> candidate.location == location }
-                                            if (pendingIndex >= 0) pending[pendingIndex] = pending[pendingIndex].copy(paths = (pending[pendingIndex].paths + path).distinct()) else pending.add(record)
-                                        } else save(record)
-                                        metadataRefreshIds.remove(trackId)
+                                        if (known == null && fingerprint in originalFingerprints) {
+                                            pending[location] = record
+                                        } else {
+                                            refreshedMetadata.add(trackId)
+                                            save(record)
+                                            // An unchanged reread is already durable.
+                                            if (trackId !in staged) metadataRefreshIds.remove(trackId)
+                                        }
                                     }
                                 } catch (cancelled: CancellationException) { throw cancelled }
                                 catch (exception: Exception) {
@@ -344,11 +391,12 @@ internal class LocalLibrary(private val context: Context, private val documents:
             val missing = original.filter { record -> record.paths.isNotEmpty() && record.paths.all { path ->
                 path.source in completed && record.location !in seen[path.source].orEmpty()
             } }.map { it.id }.toSet()
-            val matches = relocationMatches(original, pending, missing)
-            pending.forEach { record ->
-                val old = matches[record.id]?.let { id -> original.first { it.id == id } }
+            val matches = relocationMatches(original, pending.values.toList(), missing)
+            pending.values.forEach { record ->
+                val old = matches[record.id]?.let(originalsById::get)
                 save(if (old == null) record else record.copy(id = old.id, track = record.track.copy(id = old.id), importedAt = old.importedAt))
             }
+            flush()
             mutex.withLock {
                 currentCoroutineContext().ensureActive()
                 if (generation != startedGeneration) return
@@ -365,24 +413,31 @@ internal class LocalLibrary(private val context: Context, private val documents:
                 }
                 directoryCache = directoryCache.filter { it.source !in completed || it.id in directoriesSeen }
                     .map { if (it.source in failedSources) it.copy(available = false) else it }
-                val version = db.commit(reconciled, emptyList(), before.playlists, directoryCache)
-                publish(reconciled, before.playlists, version)
+                val version = db.commit(reconciled.filter { before.byId[it.id] != it }, emptyList(), before.playlists, directoryCache)
+                if (version != before.version) publish(reconciled, before.playlists, version)
             }
         } catch (exception: CancellationException) { cancelled = true; summary = summary.copy(incomplete = true) }
         catch (exception: Exception) { summary = summary.copy(incomplete = true, failures = summary.failures + (exception.message ?: "Scan failed")) }
         finally {
-            withContext(NonCancellable) { mutex.withLock {
-                if (generation == startedGeneration) {
-                    metadataRefreshIds.retainAll(mutable.value.records.map { it.id }.toSet())
-                    if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", METADATA_READER_VERSION).commit()
-                    mutable.value = mutable.value.copy(summary = summary.copy(running = false))
-                    val previous = mutableCompletedScan.value?.configuration
-                    if (!cancelled && (previous == null || previous.folders != config.folders ||
-                            previous.exclusions != config.exclusions)) {
-                        mutableCompletedScan.value = CompletedScan(config, mutable.value.records)
+            withContext(NonCancellable) {
+                // Cancellation retains successfully read records, but reset/configuration
+                // generations must never resurrect work from an obsolete scan.
+                try { flush() } catch (exception: Exception) {
+                    summary = summary.copy(incomplete = true, failures = summary.failures + (exception.message ?: "Scan could not save"))
+                }
+                mutex.withLock {
+                    if (generation == startedGeneration) {
+                        metadataRefreshIds.retainAll(mutable.value.records.map { it.id }.toSet())
+                        if (metadataRefreshIds.isEmpty()) metadataPrefs.edit().putInt("readerVersion", METADATA_READER_VERSION).commit()
+                        mutable.value = mutable.value.copy(summary = summary.copy(running = false))
+                        val previous = mutableCompletedScan.value?.configuration
+                        if (!cancelled && (previous == null || previous.folders != config.folders ||
+                                previous.exclusions != config.exclusions)) {
+                            mutableCompletedScan.value = CompletedScan(config, mutable.value.records)
+                        }
                     }
                 }
-            } }
+            }
         }
     }
 }

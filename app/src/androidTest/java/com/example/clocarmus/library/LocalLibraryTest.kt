@@ -36,7 +36,7 @@ class LocalLibraryTest : InstrumentationTestCase() {
         saveOnboarding(context.getSharedPreferences("onboarding", 0), OnboardingState(completed = true,
             folders = listOf(OnboardingFolder(source, "Music", "Test music"))))
         repository = LocalLibrary(context, access)
-        awaitIdle { it.records.size == 1 }
+        awaitIdle { it.records.size == 1 && repository.completedScan.value != null }
     }
     override fun tearDown() {
         runBlocking { repository.close() }
@@ -54,10 +54,176 @@ class LocalLibraryTest : InstrumentationTestCase() {
         }
     }
     private fun refresh() {
-        val version = repository.state.value.version
+        val queries = access.queries
         repository.refresh()
-        awaitIdle { it.version > version }
+        awaitIdle { access.queries > queries }
     }
+    fun testBatchedImportAndUnchangedRefreshAvoidDatabaseWrites() {
+        startWriteAudit()
+        access.extraFiles = 512
+        val version = repository.state.value.version
+        val started = android.os.SystemClock.elapsedRealtime()
+        refresh()
+        val importMs = android.os.SystemClock.elapsedRealtime() - started
+        val imported = repository.state.value
+        assertEquals(513, imported.records.size)
+        assertEquals(512, imported.summary.added)
+        assertEquals(513, imported.playlists.imported.size)
+        assertEquals(512L, writes("tracks"))
+        assertEquals(0L, writes("directories"))
+        assertTrue("Expected batched commits, got ${imported.version - version}", imported.version - version < 128)
+        val totalWrites = writes()
+        val reads = access.reads
+        val refreshStarted = android.os.SystemClock.elapsedRealtime()
+        refresh()
+        val refreshMs = android.os.SystemClock.elapsedRealtime() - refreshStarted
+        assertEquals(reads, access.reads)
+        assertEquals(totalWrites, writes())
+        assertEquals(imported.version, repository.state.value.version)
+        assertSame(imported.records, repository.state.value.records)
+        android.util.Log.i("ScannerPerformance", "512 new files: ${importMs}ms, ${imported.version - version} commits; unchanged 513 files: ${refreshMs}ms, zero writes")
+
+        access.changedFile = "extra-300"
+        refresh()
+        assertEquals(reads + 1, access.reads)
+        assertEquals(513L, writes("tracks"))
+        assertEquals(0L, writes("directories"))
+        assertEquals(1, repository.state.value.summary.updated)
+        val updated = repository.state.value.records.single { it.filename == "extra-300.wav" }
+        val old = imported.records.single { it.id == updated.id }
+        assertEquals(old.importedAt, updated.importedAt)
+        assertEquals(imported.playlists, repository.state.value.playlists)
+    }
+
+    fun testDirectoryChangesOnlyWriteChangedDirectories() {
+        startWriteAudit()
+        access.emptyFolders = 40
+        refresh()
+        assertEquals(40L, writes("directories"))
+        assertEquals(0L, writes("tracks"))
+        val totalWrites = writes()
+        refresh()
+        assertEquals(totalWrites, writes())
+        access.emptyFolders = 39
+        refresh()
+        assertEquals(41L, writes("directories"))
+        assertEquals(0L, writes("tracks"))
+    }
+
+    fun testCancellationFlushesCompletedBatchAndKeepsConcurrentPlaylistEdit() {
+        val original = repository.state.value.records.single()
+        access.extraFiles = 10
+        access.blockFile = "extra-5"
+        repository.refresh()
+        awaitBlocked()
+        runBlocking { repository.editPlaylists { it.add(FAVORITES, original.id, 10) } }
+        repository.cancel()
+        awaitIdle { it.summary.incomplete && it.records.size == 6 }
+        assertEquals(5, repository.state.value.summary.added)
+        assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
+        runBlocking { repository.close() }
+        access.fail = true
+        repository = LocalLibrary(context, access)
+        awaitIdle { repository.completedScan.value != null }
+        assertEquals(6, repository.state.value.records.size)
+        assertEquals(6, repository.state.value.playlists.imported.size)
+        assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
+    }
+
+    fun testResetDiscardsUncommittedBatch() {
+        access.extraFiles = 10
+        access.blockFile = "extra-5"
+        repository.refresh()
+        awaitBlocked()
+        val prefs = context.getSharedPreferences("onboarding", 0)
+        saveOnboarding(prefs, loadOnboarding(prefs).copy(folders = emptyList(), resetPending = true))
+        runBlocking { repository.reset(); repository.close() }
+        repository = LocalLibrary(context, access)
+        awaitIdle()
+        assertTrue(repository.state.value.records.isEmpty())
+        assertTrue(repository.state.value.playlists.imported.isEmpty())
+    }
+
+    fun testLoadingCursorNeverConfirmsAbsence() {
+        access.file = null
+        access.loading = true
+        refresh()
+        assertTrue(repository.state.value.summary.incomplete)
+        assertEquals(Availability.AVAILABLE, repository.state.value.records.single().availability)
+    }
+
+    fun testAmbiguousCopiesStaySeparateAndOverlappingRefreshDoesNotRewriteThem() {
+        val original = repository.state.value.records.single()
+        runBlocking {
+            repository.editPlaylists { it.add(FAVORITES, original.id, 10) }
+            repository.close()
+        }
+        access.file = null
+        access.extraFiles = 2
+        access.duplicateContent = true
+        val prefs = context.getSharedPreferences("onboarding", 0)
+        val other = "content://test.documents/tree/other"
+        saveOnboarding(prefs, loadOnboarding(prefs).add(OnboardingFolder(other, "Other", "Other")))
+        repository = LocalLibrary(context, access)
+        awaitIdle { it.records.size == 3 && it.records.count { record -> record.paths.size == 2 } == 2 }
+        val copies = repository.state.value.records.filter { it.id != original.id }
+        assertEquals(2, copies.map { it.id }.toSet().size)
+        assertEquals(Availability.MISSING, repository.state.value.byId[original.id]!!.availability)
+        assertTrue(repository.state.value.playlists.contains(FAVORITES, original.id))
+        assertEquals(3, access.reads)
+        startWriteAudit()
+        refresh()
+        assertEquals(0L, writes())
+        assertEquals(3, access.reads)
+    }
+
+    fun testFailedTransactionRollsBackRecordsAndDoesNotAdvanceCachedState() {
+        val original = repository.state.value.records.single()
+        runBlocking { repository.close() }
+        val database = LibraryDatabase(context)
+        try {
+            val version = database.version()
+            val playlists = database.playlists()!!
+            val directories = database.directories()
+            val changed = original.copy(filename = "changed.wav")
+            database.writableDatabase.execSQL("CREATE TRIGGER fail_scan BEFORE UPDATE ON state BEGIN SELECT RAISE(ABORT, 'Simulated write failure'); END")
+            try {
+                database.commit(listOf(changed), emptyList(), playlists, emptyList())
+                fail("Commit should fail")
+            } catch (_: android.database.sqlite.SQLiteException) { }
+            assertEquals(version, database.version())
+            assertEquals(original, database.records().single())
+            database.writableDatabase.execSQL("DROP TRIGGER fail_scan")
+            database.commit(listOf(changed), emptyList(), playlists, emptyList())
+            assertEquals(version + 1, database.version())
+            assertEquals(changed, database.records().single())
+            assertTrue(database.directories().isEmpty())
+            assertTrue(directories.isNotEmpty())
+        } finally { database.close() }
+        repository = LocalLibrary(context, access)
+        awaitIdle { repository.completedScan.value != null }
+    }
+
+    private fun awaitBlocked() = runBlocking {
+        withTimeout(5000) { while (!access.blocked) delay(10) }
+    }
+
+    private fun startWriteAudit() {
+        android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath("local-library.db").path, null, 0).use { db ->
+            db.execSQL("CREATE TABLE scan_writes (kind TEXT NOT NULL)")
+            for (table in listOf("tracks", "directories", "state")) {
+                for (operation in listOf("INSERT", "UPDATE", "DELETE")) {
+                    db.execSQL("CREATE TRIGGER audit_${table}_$operation AFTER $operation ON $table BEGIN INSERT INTO scan_writes VALUES ('$table'); END")
+                }
+            }
+        }
+    }
+
+    private fun writes(table: String? = null): Long =
+        android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath("local-library.db").path, null, 0).use { db ->
+            db.rawQuery("SELECT COUNT(*) FROM scan_writes" + if (table == null) "" else " WHERE kind=?",
+                table?.let { arrayOf(it) }).use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
+        }
     fun testIncrementalRefreshRenameAndDurableMemberships() {
         val old = repository.state.value.records.single()
         assertEquals(1, access.reads)
@@ -343,10 +509,29 @@ class LocalLibraryTest : InstrumentationTestCase() {
         @Volatile var reads = 0
         @Volatile var nested = false
         @Volatile var year: String? = null
+        @Volatile var queries = 0
+        @Volatile var extraFiles = 0
+        @Volatile var emptyFolders = 0
+        @Volatile var changedFile: String? = null
+        @Volatile var blockFile: String? = null
+        @Volatile var blocked = false
+        @Volatile var loading = false
+        @Volatile var duplicateContent = false
         override fun children(tree: Uri, id: String): MatrixCursor {
+            queries++
             if (accessLost) throw SecurityException("Simulated persisted grant loss")
             if (fail) error("Drive disconnected")
-            return MatrixCursor(arrayOf("id", "name", "mime", "size", "modified")).apply {
+            return object : MatrixCursor(arrayOf("id", "name", "mime", "size", "modified")) {
+                override fun getExtras() = android.os.Bundle().apply { putBoolean(DocumentsContract.EXTRA_LOADING, loading) }
+            }.apply {
+                if (id.startsWith("empty-")) return@apply
+                if (id == "music" || id == "other") {
+                    repeat(emptyFolders) { addRow(arrayOf<Any>("empty-$it", "Empty $it", DocumentsContract.Document.MIME_TYPE_DIR, 0, 1)) }
+                    repeat(extraFiles) {
+                        val name = "extra-$it"
+                        addRow(arrayOf<Any>(name, "$name.wav", "audio/wav", 100, if (name == changedFile) 2 else 1))
+                    }
+                }
                 if (nested && id == "music") {
                     addRow(arrayOf<Any>("sub", "Sub", DocumentsContract.Document.MIME_TYPE_DIR, 0, 1))
                     addRow(arrayOf<Any>("empty", "Empty", DocumentsContract.Document.MIME_TYPE_DIR, 0, 1))
@@ -356,9 +541,13 @@ class LocalLibraryTest : InstrumentationTestCase() {
         override suspend fun audio(document: AudioDocument, id: String): Pair<TrackMenuEntry, String> {
             reads++
             started = true
+            if (document.name == "$blockFile.wav") {
+                blocked = true
+                while (blockFile != null) delay(10)
+            }
             while (slow) delay(10)
             return TrackMenuEntry(document.name, "Unknown artist", "Unknown album", year = year, id = id,
-                tags = TrackTags(releaseDate = year)) to "unique-content"
+                tags = TrackTags(releaseDate = year)) to if (document.name.startsWith("extra-") && !duplicateContent) "${document.name}:${document.modified}" else "unique-content"
         }
     }
 }

@@ -93,7 +93,6 @@ internal fun MainPlayerScreen(referencePreview: Boolean = false, menuPreview: Bo
     val fixture = referencePreview || menuPreview || tracksPreview || artistsPreview != null || albumsPreview != null || playlistsPreview != null || genresPreview != null || collectionsPreview != null || foldersPreview != null || settingsPreview != null || queuePreview
     val repository = remember { (context.applicationContext as com.example.clocarmus.ClocarmusApplication).library }
     val librarySnapshot by repository.state.collectAsState()
-    LaunchedEffect(fixture) { if (!fixture) repository.refresh() }
     val activity = context as? com.example.clocarmus.MainActivity
     val launcher = activity?.launcher
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
